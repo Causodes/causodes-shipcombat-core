@@ -1,0 +1,129 @@
+{{!-- Command Deck: merged captain + ordnance status bar for the 5-player Supreme Commander tab --}}
+<div class="sheet-list shipcombat-role-status-bar">
+    <div class="list-header row-content">
+        <div class="list-name">{{localize "SHIPCOMBAT.Captain.StatusTitle"}}</div>
+
+        {{#with (lookup roles "captain")}}
+        {{> "core-status-banner"
+            coreCount=coreCount hasCoreStaged=hasCoreStaged}}
+        {{/with}}
+    </div>
+    <div class="list-content">
+        <div class="shipcombat-role-status-panel">
+
+            {{!-- Stance row --}}
+            <div class="shipcombat-resource-bar-row shipcombat-stance-row shipcombat-stance--{{captainCtx.stance}} {{#if captainCtx.hasPendingStance}}shipcombat-stance--pending{{/if}}">
+                <span class="shipcombat-resource-bar-label">
+                    <i class="fa-solid fa-flag"></i> {{localize "SHIPCOMBAT.Captain.StanceLabel"}}
+                </span>
+                <span class="shipcombat-stance-value"{{#if captainCtx.stanceDesc}} data-tooltip="{{captainCtx.stanceDesc}}"{{/if}}>{{captainCtx.stanceLabel}}</span>
+                {{#if captainCtx.hasPendingStance}}
+                <span class="shipcombat-stance-pending-hint">
+                    <i class="fa-solid fa-arrow-right-long"></i> {{captainCtx.pendingLabel}}
+                </span>
+                {{/if}}
+                <div class="shipcombat-triage-counter"
+                     data-tooltip="{{captainCtx.triageCount}}/{{captainCtx.triageMax}}: {{localize 'SHIPCOMBAT.Captain.TriageTooltip'}}">
+                    <i class="fa-solid fa-wrench"></i>
+                    {{captainCtx.triageCount}}/{{captainCtx.triageMax}}
+                </div>
+            </div>
+
+            {{!-- Ordnance Points bar --}}
+            <div class="shipcombat-resource-bar-row">
+                <span class="shipcombat-resource-bar-label">{{ordnanceCtx.mpLabel}}</span>
+                <div class="shipcombat-resource-bar-track shipcombat-resource-bar-track--plasma">
+                    <div class="shipcombat-resource-bar-fill shipcombat-bar-op" style="width: {{ordnanceCtx.mpPct}}%"></div>
+                    {{#if ordnanceCtx.mpLostPct}}
+                    <div class="shipcombat-bar-lost" style="left: {{ordnanceCtx.mpPct}}%; width: {{ordnanceCtx.mpLostPct}}%"></div>
+                    {{/if}}
+                </div>
+                <span class="shipcombat-resource-bar-value" style="color: #00ff88">{{ordnanceCtx.manpower}}/{{ordnanceCtx.manpowerMax}}</span>
+            </div>
+
+            {{!-- Auxiliary Power bar --}}
+            <div class="shipcombat-resource-bar-row">
+                <span class="shipcombat-resource-bar-label">{{localize "SHIPCOMBAT.Sensors.PowerTrack"}}</span>
+                <div class="shipcombat-resource-bar-track shipcombat-resource-bar-track--aux">
+                    <div class="shipcombat-resource-bar-fill shipcombat-bar-aux" style="width: {{ordnanceCtx.auxPowerPct}}%"></div>
+                </div>
+                <span class="shipcombat-resource-bar-value" style="color: #7ec8e3">{{ordnanceCtx.auxPower}}/{{ordnanceCtx.auxPowerMax}}</span>
+            </div>
+
+        </div>
+
+        {{!-- Ordnance Readiness — torpedo + strike craft (no payloads) --}}
+        <div class="shipcombat-ordnance-cards">
+
+            {{!-- Torpedo card --}}
+            <div class="shipcombat-ord-card">
+                <div class="shipcombat-ord-card-header">
+                    <i class="fa-solid fa-rocket"></i>
+                    <span>{{localize "SHIPCOMBAT.Ordnance.Torpedoes"}}</span>
+                </div>
+                <div class="shipcombat-ord-card-body">
+                    {{#if ordnanceCtx.readyTorpedoes}}
+                    <span class="shipcombat-ord-badge shipcombat-ord-badge--ready">
+                        <i class="fa-solid fa-circle"></i> {{ordnanceCtx.readyTorpedoes}} {{localize "SHIPCOMBAT.Ordnance.Armed"}}
+                    </span>
+                    {{/if}}
+                    {{#if ordnanceCtx.loadingTorpedoes}}
+                    <span class="shipcombat-ord-badge shipcombat-ord-badge--loading">
+                        <i class="fa-solid fa-circle"></i> {{ordnanceCtx.loadingTorpedoes}} {{localize "SHIPCOMBAT.Ordnance.Loading"}}
+                    </span>
+                    {{/if}}
+                    {{#if ordnanceCtx.deployedTorpedoCount}}
+                    <span class="shipcombat-ord-badge shipcombat-ord-badge--deployed">
+                        <i class="fa-solid fa-circle"></i> {{ordnanceCtx.deployedTorpedoCount}} {{localize "SHIPCOMBAT.Ordnance.InFlight"}}
+                    </span>
+                    {{/if}}
+                    {{#unless ordnanceCtx.readyTorpedoes}}
+                    {{#unless ordnanceCtx.loadingTorpedoes}}
+                    {{#unless ordnanceCtx.deployedTorpedoCount}}
+                    <span class="shipcombat-ord-badge shipcombat-ord-badge--none">{{localize "SHIPCOMBAT.Ordnance.NoneReady"}}</span>
+                    {{/unless}}
+                    {{/unless}}
+                    {{/unless}}
+                    {{#if ordnanceCtx.hasTorpedoConfig}}
+                    <span class="shipcombat-ord-badge {{#if (shipcombatEq ordnanceCtx.autoArmTimer 1)}}shipcombat-ord-badge--ready{{else}}shipcombat-ord-badge--loading{{/if}}"
+                          data-tooltip="{{localize 'SHIPCOMBAT.Ordnance.AutoArmTooltip'}}">
+                        <i class="fa-solid fa-clock"></i> {{localize 'SHIPCOMBAT.Ordnance.AutoArm'}}: {{ordnanceCtx.autoArmTimer}}T
+                    </span>
+                    {{/if}}
+                </div>
+            </div>
+
+            {{!-- Strike Craft card --}}
+            {{#if @root.useStrikeCraft}}
+            <div class="shipcombat-ord-card shipcombat-ord-card--craft">
+                <div class="shipcombat-ord-card-header">
+                    <i class="fa-solid fa-jet-fighter"></i>
+                    <span>{{localize "SHIPCOMBAT.Ordnance.StrikeCraft"}}</span>
+                    <span class="shipcombat-ord-flights">{{ordnanceCtx.deployedCraftCount}}/{{ordnanceCtx.maxFlights}}</span>
+                </div>
+                <div class="shipcombat-ord-card-body">
+                    <div class="shipcombat-ordnance-pips">
+                        {{#each ordnanceCtx.craftPips}}
+                        <div class="shipcombat-ordnance-pip shipcombat-ordnance-pip--{{state}}"></div>
+                        {{/each}}
+                    </div>
+                </div>
+            </div>
+            {{/if}}
+
+        </div>
+
+        {{!-- Active Commitments (condensed inline) --}}
+        {{#if ordnanceCtx.commitments.length}}
+        <div class="shipcombat-commitments-inline">
+            {{#each ordnanceCtx.commitments}}
+            <span class="shipcombat-commitment-pill {{#if isNew}}shipcombat-commitment-pill--new{{/if}} {{#if noCancel}}shipcombat-commitment-pill--locked{{/if}}"
+                  data-tooltip="{{actionLabel}}  -  {{crewCount}} crew, {{turnsRemaining}} turn(s) left{{#if completionBenefit}} | Benefit awarded on completion{{/if}}{{#if isNew}}{{#if noCancel}} | Cannot cancel: effect already applied{{else}} | Right-click to cancel{{/if}}{{/if}}"
+                  data-index="{{index}}">
+                <i class="{{icon}}"></i> {{crewCount}}<i class="fa-solid fa-user fa-xs"></i> {{turnsRemaining}}T{{#if noCancel}}<i class="fa-solid fa-lock fa-xs" style="margin-left:2px;opacity:0.6"></i>{{/if}}
+            </span>
+            {{/each}}
+        </div>
+        {{/if}}
+    </div>
+</div>

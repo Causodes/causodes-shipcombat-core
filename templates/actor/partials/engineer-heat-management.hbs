@@ -1,0 +1,43 @@
+{{!-- Engineer: Heat Management --}}
+<div class="sheet-list shipcombat-role-section">
+
+    {{#unless engineerCtx.heatSelected}}
+    <div class="shipcombat-section-overlay{{#if (shipcombatOr (shipcombatNot engineerCtx.hasBankedCores) (shipcombatEq engineerCtx.actionsRemaining 0))}} shipcombat-section-overlay--taken{{/if}}">
+        {{#if (shipcombatNot engineerCtx.hasBankedCores)}}
+            <div class="shipcombat-overlay-lock-indicator">
+                <i class="fa-solid fa-lock fa-lg"></i>
+                <span>{{localize "SHIPCOMBAT.Engineer.RequiresBankedCore"}}</span>
+            </div>
+        {{else if (shipcombatEq engineerCtx.actionsRemaining 0)}}
+            <div class="shipcombat-overlay-lock-indicator">
+                <i class="fa-solid fa-ban fa-lg"></i>
+                <span>{{localize "SHIPCOMBAT.Engineer.ActionTakenDesc"}}</span>
+            </div>
+        {{else}}
+        <button class="shipcombat-section-overlay-btn" data-action="selectAction" data-action-type="heat">
+            {{localize "SHIPCOMBAT.Engineer.HeatManagement"}}
+        </button>
+        {{/if}}
+    </div>
+    {{/unless}}
+
+    <div class="list-header row-content">
+        <div class="list-name">{{localize "SHIPCOMBAT.Engineer.HeatManagement"}}</div>
+    </div>
+    <div class="list-content">
+        <div class="shipcombat-eng-action-row">
+            <p class="shipcombat-eng-action-desc">{{localize "SHIPCOMBAT.Engineer.ManageHeatDesc"}}</p>
+            <div class="shipcombat-eng-action-ctrl">
+                <button class="shipcombat-alloc-btn" data-action="adjustHeatCores" data-delta="-1"
+                        {{#unless engineerCtx.hasBankedCores}}disabled{{/unless}}>&minus;</button>
+                <span class="shipcombat-core-alloc-count">{{engineerCtx.heatCoresStaged}}</span>
+                <button class="shipcombat-alloc-btn" data-action="adjustHeatCores" data-delta="1"
+                        {{#unless engineerCtx.hasBankedCores}}disabled{{/unless}}>+</button>
+            </div>
+            <button type="button" class="shipcombat-eng-confirm" data-action="manageHeat"
+                    {{#unless engineerCtx.hasBankedCores}}disabled{{/unless}}>
+                {{localize "SHIPCOMBAT.Engineer.Execute"}}
+            </button>
+        </div>
+    </div>
+</div>

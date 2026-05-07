@@ -1,0 +1,18 @@
+{{!-- Captain: Active Orders (played cards this round) --}}
+{{#if captainCtx.hasPlayedCards}}
+<div class="sheet-list">
+    <div class="list-header row-content">
+        <div class="list-name">
+            <i class="fa-solid fa-check-double"></i>
+            {{localize "SHIPCOMBAT.Captain.ActiveOrders"}}
+        </div>
+    </div>
+    <div class="list-content">
+        <div class="shipcombat-played-cards-row">
+            {{#each captainCtx.playedCards}}
+            <span class="shipcombat-played-chip {{catClass}}">{{label}}</span>
+            {{/each}}
+        </div>
+    </div>
+</div>
+{{/if}}

@@ -1,0 +1,21 @@
+{{!-- Ordnance: Role claim prompt --}}
+{{#with (lookup roles "ordnance")}}
+{{#unless isMyRole}}
+    {{#unless @root.isGM}}
+    <div class="sheet-list">
+        <div class="list-content">
+            <div class="list-row">
+                <div class="row-content">
+                    <div class="list-name">{{localize "SHIPCOMBAT.Prompt.ClaimRole"}}</div>
+                    <div class="list-controls">
+                        <button data-action="claimRole" data-role-id="ordnance">
+                            <i class="fa-solid fa-rocket"></i> {{labelLocalized}}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {{/unless}}
+{{/unless}}
+{{/with}}

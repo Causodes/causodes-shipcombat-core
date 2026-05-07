@@ -1,0 +1,36 @@
+{{!-- Captain: Deployed Strike Craft (5-man Supreme Commander tab) --}}
+<div class="sheet-list shipcombat-deployed-ordnance">
+    <div class="list-header row-content">
+        <div class="list-name">{{localize "SHIPCOMBAT.Captain.DeployedStrikeCraft"}} ({{ordnanceCtx.deployedCraftCount}})</div>
+    </div>
+    <div class="list-content">
+        {{#unless ordnanceCtx.deployedCraftCount}}
+        <div class="shipcombat-deployed-empty">
+            {{localize "SHIPCOMBAT.Ordnance.NoneDeployedCraft"}}
+        </div>
+        {{/unless}}
+
+        {{#each ordnanceCtx.deployedCraft}}
+        <div class="shipcombat-deployed-row shipcombat-deployed--craft {{#if turnComplete}}shipcombat-deployed--done{{/if}}"
+             data-token-id="{{tokenId}}">
+            <img src="{{img}}" class="shipcombat-deployed-icon" />
+            <span class="shipcombat-deployed-name">{{name}}</span>
+            <span class="shipcombat-deployed-type"><i class="fa-solid fa-jet-fighter-up"></i></span>
+            <div class="shipcombat-deployed-hull">
+                <span>{{hull.value}}/{{hull.max}}</span>
+            </div>
+            <div class="shipcombat-deployed-controls">
+                <button data-action="panToOrdnance" data-token-id="{{tokenId}}"
+                        data-tooltip="{{localize 'SHIPCOMBAT.Ordnance.PanTo'}}">
+                    <i class="fa-solid fa-eye"></i>
+                </button>
+                <button data-action="markOrdnanceDone" data-token-id="{{tokenId}}"
+                        class="{{#if turnComplete}}active{{/if}}"
+                        data-tooltip="{{localize 'SHIPCOMBAT.Ordnance.MarkDone'}}">
+                    <i class="{{#if turnComplete}}fa-solid fa-circle-check{{else}}fa-regular fa-circle{{/if}}"></i>
+                </button>
+            </div>
+        </div>
+        {{/each}}
+    </div>
+</div>

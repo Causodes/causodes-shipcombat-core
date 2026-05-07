@@ -1,0 +1,46 @@
+{{!-- recover-craft-popup.hbs  -  select a nearby friendly strike craft to recover --}}
+<div class="shipcombat-tp-wrapper">
+
+    {{!-- Header --}}
+    <div class="shipcombat-tp-header">
+        <div class="shipcombat-rc-header-icon">
+            <i class="fa-solid fa-plane-arrival"></i>
+        </div>
+        <div class="shipcombat-tp-header-text">
+            <span class="shipcombat-tp-weapon-name">{{localize "SHIPCOMBAT.Ordnance.SelectCraftTitle"}}</span>
+            <span class="shipcombat-tp-mode-name">{{localize "SHIPCOMBAT.Ordnance.SelectCraftPrompt"}}</span>
+        </div>
+    </div>
+
+    {{!-- Craft list --}}
+    {{#if noTargets}}
+    <div class="shipcombat-tp-empty">
+        <i class="fa-solid fa-ban"></i>
+        {{localize "SHIPCOMBAT.Ordnance.NoCraftInRange"}}
+    </div>
+    {{else}}
+    <div class="shipcombat-tp-targets">
+        {{#each craft}}
+        <div class="shipcombat-tp-target" data-token-id="{{this.tokenId}}">
+            <img src="{{this.img}}" class="shipcombat-tp-target-icon">
+            <div class="shipcombat-tp-target-info">
+                <span class="shipcombat-tp-target-name">{{this.name}}</span>
+                <div class="shipcombat-tp-target-details">
+                    <span class="shipcombat-tp-detail">
+                        <i class="fa-solid fa-ruler"></i>
+                        {{this.distance}} {{localize "SHIPCOMBAT.Label.VoidUnits"}}
+                    </span>
+                </div>
+            </div>
+            <button class="shipcombat-tp-fire-btn shipcombat-rc-recall-btn"
+                    data-action="confirmRecall"
+                    data-token-id="{{this.tokenId}}"
+                    data-tooltip="{{localize 'SHIPCOMBAT.Ordnance.Recall'}}">
+                <i class="fa-solid fa-plane-arrival"></i>
+            </button>
+        </div>
+        {{/each}}
+    </div>
+    {{/if}}
+
+</div>

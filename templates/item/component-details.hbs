@@ -1,0 +1,449 @@
+<section class="tab {{tab.cssClass}}" data-group="primary" data-tab="{{tab.id}}">
+
+    {{!-- Slot selector (always visible) --}}
+    <div class="form-group">
+        <label>{{localize "SHIPCOMBAT.Component.Slot"}}</label>
+        <div class="form-fields">
+            <select name="system.slot">
+                {{#each slotChoices}}
+                <option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+                {{/each}}
+            </select>
+        </div>
+    </div>
+
+    {{!-- ═══════════ Weapon Battery ═══════════ --}}
+    {{#if isWeapon}}
+    <fieldset>
+        <legend>{{localize "SHIPCOMBAT.Component.WeaponStats"}}</legend>
+
+        <div class="form-group">
+            <label>{{localize "SHIPCOMBAT.Component.WeaponPosition"}}</label>
+            <div class="form-fields">
+                <select name="system.weaponPosition">
+                    {{#each weaponPositionChoices}}
+                    <option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+                    {{/each}}
+                </select>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>{{localize "SHIPCOMBAT.Component.ResourceType"}}</label>
+            <div class="form-fields">
+                <select name="system.resourceType">
+                    {{#each resourceTypeChoices}}
+                    <option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+                    {{/each}}
+                </select>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>{{localize "SHIPCOMBAT.Component.Damage"}}</label>
+            <div class="form-fields">
+                <input type="number" name="system.damage" value="{{system.damage}}">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>{{localize "SHIPCOMBAT.Component.SalvoSize"}}</label>
+            <div class="form-fields">
+                <input type="number" name="system.salvoSize" value="{{system.salvoSize}}" min="1">
+            </div>
+        </div>
+
+        {{#if (eq system.resourceType "power")}}
+        <div class="form-group">
+            <label>{{localize "SHIPCOMBAT.Component.ChargeStep"}}</label>
+            <div class="form-fields">
+                <input type="number" name="system.chargeStep" value="{{system.chargeStep}}" min="1">
+            </div>
+        </div>
+        {{/if}}
+
+        <div class="form-group">
+            <label>{{localize "SHIPCOMBAT.Component.Range"}}</label>
+            <div class="form-fields">
+                <input type="number" name="system.range" value="{{system.range}}" min="0">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>{{localize "SHIPCOMBAT.Component.DegreeOfFire"}}</label>
+            <div class="form-fields">
+                <input type="number" name="system.degreeOfFire" value="{{system.degreeOfFire}}" min="0" max="360">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>{{localize "SHIPCOMBAT.Component.WeaponCategory"}}</label>
+            <div class="form-fields">
+                <select name="system.weaponCategory">
+                    {{#each weaponCategoryChoices}}
+                    <option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+                    {{/each}}
+                </select>
+            </div>
+        </div>
+
+        {{!-- Traits  -  same structure as impmal item-traits.hbs partial --}}
+        <div class="form-group item-traits stacked">
+            <label><a data-action="editWeaponTraits">{{localize "SHIPCOMBAT.Component.Traits"}} <i class="fa-solid fa-gear"></i></a></label>
+            <div class="form-fields">
+                <div class="readonly">{{{traitsDisplayHtml}}}</div>
+            </div>
+        </div>
+    </fieldset>
+    {{/if}}
+
+    {{!-- ═══════════ Void Shields ═══════════ --}}
+    {{#if isShields}}
+    <fieldset>
+        <legend>{{localize "SHIPCOMBAT.Component.ShieldValues"}}</legend>
+
+        <div class="form-group">
+            <label>{{localize "SHIPCOMBAT.Component.MaxVoidFlux"}}</label>
+            <div class="form-fields">
+                <input type="number" name="system.maxVoidFlux" value="{{system.maxVoidFlux}}" min="0">
+            </div>
+        </div>
+
+        <div class="shipcombat-zone-threshold-block">
+            <p class="shipcombat-zone-threshold-title">{{localize "SHIPCOMBAT.Component.ZoneThreshold"}}</p>
+            <div class="shipcombat-zone-threshold-grid">
+                {{#each shieldZones}}
+                <div class="shipcombat-zone-threshold-cell">
+                    <span class="shipcombat-zone-threshold-lbl">{{label}}</span>
+                    <input type="number" name="system.zoneThresholds.{{key}}" value="{{value}}" min="0">
+                </div>
+                {{/each}}
+            </div>
+        </div>
+    </fieldset>
+    {{/if}}
+
+    {{!-- ═══════════ Armour ═══════════ --}}
+    {{#if isArmour}}
+    <fieldset>
+        <legend>{{localize "SHIPCOMBAT.Component.ArmourValues"}}</legend>
+
+        <div class="shipcombat-zone-threshold-block">
+            <p class="shipcombat-zone-threshold-title">{{localize "SHIPCOMBAT.Component.ArmourValues"}}</p>
+            <div class="shipcombat-zone-threshold-grid">
+                {{#each armourZones}}
+                <div class="shipcombat-zone-threshold-cell">
+                    <span class="shipcombat-zone-threshold-lbl">{{label}}</span>
+                    <input type="number" name="system.armourValues.{{key}}" value="{{value}}" min="0">
+                </div>
+                {{/each}}
+            </div>
+        </div>
+    </fieldset>
+    {{/if}}
+
+    {{!-- ═══════════ Engine ═══════════ --}}
+    {{#if isEngine}}
+    <fieldset>
+        <legend>{{localize "SHIPCOMBAT.Component.EngineStats"}}</legend>
+
+        <div class="form-group">
+            <label>{{localize "SHIPCOMBAT.Component.Speed"}}</label>
+            <div class="form-fields">
+                <input type="number" name="system.speed" value="{{system.speed}}" min="0">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>{{localize "SHIPCOMBAT.Component.Maneuverability"}}</label>
+            <div class="form-fields">
+                <input type="number" name="system.maneuverability" value="{{system.maneuverability}}" min="0">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>{{localize "SHIPCOMBAT.Component.PowerPerAP"}}</label>
+            <div class="form-fields">
+                <input type="number" name="system.powerPerAP" value="{{system.powerPerAP}}" min="0">
+            </div>
+        </div>
+    </fieldset>
+    {{/if}}
+
+    {{!-- ═══════════ Sensor ═══════════ --}}
+    {{#if isSensor}}
+    <fieldset>
+        <legend>{{localize "SHIPCOMBAT.Component.SensorStats"}}</legend>
+
+        <div class="form-group">
+            <label>{{localize "SHIPCOMBAT.Component.Rating"}}</label>
+            <div class="form-fields">
+                <input type="number" name="system.rating" value="{{system.rating}}" min="0">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>{{localize "SHIPCOMBAT.Component.BandSize"}}</label>
+            <div class="form-fields">
+                <input type="number" name="system.bandSize" value="{{system.bandSize}}" min="0">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>{{localize "SHIPCOMBAT.Component.AutoScanRange"}}</label>
+            <div class="form-fields">
+                <input type="number" name="system.autoScanRange" value="{{system.autoScanRange}}" min="0">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>{{localize "SHIPCOMBAT.Component.MaxRange"}}</label>
+            <div class="form-fields">
+                <input type="number" name="system.maxRange" value="{{system.maxRange}}" min="0">
+            </div>
+        </div>
+    </fieldset>
+    {{/if}}
+
+    {{!-- ═══════════ Reactor ═══════════ --}}
+    {{#if isReactor}}
+    <fieldset>
+        <legend>{{localize "SHIPCOMBAT.Component.ReactorStats"}}</legend>
+
+        <div class="form-group">
+            <label>{{localize "SHIPCOMBAT.Component.CoreOutput"}}</label>
+            <div class="form-fields">
+                <input type="number" name="system.rating" value="{{system.rating}}" min="0">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>{{localize "SHIPCOMBAT.Component.ShieldStrengthPerCore"}}</label>
+            <div class="form-fields">
+                <input type="number" name="system.shieldStrengthPerCore" value="{{system.shieldStrengthPerCore}}" min="0">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>{{localize "SHIPCOMBAT.Component.HeatCapacity"}}</label>
+            <div class="form-fields">
+                <input type="number" name="system.heatCapacity" value="{{system.heatCapacity}}" min="0">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>{{localize "SHIPCOMBAT.Component.BankCapacity"}}</label>
+            <div class="form-fields">
+                <input type="number" name="system.bankCapacity" value="{{system.bankCapacity}}" min="0">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>{{localize "SHIPCOMBAT.Component.AuxPowerPerCore"}}</label>
+            <div class="form-fields">
+                <input type="number" name="system.reserveMultiplier" value="{{system.reserveMultiplier}}" min="0">
+            </div>
+        </div>
+    </fieldset>
+    {{/if}}
+
+    {{!-- ═══════════ Torpedo ═══════════ --}}
+    {{#if isTorpedo}}
+    <fieldset>
+        <legend>{{localize "SHIPCOMBAT.Component.TorpedoStats"}}</legend>
+
+        <div class="form-group">
+            <label>{{localize "SHIPCOMBAT.Component.Fuel"}}</label>
+            <div class="form-fields">
+                <input type="number" name="system.torpedoFuel" value="{{system.torpedoFuel}}" min="0">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>{{localize "SHIPCOMBAT.Component.Speed"}}</label>
+            <div class="form-fields">
+                <input type="number" name="system.torpedoSpeed" value="{{system.torpedoSpeed}}" min="0">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>{{localize "SHIPCOMBAT.Component.Maneuverability"}}</label>
+            <div class="form-fields">
+                <input type="number" name="system.torpedoManeuverability" value="{{system.torpedoManeuverability}}" min="0">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>{{localize "SHIPCOMBAT.Component.Salvo"}}</label>
+            <div class="form-fields">
+                <input type="number" name="system.torpedoSalvo" value="{{system.torpedoSalvo}}" min="1">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>{{localize "SHIPCOMBAT.Component.PayloadDamage"}}</label>
+            <div class="form-fields">
+                <input type="number" name="system.torpedoPayloadDamage" value="{{system.torpedoPayloadDamage}}" min="0">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>{{localize "SHIPCOMBAT.Component.PayloadRadius"}}</label>
+            <div class="form-fields">
+                <input type="number" name="system.torpedoPayloadRadius" value="{{system.torpedoPayloadRadius}}" min="0">
+            </div>
+        </div>
+
+        {{!-- Torpedo Traits --}}
+        <div class="form-group item-traits stacked">
+            <label><a data-action="editWeaponTraits">{{localize "SHIPCOMBAT.Component.Traits"}} <i class="fa-solid fa-gear"></i></a></label>
+            <div class="form-fields">
+                <div class="readonly">{{{traitsDisplayHtml}}}</div>
+            </div>
+        </div>
+    </fieldset>
+    {{/if}}
+
+    {{!-- ═══════════ Strike Craft ═══════════ --}}
+    {{#if isStrikeCraft}}
+    <fieldset>
+        <legend>{{localize "SHIPCOMBAT.Component.StrikeCraftStats"}}</legend>
+
+        <div class="form-group">
+            <label>{{localize "SHIPCOMBAT.Component.CraftType"}}</label>
+            <div class="form-fields">
+                <select name="system.craftType">
+                    {{#each craftTypeChoices}}
+                    <option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+                    {{/each}}
+                </select>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>{{localize "SHIPCOMBAT.Component.FlightSize"}}</label>
+            <div class="form-fields">
+                <input type="number" name="system.craftFlightSize" value="{{system.craftFlightSize}}" min="1">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>{{localize "SHIPCOMBAT.Component.Fuel"}}</label>
+            <div class="form-fields">
+                <input type="number" name="system.craftFuel" value="{{system.craftFuel}}" min="0">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>{{localize "SHIPCOMBAT.Component.Speed"}}</label>
+            <div class="form-fields">
+                <input type="number" name="system.craftSpeed" value="{{system.craftSpeed}}" min="0">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>{{localize "SHIPCOMBAT.Component.Maneuverability"}}</label>
+            <div class="form-fields">
+                <input type="number" name="system.craftManeuverability" value="{{system.craftManeuverability}}" min="0">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>{{localize "SHIPCOMBAT.Component.PayloadDamage"}}</label>
+            <div class="form-fields">
+                <input type="number" name="system.craftPayloadDamage" value="{{system.craftPayloadDamage}}" min="0">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>{{localize "SHIPCOMBAT.Component.PayloadRadius"}}</label>
+            <div class="form-fields">
+                <input type="number" name="system.craftPayloadRadius" value="{{system.craftPayloadRadius}}" min="0">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>{{localize "SHIPCOMBAT.Component.PayloadCount"}}</label>
+            <div class="form-fields">
+                <input type="number" name="system.craftPayloadCount" value="{{system.craftPayloadCount}}" min="1">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>{{localize "SHIPCOMBAT.Component.SensorRating"}}</label>
+            <div class="form-fields">
+                <input type="number" name="system.craftSensorRating" value="{{system.craftSensorRating}}" min="0">
+            </div>
+        </div>
+
+        {{!-- Strike Craft Traits --}}
+        <div class="form-group item-traits stacked">
+            <label><a data-action="editWeaponTraits">{{localize "SHIPCOMBAT.Component.Traits"}} <i class="fa-solid fa-gear"></i></a></label>
+            <div class="form-fields">
+                <div class="readonly">{{{traitsDisplayHtml}}}</div>
+            </div>
+        </div>
+    </fieldset>
+    {{/if}}
+
+    {{!-- ═══════════ Ordnance Bay ═══════════ --}}
+    {{#if isWeaponsBay}}
+    <fieldset>
+        <legend>{{localize "SHIPCOMBAT.Component.WeaponsBayStats"}}</legend>
+
+        {{!-- General --}}
+        <div class="form-group">
+            <label>{{localize "SHIPCOMBAT.Component.Manpower"}}</label>
+            <div class="form-fields">
+                <input type="number" name="system.bayManpower" value="{{system.bayManpower}}" min="0">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>{{localize "SHIPCOMBAT.Component.AmmoCapacity"}}</label>
+            <div class="form-fields">
+                <input type="number" name="system.bayAmmoCapacity" value="{{system.bayAmmoCapacity}}" min="0">
+            </div>
+        </div>
+
+        {{!-- Torpedoes --}}
+        <div class="form-group">
+            <label>{{localize "SHIPCOMBAT.Component.TorpedoSalvoSize"}}</label>
+            <div class="form-fields">
+                <input type="number" name="system.bayTorpedoSalvoSize" value="{{system.bayTorpedoSalvoSize}}" min="1">
+            </div>
+        </div>
+
+        {{!-- Strike Craft --}}
+        <div class="form-group">
+            <label>{{localize "SHIPCOMBAT.Component.StrikeCraftCapacity"}}</label>
+            <div class="form-fields">
+                <input type="number" name="system.bayStrikeCraftCapacity" value="{{system.bayStrikeCraftCapacity}}" min="0">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>{{localize "SHIPCOMBAT.Component.MaxFlights"}}</label>
+            <div class="form-fields">
+                <input type="number" name="system.bayMaxFlights" value="{{system.bayMaxFlights}}" min="0">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>{{localize "SHIPCOMBAT.Component.StrikeCraftFlightSize"}}</label>
+            <div class="form-fields">
+                <input type="number" name="system.bayStrikeCraftFlightSize" value="{{system.bayStrikeCraftFlightSize}}" min="1">
+            </div>
+        </div>
+
+    </fieldset>
+    {{/if}}
+
+    {{!-- ═══════════ Adapter-extended fields ═══════════
+         System adapters register a "component-extended-fields" Handlebars partial
+         to render any fields declared via getComponentSchemaExtensions().
+         The default (engine-registered) partial renders nothing.
+    --}}
+    {{> component-extended-fields slot=system.slot system=system }}
+
+</section>

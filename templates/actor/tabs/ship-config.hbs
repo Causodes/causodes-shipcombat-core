@@ -1,0 +1,217 @@
+<section class="tab {{tab.cssClass}}" data-group="primary" data-tab="{{tab.id}}">
+
+    {{!-- Ship Configuration --}}
+    <div class="sheet-list">
+        <div class="list-header row-content">
+            <div class="list-name">{{localize "SHIPCOMBAT.Label.ShipConfiguration"}}</div>
+        </div>
+        <div class="list-content">
+            <div class="shipcombat-ship-config-grid">
+
+                <div class="shipcombat-ship-config-left">
+
+                {{!-- Crew Size (Active Roles) --}}
+                <div class="shipcombat-config-row">
+                    <label class="shipcombat-config-label">{{localize "SHIPCOMBAT.Config.CrewSize"}}</label>
+                    {{#if isOwner}}
+                    <select data-slot-count="system.crewSize" class="shipcombat-config-select">
+                        {{#each crewSizeOptions}}
+                        <option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+                        {{/each}}
+                    </select>
+                    {{else}}
+                    <span class="shipcombat-config-value">{{crewSize}}</span>
+                    {{/if}}
+                </div>
+
+                {{!-- Strike Craft --}}
+                <div class="shipcombat-config-row">
+                    <label class="shipcombat-config-label">{{localize "SHIPCOMBAT.Config.StrikeCraft"}}</label>
+                    {{#if isOwner}}
+                    <select class="shipcombat-config-select" data-ship-config="system.useStrikeCraft">
+                        <option value="yes" {{#if useStrikeCraft}}selected{{/if}}>{{localize "SHIPCOMBAT.Config.Yes"}}</option>
+                        <option value="no" {{#unless useStrikeCraft}}selected{{/unless}}>{{localize "SHIPCOMBAT.Config.No"}}</option>
+                    </select>
+                    {{else}}
+                    <span class="shipcombat-config-value">{{#if useStrikeCraft}}{{localize "SHIPCOMBAT.Config.Yes"}}{{else}}{{localize "SHIPCOMBAT.Config.No"}}{{/if}}</span>
+                    {{/if}}
+                </div>
+
+                {{!-- Manpower Flavour (formerly Crew Scale) --}}
+                <div class="shipcombat-config-row">
+                    <label class="shipcombat-config-label">{{localize "SHIPCOMBAT.Config.CrewScale"}}</label>
+                    {{#if isOwner}}
+                    <select class="shipcombat-config-select" data-ship-config="system.crewScale">
+                        <option value="warship"    {{#if crewScaleWarship}}selected{{/if}}>{{localize "SHIPCOMBAT.Config.CrewScaleWarship"}}</option>
+                        <option value="smallcraft" {{#if crewScaleSmallCraft}}selected{{/if}}>{{localize "SHIPCOMBAT.Config.CrewScaleSmallCraft"}}</option>
+                    </select>
+                    {{else}}
+                    <span class="shipcombat-config-value">{{crewScaleLabel}}</span>
+                    {{/if}}
+                </div>
+
+                </div>{{!-- .shipcombat-ship-config-left --}}
+
+                <div class="shipcombat-ship-config-right">
+
+                {{!-- Torpedo launch sides --}}
+                <div class="shipcombat-config-row shipcombat-config-row--launch">
+                    <label class="shipcombat-config-label--launch">{{localize "SHIPCOMBAT.Ordnance.LaunchSidesTitle"}}</label>
+                    <div class="shipcombat-launch-sides">
+                        {{#each ordnanceLaunchSides.torpedo}}
+                        <label class="shipcombat-launch-side-toggle" data-for-dir="{{this.key}}">
+                            <input type="checkbox" data-launch-side="torpedo" data-launch-dir="{{this.key}}"
+                                   {{#if this.value}}checked{{/if}} {{#unless @root.isOwner}}disabled{{/unless}}>
+                            <i class="fa-solid {{this.icon}}"></i>
+                            <span>{{this.label}}</span>
+                        </label>
+                        {{/each}}
+                    </div>
+                </div>
+
+                {{!-- Strike Craft launch sides --}}
+                {{#if useStrikeCraft}}
+                <div class="shipcombat-config-row shipcombat-config-row--launch">
+                    <label class="shipcombat-config-label--launch">{{localize "SHIPCOMBAT.Ordnance.LaunchSidesStrikeCraftTitle"}}</label>
+                    <div class="shipcombat-launch-sides">
+                        {{#each ordnanceLaunchSides.strikeCraft}}
+                        <label class="shipcombat-launch-side-toggle" data-for-dir="{{this.key}}">
+                            <input type="checkbox" data-launch-side="strikeCraft" data-launch-dir="{{this.key}}"
+                                   {{#if this.value}}checked{{/if}} {{#unless @root.isOwner}}disabled{{/unless}}>
+                            <i class="fa-solid {{this.icon}}"></i>
+                            <span>{{this.label}}</span>
+                        </label>
+                        {{/each}}
+                    </div>
+                </div>
+                {{/if}}
+
+                </div>{{!-- .shipcombat-ship-config-right --}}
+
+            </div>
+        </div>
+    </div>
+    <div class="sheet-list">
+        <div class="list-header row-content">
+            <div class="list-name">{{localize "SHIPCOMBAT.Label.WeaponSlots"}}</div>
+        </div>
+        <div class="list-content">
+            <div class="shipcombat-weapon-slot-grid">
+                {{#each weaponSectionsAll}}
+                <div class="shipcombat-weapon-slot-cell">
+                    <div class="shipcombat-weapon-slot-label">{{labelLocalized}}</div>
+                    {{#if @root.isOwner}}
+                    <input type="number" min="0" value="{{slotCount}}" data-slot-count="system.weaponSlots.{{id}}" class="shipcombat-slot-input shipcombat-weapon-slot-input">
+                    {{else}}
+                    <span class="shipcombat-weapon-slot-val">{{slotCount}}</span>
+                    {{/if}}
+                </div>
+                {{/each}}
+                <div class="shipcombat-weapon-slot-cell">
+                    <div class="shipcombat-weapon-slot-label">{{localize "SHIPCOMBAT.Slot.Ordnance"}}</div>
+                    {{#if isOwner}}
+                    <input type="number" min="0" value="{{ordnanceSlotCount}}" data-slot-count="system.ordnanceSlots.ordnance" class="shipcombat-slot-input shipcombat-weapon-slot-input">
+                    {{else}}
+                    <span class="shipcombat-weapon-slot-val">{{ordnanceSlotCount}}</span>
+                    {{/if}}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{!-- Ordnance Actor Templates (Torpedo / Strike Craft actors) --}}
+    <div class="shipcombat-section-grid">
+        {{!-- Torpedo Actors --}}
+        <div class="sheet-list vehicle-actors droppable" data-ordnance-drop="torpedo">
+            <div class="list-header row-content">
+                <div class="list-name">{{localize "SHIPCOMBAT.Label.TorpedoActors"}}</div>
+                <div class="list-controls"></div>
+            </div>
+            <div class="list-content">
+                {{#each ordnanceActors.torpedo}}
+                <div class="list-row" data-ordnance-id="{{id}}" data-ordnance-slot="torpedo">
+                    <div class="row-content">
+                        <div class="list-name">
+                            {{#if img}}<img src="{{img}}">{{/if}}
+                            <a class="label" data-action="openOrdnanceActor">{{name}}</a>
+                        </div>
+                        <div class="list-controls">
+                            {{#if @root.isOwner}}<a class="list-control" data-action="removeOrdnanceActor"><i class="fa-solid fa-xmark"></i></a>{{/if}}
+                        </div>
+                    </div>
+                </div>
+                {{/each}}
+                {{#if isOwner}}
+                <div class="droppable" data-ordnance-drop="torpedo" data-tooltip="{{localize 'SHIPCOMBAT.Hint.DropOrdnanceActor'}}"><i class="fa-solid fa-plus"></i></div>
+                {{/if}}
+            </div>
+        </div>
+
+        {{!-- Strike Craft Actors --}}
+        {{#if useStrikeCraft}}
+        <div class="sheet-list vehicle-actors droppable" data-ordnance-drop="strikeCraft">
+            <div class="list-header row-content">
+                <div class="list-name">{{localize "SHIPCOMBAT.Label.StrikeCraftActors"}}</div>
+                <div class="list-controls"></div>
+            </div>
+            <div class="list-content">
+                {{#each ordnanceActors.strikeCraft}}
+                <div class="list-row" data-ordnance-id="{{id}}" data-ordnance-slot="strikeCraft">
+                    <div class="row-content">
+                        <div class="list-name">
+                            {{#if img}}<img src="{{img}}">{{/if}}
+                            <a class="label" data-action="openOrdnanceActor">{{name}}</a>
+                        </div>
+                        <div class="list-controls">
+                            {{#if @root.isOwner}}<a class="list-control" data-action="removeOrdnanceActor"><i class="fa-solid fa-xmark"></i></a>{{/if}}
+                        </div>
+                    </div>
+                </div>
+                {{/each}}
+                {{#if isOwner}}
+                <div class="droppable" data-ordnance-drop="strikeCraft" data-tooltip="{{localize 'SHIPCOMBAT.Hint.DropOrdnanceActor'}}"><i class="fa-solid fa-plus"></i></div>
+                {{/if}}
+            </div>
+        </div>
+        {{/if}}
+    </div>
+
+    {{!-- Component Inventory --}}
+    <div class="sheet-list">
+        <div class="list-header row-content">
+            <div class="list-name">{{localize "SHIPCOMBAT.Label.ComponentInventory"}}</div>
+            <div class="list-controls">
+                {{#if isGM}}<a class="list-control" data-action="addToInventory" data-tooltip="{{localize 'SHIPCOMBAT.Action.AddComponent'}}"><i class="fa-solid fa-plus"></i></a>{{/if}}
+            </div>
+        </div>
+        <div class="list-content">
+            {{#if componentInventoryBySlot.length}}
+            {{#each componentInventoryBySlot}}
+            <div class="shipcombat-inv-group">
+                <div class="shipcombat-inv-group-header">{{slotLabel}}</div>
+                {{#each items}}
+                <div class="list-row" data-id="{{id}}" data-uuid="{{uuid}}">
+                    <div class="row-content">
+                        <div class="list-name">
+                            <img src="{{img}}">
+                            <a class="label" data-action="openItem">{{name}}</a>
+                            {{#unless equipped}}<span class="shipcombat-muted shipcombat-config-uninstalled"> &bull; {{localize "SHIPCOMBAT.Label.Uninstalled"}}</span>{{/unless}}
+                        </div>
+                        <div class="list-controls">
+                            {{#if @root.isGM}}<a class="list-control" data-action="deleteEmbedded"><i class="fa-solid fa-xmark"></i></a>{{/if}}
+                        </div>
+                    </div>
+                </div>
+                {{/each}}
+            </div>
+            {{/each}}
+            {{else}}
+            <div class="list-row">
+                <div class="row-content shipcombat-muted" style="padding: 6px 8px;">{{localize "SHIPCOMBAT.Label.NoComponents"}}</div>
+            </div>
+            {{/if}}
+        </div>
+    </div>
+
+
+</section>

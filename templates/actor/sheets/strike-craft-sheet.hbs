@@ -1,0 +1,21 @@
+<section class="tab {{tab.cssClass}}" data-group="primary" data-tab="{{tab.id}}">
+<div class="shipcombat-torpedo-sheet shipcombat-strikecraft-sheet">
+
+    {{> "vessel-trait-summary"}}
+
+    {{!-- Movement Controls --}}
+    <div class="shipcombat-torpedo-movement">
+        {{> "vessel-movement-controls"}}
+    </div>
+
+    {{!-- Attack --}}
+    <div class="shipcombat-torpedo-detonate">
+        <button type="button" data-action="attack" class="shipcombat-attack-btn">
+            <i class="fas fa-crosshairs"></i> Attack
+        </button>
+    </div>
+
+    {{> "vessel-turn-complete"}}
+
+</div>
+</section>

@@ -1,0 +1,20 @@
+<div class="shipcombat-bda-popup-body">
+
+    <div class="shipcombat-bda-result-header">
+        <div class="shipcombat-bda-sl-value">SL {{resultSL}}</div>
+        <div class="shipcombat-bda-retain-desc">{{retainDesc}}</div>
+    </div>
+
+    <p class="shipcombat-bda-correction-prompt">{{localize "SHIPCOMBAT.BDA.CorrectionPrompt"}}</p>
+
+    <div class="shipcombat-bda-corrections">
+        {{#each corrections}}
+        <button class="shipcombat-bda-correction-btn" data-action="selectCorrection"
+                data-correction-id="{{id}}">
+            <span class="shipcombat-bda-correction-name">{{labelLocalized}}</span>
+            <span class="shipcombat-bda-correction-hint">{{descLocalized}}</span>
+        </button>
+        {{/each}}
+    </div>
+
+</div>

@@ -1,0 +1,92 @@
+<section class="tab {{tab.cssClass}}" data-group="primary" data-tab="{{tab.id}}">
+
+    {{!-- Weapon Batteries --}}
+    <div class="shipcombat-section-grid">
+        {{#each weaponSections}}
+        <div class="sheet-list vehicle-actors">
+            <div class="list-header row-content">
+                <div class="list-name">{{labelLocalized}} ({{items.length}}/{{slotCount}})</div>
+                <div class="list-controls shipcombat-section-controls">
+                    <a class="list-control" data-action="createItem" data-component-slot="weapon" data-component-position="{{id}}"><i class="fa-solid fa-plus"></i></a>
+                </div>
+            </div>
+            <div class="list-content">
+                {{#each items}}
+                <div class="list-row" data-uuid="{{this.uuid}}" data-id="{{this.id}}">
+                    <div class="row-content">
+                        <div class="list-name rollable">
+                            <img src="{{this.img}}">
+                            <a class="label" data-action="toggleSummary">{{this.name}}</a>
+                        </div>
+                        <div class="list-controls">
+                            <a class="list-control" data-action="deleteEmbedded"><i class="fa-solid fa-xmark"></i></a>
+                        </div>
+                    </div>
+                </div>
+                {{/each}}
+                {{#if emptySlots}}
+                <div class="droppable" data-component-slot="weapon" data-component-position="{{id}}" data-tooltip='{{localize "SHIPCOMBAT.Hint.DropComponent"}}'><i class="fa-solid fa-plus"></i></div>
+                {{/if}}
+            </div>
+        </div>
+        {{/each}}
+    </div>
+
+    {{!-- Weapon Slot Configuration --}}
+    <div class="sheet-list">
+        <div class="list-header row-content">
+            <div class="list-name">{{localize "SHIPCOMBAT.Label.WeaponSlots"}}</div>
+            <div>{{localize "SHIPCOMBAT.Label.Slots"}}</div>
+            <div class="list-controls"></div>
+        </div>
+        <div class="list-content">
+            {{#each weaponSections}}
+            <div class="list-row">
+                <div class="row-content">
+                    <div class="list-name">{{labelLocalized}}</div>
+                    <div>
+                        <input type="number" min="0" value="{{slotCount}}" data-slot-count="system.weaponSlots.{{id}}">
+                    </div>
+                    <div class="list-controls"></div>
+                </div>
+            </div>
+            {{/each}}
+        </div>
+    </div>
+
+    {{!-- GM Notes --}}
+    <div class="sheet-list">
+        <div class="list-header row-content">
+            <div class="list-name">{{localize "SHIPCOMBAT.Label.Notes"}}</div>
+        </div>
+        <div class="list-content">
+            {{formInput (lookup fields "notes.gm") value=sys.notes.gm}}
+        </div>
+    </div>
+
+    {{!-- Debug: Critical Conditions (GM only) --}}
+    {{#if isGM}}
+    <div class="sheet-list shipcombat-debug-conditions">
+        <div class="list-header row-content">
+            <div class="list-name"><i class="fa-solid fa-bug"></i> Debug: Critical Conditions</div>
+        </div>
+        <div class="list-content">
+            {{#each conditionsList}}
+            <div class="list-row">
+                <div class="row-content shipcombat-debug-cond-row">
+                    <div class="list-name">{{locLabel}}</div>
+                    <div class="shipcombat-debug-tier-label">{{#if conditionName}}{{conditionName}}{{else}}&mdash;{{/if}}</div>
+                    <div class="shipcombat-debug-tier-btns">
+                        <button class="shipcombat-debug-btn{{#unless tier}} shipcombat-debug-btn--active{{/unless}}" data-action="npcDebugSetCondition" data-loc-id="{{locId}}" data-tier="">None</button>
+                        <button class="shipcombat-debug-btn{{#if (shipcombatEq tier 'low')}} shipcombat-debug-btn--active{{/if}}" data-action="npcDebugSetCondition" data-loc-id="{{locId}}" data-tier="low">Low</button>
+                        <button class="shipcombat-debug-btn{{#if (shipcombatEq tier 'medium')}} shipcombat-debug-btn--active{{/if}}" data-action="npcDebugSetCondition" data-loc-id="{{locId}}" data-tier="medium">Med</button>
+                        <button class="shipcombat-debug-btn{{#if (shipcombatEq tier 'high')}} shipcombat-debug-btn--active{{/if}}" data-action="npcDebugSetCondition" data-loc-id="{{locId}}" data-tier="high">High</button>
+                    </div>
+                </div>
+            </div>
+            {{/each}}
+        </div>
+    </div>
+    {{/if}}
+
+</section>

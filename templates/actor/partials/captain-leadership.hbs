@@ -1,0 +1,78 @@
+{{!-- Captain: Leadership Allocation --}}
+<div class="sheet-list">
+    <div class="list-header row-content shipcombat-leadership-header">
+        <div class="list-name">{{localize "SHIPCOMBAT.Captain.LeadershipAllocation"}}</div>
+        <a class="shipcombat-full-reset-link" data-action="rollInitiative"
+           data-tooltip="{{localize 'SHIPCOMBAT.Captain.RollInitiativeBtn'}}">
+            <i class="fa-solid fa-dice-d20"></i>
+        </a>
+    </div>
+    <div class="list-content">
+        <div class="shipcombat-helm-stats">
+            <div class="shipcombat-helm-stat" data-tooltip="{{captainCtx.slTooltip}}">
+                <span class="shipcombat-helm-stat-label">{{captainCtx.slLabel}}</span>
+                {{#if captainCtx.leadershipRolled}}
+                    <span class="shipcombat-helm-stat-value shipcombat-sl-badge">{{captainCtx.remainingLeadershipSL}}</span>
+                {{else}}
+                    <button class="shipcombat-roll-piloting-btn" data-action="rollLeadershipSL">
+                        <i class="fa-solid fa-dice"></i> {{captainCtx.rollLabel}}
+                    </button>
+                {{/if}}
+            </div>
+            <div class="shipcombat-helm-stat" data-tooltip="{{localize 'SHIPCOMBAT.Captain.InspireTooltip'}}">
+                <span class="shipcombat-helm-stat-label">{{localize "SHIPCOMBAT.Captain.Inspire"}}</span>
+                <div class="shipcombat-alloc-row">
+                    <button class="shipcombat-alloc-btn" data-action="allocLeadershipSL" data-stat="inspire" data-delta="-1"
+                            {{#unless captainCtx.leadershipRolled}}disabled{{/unless}}
+                            {{#if captainCtx.hasPlayedCards}}disabled{{/if}}
+                            {{#unless captainCtx.allocInspire}}disabled{{/unless}}>
+                        &minus;
+                    </button>
+                    <span class="shipcombat-helm-stat-value">{{captainCtx.allocInspire}}</span>
+                    <button class="shipcombat-alloc-btn" data-action="allocLeadershipSL" data-stat="inspire" data-delta="1"
+                            {{#unless captainCtx.leadershipRolled}}disabled{{/unless}}
+                            {{#if captainCtx.hasPlayedCards}}disabled{{/if}}
+                            {{#if (gte (add (add captainCtx.allocInspire captainCtx.allocResolve) captainCtx.allocInitiative) captainCtx.leadershipSL)}}disabled{{/if}}>
+                        +
+                    </button>
+                </div>
+            </div>
+            <div class="shipcombat-helm-stat" data-tooltip="{{localize 'SHIPCOMBAT.Captain.ResolveTooltip'}}">
+                <span class="shipcombat-helm-stat-label">{{localize "SHIPCOMBAT.Captain.Resolve"}}</span>
+                <div class="shipcombat-alloc-row">
+                    <button class="shipcombat-alloc-btn" data-action="allocLeadershipSL" data-stat="resolve" data-delta="-1"
+                            {{#unless captainCtx.leadershipRolled}}disabled{{/unless}}
+                            {{#if captainCtx.hasPlayedCards}}disabled{{/if}}
+                            {{#unless captainCtx.allocResolve}}disabled{{/unless}}>
+                        &minus;
+                    </button>
+                    <span class="shipcombat-helm-stat-value">{{captainCtx.allocResolve}}</span>
+                    <button class="shipcombat-alloc-btn" data-action="allocLeadershipSL" data-stat="resolve" data-delta="1"
+                            {{#unless captainCtx.leadershipRolled}}disabled{{/unless}}
+                            {{#if captainCtx.hasPlayedCards}}disabled{{/if}}
+                            {{#if (gte (add (add captainCtx.allocInspire captainCtx.allocResolve) captainCtx.allocInitiative) captainCtx.leadershipSL)}}disabled{{/if}}>
+                        +
+                    </button>
+                </div>
+            </div>
+            <div class="shipcombat-helm-stat" data-tooltip="{{localize 'SHIPCOMBAT.Captain.InitiativeTooltip'}}">
+                <span class="shipcombat-helm-stat-label">{{localize "SHIPCOMBAT.Captain.AllocInitiative"}}</span>
+                <div class="shipcombat-alloc-row">
+                    <button class="shipcombat-alloc-btn" data-action="allocLeadershipSL" data-stat="initiative" data-delta="-1"
+                            {{#unless captainCtx.leadershipRolled}}disabled{{/unless}}
+                            {{#if captainCtx.hasPlayedCards}}disabled{{/if}}
+                            {{#unless captainCtx.allocInitiative}}disabled{{/unless}}>
+                        &minus;
+                    </button>
+                    <span class="shipcombat-helm-stat-value">{{captainCtx.allocInitiative}}</span>
+                    <button class="shipcombat-alloc-btn" data-action="allocLeadershipSL" data-stat="initiative" data-delta="1"
+                            {{#unless captainCtx.leadershipRolled}}disabled{{/unless}}
+                            {{#if captainCtx.hasPlayedCards}}disabled{{/if}}
+                            {{#if (gte (add (add captainCtx.allocInspire captainCtx.allocResolve) captainCtx.allocInitiative) captainCtx.leadershipSL)}}disabled{{/if}}>
+                        +
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

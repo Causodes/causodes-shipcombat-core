@@ -1,0 +1,135 @@
+<section class="tab {{tab.cssClass}}" data-group="primary" data-tab="{{tab.id}}">
+<div class="shipcombat-npc-body">
+
+    {{!-- ═══════ Action Buttons ═══════ --}}
+    <div class="shipcombat-npc-actions-grid">
+        <button class="shipcombat-npc-action-pill" data-action="npcRollInitiative">
+            <i class="fa-solid fa-dice"></i> {{localize "SHIPCOMBAT.NpcShip.RollInitiative"}}
+        </button>
+        <button class="shipcombat-npc-action-pill" data-action="npcReduceHeat"
+                {{#if sys.engActionUsed}}disabled{{/if}}>
+            <i class="fa-solid fa-temperature-arrow-down"></i> {{localize "SHIPCOMBAT.NpcShip.ReduceHeat"}}
+        </button>
+        <button class="shipcombat-npc-action-pill" data-action="npcSuppressFire"
+                {{#if sys.engActionUsed}}disabled{{/if}}>
+            <i class="fa-solid fa-fire-extinguisher"></i> {{localize "SHIPCOMBAT.NpcShip.SuppressFire"}}
+        </button>
+        <button class="shipcombat-npc-action-pill" data-action="npcRefillShields">
+            <i class="fa-solid fa-shield-halved"></i> {{localize "SHIPCOMBAT.NpcShip.RefillShields"}}
+        </button>
+        <button class="shipcombat-npc-action-pill shipcombat-npc-danger-btn" data-action="npcFullReset">
+            <i class="fa-solid fa-trash-can"></i> {{localize "SHIPCOMBAT.NpcShip.FullReset"}}
+        </button>
+    </div>
+
+    {{!-- ═══════ Shield Sectors ═══════ --}}
+    <div class="sheet-list">
+        <div class="list-header row-content">
+            <div class="list-name">{{localize "SHIPCOMBAT.Sensors.VoidshieldAllocation"}}</div>
+        </div>
+        <div class="list-content shipcombat-shield-alloc-row">
+
+            {{!-- Sector max list (left) --}}
+            <div class="shipcombat-shield-sector-list">
+              <div class="shipcombat-ssl-head">{{localize "SHIPCOMBAT.Sensors.ZoneMax"}}</div>
+              {{#each sectors}}
+              <div class="shipcombat-ssl-row">
+                <span class="shipcombat-ssl-label">{{label}}</span>
+                <input type="number" name="system.shieldMax.{{id}}" value="{{shieldMax}}" min="0" class="shipcombat-ssl-max shipcombat-npc-shield-max-input">
+              </div>
+              {{/each}}
+            </div>
+
+            {{!-- SVG Arc Compass with overlaid shield values --}}
+            <div class="shipcombat-arc-compass-wrap">
+                <svg class="shipcombat-arc-compass-svg" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M 50.14 42.64 A 76 76 0 0 1 149.86 42.64 L 138.05 56.23 A 58 58 0 0 0 61.95 56.23 Z"
+                          fill="{{#if shields.bow.over}}#44aaff{{else}}#00ff88{{/if}}" fill-opacity="{{shields.bow.pct}}"
+                          stroke="{{#if shields.bow.over}}#44aaff{{else}}#00ff88{{/if}}" stroke-opacity="0.75" stroke-width="1"/>
+                    <path d="M 157.36 50.14 A 76 76 0 0 1 157.36 149.86 L 143.77 138.05 A 58 58 0 0 0 143.77 61.95 Z"
+                          fill="{{#if shields.starboard.over}}#44aaff{{else}}#00ff88{{/if}}" fill-opacity="{{shields.starboard.pct}}"
+                          stroke="{{#if shields.starboard.over}}#44aaff{{else}}#00ff88{{/if}}" stroke-opacity="0.75" stroke-width="1"/>
+                    <path d="M 149.86 157.36 A 76 76 0 0 1 50.14 157.36 L 61.95 143.77 A 58 58 0 0 0 138.05 143.77 Z"
+                          fill="{{#if shields.stern.over}}#44aaff{{else}}#00ff88{{/if}}" fill-opacity="{{shields.stern.pct}}"
+                          stroke="{{#if shields.stern.over}}#44aaff{{else}}#00ff88{{/if}}" stroke-opacity="0.75" stroke-width="1"/>
+                    <path d="M 42.64 149.86 A 76 76 0 0 1 42.64 50.14 L 56.23 61.95 A 58 58 0 0 0 56.23 138.05 Z"
+                          fill="{{#if shields.port.over}}#44aaff{{else}}#00ff88{{/if}}" fill-opacity="{{shields.port.pct}}"
+                          stroke="{{#if shields.port.over}}#44aaff{{else}}#00ff88{{/if}}" stroke-opacity="0.75" stroke-width="1"/>
+                    <circle cx="100" cy="100" r="36"
+                            fill="#0a0f0a" fill-opacity="0.88"
+                            stroke="#00ff88" stroke-opacity="0.22" stroke-width="1"/>
+                    <polygon points="100,6 93,22 107,22"
+                             fill="{{#if shields.bow.over}}#44aaff{{else}}#00ff88{{/if}}" fill-opacity="0.90"/>
+                </svg>
+
+                <span class="shipcombat-arc-val shipcombat-arc-val--bow{{#if shields.bow.over}} shipcombat-arc-val--over{{/if}}"         data-sector="bow"       data-field="shields">{{shields.bow.val}}</span>
+                <span class="shipcombat-arc-val shipcombat-arc-val--starboard{{#if shields.starboard.over}} shipcombat-arc-val--over{{/if}}" data-sector="starboard" data-field="shields">{{shields.starboard.val}}</span>
+                <span class="shipcombat-arc-val shipcombat-arc-val--stern{{#if shields.stern.over}} shipcombat-arc-val--over{{/if}}"       data-sector="stern"     data-field="shields">{{shields.stern.val}}</span>
+                <span class="shipcombat-arc-val shipcombat-arc-val--port{{#if shields.port.over}} shipcombat-arc-val--over{{/if}}"         data-sector="port"      data-field="shields">{{shields.port.val}}</span>
+
+                <div class="shipcombat-arc-center">
+                    <div class="shipcombat-arc-pool-val {{#if (shipcombatLt sys.voidshieldFluxRemaining 0)}}shipcombat-npc-flux-negative{{/if}}">{{sys.voidshieldFluxRemaining}}</div>
+                    <span class="shipcombat-arc-dir">{{localize "SHIPCOMBAT.NpcShip.FluxRemaining"}}</span>
+                </div>
+            </div>
+
+            {{!-- Controls panel (right) --}}
+            <div class="shipcombat-arc-hint-panel">
+              <div class="shipcombat-ssl-head">{{localize "SHIPCOMBAT.Sensors.Controls"}}</div>
+              <div class="shipcombat-arc-hint-row"><span class="shipcombat-arc-hint-key">Scroll</span><span class="shipcombat-arc-hint-val">Adjust</span></div>
+              <div class="shipcombat-arc-hint-row"><span class="shipcombat-arc-hint-key">Left-Click</span><span class="shipcombat-arc-hint-val">+1</span></div>
+              <div class="shipcombat-arc-hint-row"><span class="shipcombat-arc-hint-key">Right-Click</span><span class="shipcombat-arc-hint-val">−1</span></div>
+              <hr class="shipcombat-hint-divider">
+              <div class="shipcombat-ssl-head">{{localize "SHIPCOMBAT.NpcShip.VoidshieldFlux"}}</div>
+              <div class="shipcombat-arc-hint-row">
+                <span class="shipcombat-arc-hint-key">{{localize "SHIPCOMBAT.NpcShip.FluxMax"}}</span>
+                <input type="number" name="system.voidshieldFlux" value="{{sys.voidshieldFlux}}" min="0" class="shipcombat-npc-flux-config-input">
+              </div>
+            </div>
+
+        </div>
+    </div>
+
+    {{!-- ═══════ Crit Conditions ═══════ --}}
+    <div class="sheet-list">
+        <div class="list-header row-content">
+            <div class="list-name">{{localize "SHIPCOMBAT.Captain.Conditions"}}</div>
+        </div>
+        <div class="list-content">
+            {{#if hasAnyCondition}}
+            {{#each conditionsList}}
+            {{#if hasCondition}}
+            <div class="list-row shipcombat-crit-row {{tierClass}}" data-tooltip='{{conditionEffect}}' data-loc-id="{{locId}}">
+                <div class="row-content">
+                    <div class="list-name">
+                        <span class="shipcombat-crit-location">{{locLabel}}</span>
+                        <span class="shipcombat-crit-name">{{conditionName}}</span>
+                    </div>
+                    <div class="shipcombat-crit-tier-badge {{tierClass}}">{{tierLabel}}</div>
+                    <div class="list-controls">
+                        <button type="button"
+                                data-action="npcStepCondition"
+                                data-loc-id="{{locId}}"
+                                data-tooltip="{{localize 'SHIPCOMBAT.NpcShip.StepConditionDown'}}">
+                            <i class="fa-solid fa-arrow-down"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {{/if}}
+            {{/each}}
+            {{else}}
+            <div class="list-row">
+                <div class="row-content">
+                    <div class="list-name shipcombat-empty-label">
+                        <i class="fa-solid fa-circle-check"></i>
+                        {{localize "SHIPCOMBAT.Captain.NoConditions"}}
+                    </div>
+                </div>
+            </div>
+            {{/if}}
+        </div>
+    </div>
+
+</div>
+</section>

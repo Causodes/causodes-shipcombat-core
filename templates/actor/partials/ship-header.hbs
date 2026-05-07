@@ -1,0 +1,87 @@
+<div class="shipcombat-header shipcombat-ship-header">
+
+  <header class="sheet-header">
+    <img class="profile" data-action="editImage" src="{{actor.img}}" data-edit="img">
+    <div class="header-details">
+      <div class="details-row name">
+        <input type="text" name="name" value="{{actor.name}}" placeholder="Ship Name"
+               {{#unless isGM}}disabled{{/unless}}>
+      </div>
+      <div class="details-row">
+        <div class="detail-group">
+          <div class="input-group">
+            <select name="system.classification" {{#unless isGM}}disabled{{/unless}}>
+              {{#each shipClassifications}}
+              <option value="{{this.value}}" {{#if (eq ../sys.classification this.value)}}selected{{/if}}>{{this.label}}</option>
+              {{/each}}
+            </select>
+          </div>
+          <label>{{localize "SHIPCOMBAT.NpcShip.Classification"}}</label>
+        </div>
+        <div class="detail-group">
+          <div class="input-group">
+            <input type="text" name="system.model" value="{{sys.model}}"
+                   placeholder="{{localize 'SHIPCOMBAT.NpcShip.Model'}}" {{#unless isGM}}disabled{{/unless}}>
+          </div>
+          <label>{{localize "SHIPCOMBAT.NpcShip.Model"}}</label>
+        </div>
+        <div class="detail-group">
+          <div class="input-group">
+            <input type="text" name="system.shipFaction" value="{{sys.shipFaction}}"
+                   placeholder="{{localize 'SHIPCOMBAT.NpcShip.Faction'}}" {{#unless isGM}}disabled{{/unless}}>
+          </div>
+          <label>{{localize "SHIPCOMBAT.NpcShip.Faction"}}</label>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="shipcombat-compact-stats">
+
+    {{!-- Defence stat table (armour / shields per sector, single row) --}}
+    <table class="shipcombat-stat-table">
+      <tr>
+        <td></td>
+        {{#each shipSectors}}
+        <td data-tooltip="{{label}}" data-tooltip-direction="UP">{{abbr}}</td>
+        {{/each}}
+      </tr>
+      <tr>
+        <td class="shipcombat-stat-row-label" data-tooltip="{{localize 'SHIPCOMBAT.Label.ArmourVoidshields'}}" data-tooltip-direction="LEFT">{{localize "SHIPCOMBAT.Label.ArmourVoidshields"}}</td>
+        {{#each shipSectors}}
+        <td><span class="shipcombat-readonly-val shipcombat-compound-val{{#if armourRendVal}} shipcombat-armour--rend{{/if}}">{{armour}}<span class="shipcombat-as-sep">|</span>{{shield}}</span></td>
+        {{/each}}
+      </tr>
+    </table>
+
+    {{!-- Attribute boxes: Hull Damage + Internal Fire --}}
+    <div class="shipcombat-ship-attr-row">
+      <div class="shipcombat-ship-attr-box">
+        <div class="shipcombat-ship-attr-label">{{localize "SHIPCOMBAT.Label.HullDamage"}}</div>
+        <div class="shipcombat-ship-attr-fields">
+          {{#if isOwner}}
+            <input type="number" name="system.hull.value" value="{{sys.hull.value}}" min="0">
+            <span class="shipcombat-hull-sep">/</span>
+            <input type="number" name="system.hull.max" value="{{sys.hull.max}}" min="0">
+          {{else}}
+            <span class="shipcombat-readonly-val">{{sys.hull.value}}</span>
+            <span class="shipcombat-hull-sep">/</span>
+            <span class="shipcombat-readonly-val">{{sys.hull.max}}</span>
+          {{/if}}
+        </div>
+      </div>
+      <div class="shipcombat-ship-attr-box {{#if (shipcombatGt sys.internalFire 0)}}shipcombat-fire-active{{/if}}">
+        <div class="shipcombat-ship-attr-label">{{localize "SHIPCOMBAT.Engineer.InternalFire"}}</div>
+        <div class="shipcombat-ship-attr-fields">
+          {{#if isOwner}}
+            <input type="number" name="system.internalFire" value="{{sys.internalFire}}" min="0">
+          {{else}}
+            <span class="shipcombat-readonly-val">{{sys.internalFire}}</span>
+          {{/if}}
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</div>

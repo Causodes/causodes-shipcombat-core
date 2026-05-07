@@ -1,0 +1,11 @@
+{{!-- Shared turn-complete toggle button for torpedo and strike-craft action tabs.
+     Requires sys.turnComplete context --}}
+<div class="shipcombat-torpedo-turn">
+    <button type="button" data-action="markTurnComplete">
+        {{#if sys.turnComplete}}
+            <i class="fas fa-check-circle"></i> Turn Complete
+        {{else}}
+            <i class="far fa-circle"></i> Mark Turn Done
+        {{/if}}
+    </button>
+</div>

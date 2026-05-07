@@ -1,0 +1,9 @@
+{{!-- Engineer: Captain Boost Banner --}}
+{{#if engineerCtx.captainBoosts.length}}
+<div class="shipcombat-captain-boost-bar">
+    <span class="shipcombat-captain-boost-bar-label"><i class="fa-solid fa-flag"></i> {{localize "SHIPCOMBAT.Captain.ActiveOrdersShort"}}:</span>
+    {{#each engineerCtx.captainBoosts}}
+    <span class="shipcombat-captain-boost-chip">{{label}}</span>
+    {{/each}}
+</div>
+{{/if}}

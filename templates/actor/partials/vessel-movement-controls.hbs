@@ -1,0 +1,71 @@
+{{!-- Shared movement controls (bearing + power bar + confirm) for torpedo and strike-craft.
+     Requires helm context: helm.minMove, helm.maxBearing, helm.bearing, helm.powerMax,
+     helm.isRealistic, helm.velocityX, helm.velocityY, helm.bearingUsed, helm.bearingMax,
+     helm.bearingRemaining, helm.momentumUsed, helm.bearingBudgetTooltip --}}
+<h4>Movement</h4>
+<div class="shipcombat-torpedo-movement-info">
+    {{#if helm.isRealistic}}
+    <span>Velocity: {{helm.minMove}} {{shipcombatTerm "DistanceUnitAbbr"}}</span>
+    {{else}}
+    <span>Min Move: {{helm.minMove}}</span>
+    {{/if}}
+    <span>Max Bearing: ±{{helm.maxBearing}}°</span>
+</div>
+
+{{#if helm.isRealistic}}
+{{!-- REALISTIC: same row layout as simplified for visual consistency --}}
+<div class="shipcombat-torpedo-power-block">
+    <label>{{localize "SHIPCOMBAT.Helm.Bearing"}}</label>
+    <input type="range" data-helm-bearing
+           min="-180" max="180" step="1" value="{{helm.bearing}}">
+    <span class="shipcombat-power-readout shipcombat-readout-cell"><span data-bearing-display>{{helm.bearing}}</span><span class="shipcombat-runit">°</span></span>
+</div>
+<div class="shipcombat-torpedo-power-block">
+    <label>Rotation</label>
+    <div class="shipcombat-power-bar shipcombat-bearing-budget-bar shipcombat-power-bar--compact" data-bearing-budget-bar
+         data-bearing-max="{{helm.bearingMax}}" data-bearing-used="{{helm.bearingUsed}}"
+         data-tooltip="{{helm.bearingBudgetTooltip}}"></div>
+    <span class="shipcombat-power-readout shipcombat-readout-cell"><span data-bearing-budget-display>{{helm.bearingUsed}}</span><span class="shipcombat-runit">°</span></span>
+</div>
+<div class="shipcombat-torpedo-power-block">
+    <label>{{localize "SHIPCOMBAT.Helm.Thrust"}}</label>
+    <div class="shipcombat-power-bar shipcombat-power-bar--compact" data-helm-power-bar data-minmove-pct="{{helm.minMovePct}}">
+        <div class="shipcombat-power-minmove-line"></div>
+        <input type="range" class="shipcombat-power-range" data-helm-fuel
+               min="0" max="{{helm.powerMax}}" step="1">
+    </div>
+    <span class="shipcombat-power-readout shipcombat-readout-cell"><span data-fuel-display></span><span class="shipcombat-runit">%</span></span>
+</div>
+<div class="shipcombat-torpedo-power-block">
+    <label>{{localize "SHIPCOMBAT.Helm.Carry"}}</label>
+    <div class="shipcombat-power-bar shipcombat-momentum-bar shipcombat-power-bar--compact" data-helm-carry-bar>
+        <input type="range" class="shipcombat-power-range" data-helm-carry
+               min="0" max="100" step="1">
+    </div>
+    <span class="shipcombat-power-readout shipcombat-readout-cell"><span data-carry-display></span><span class="shipcombat-runit">%</span></span>
+</div>
+{{else}}
+{{!-- NON-REALISTIC: original simplified layout --}}
+<div class="shipcombat-torpedo-power-block">
+    <label>Bearing</label>
+    <input type="range" data-helm-bearing
+           min="-{{helm.maxBearing}}" max="{{helm.maxBearing}}"
+           value="{{helm.bearing}}" step="1" />
+    <span class="shipcombat-power-readout shipcombat-readout-cell"><span data-bearing-display>{{helm.bearing}}</span><span class="shipcombat-runit">°</span></span>
+</div>
+<div class="shipcombat-torpedo-power-block">
+    <label>{{localize "SHIPCOMBAT.Helm.Power"}}</label>
+    <div class="shipcombat-power-bar shipcombat-power-bar--compact" data-helm-power-bar>
+        <div class="shipcombat-power-minmove-line"></div>
+        <input type="range" class="shipcombat-power-range" data-helm-fuel
+               min="0" max="{{helm.powerMax}}" step="1">
+    </div>
+    <span class="shipcombat-power-readout shipcombat-readout-cell"><span data-fuel-display></span><span class="shipcombat-runit">%</span></span>
+</div>
+{{/if}}
+
+<div class="shipcombat-torpedo-movement-buttons">
+    <button type="button" data-action="confirmHelm">
+        <i class="fas fa-check"></i> Confirm
+    </button>
+</div>

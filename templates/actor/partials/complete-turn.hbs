@@ -1,0 +1,15 @@
+{{!-- Toggle Action Done – toggles turnDone[roleId] on the ship actor --}}
+{{!-- Expects: tabRoleId (string), and turnDone from the role's context --}}
+<div class="shipcombat-complete-turn-row">
+    {{#if turnDone}}
+    <button type="button" class="shipcombat-mark-done-btn done" data-action="markDone" data-role-id="{{tabRoleId}}">
+        <i class="fa-solid fa-rotate-left"></i>
+        {{localize "SHIPCOMBAT.Action.UndoAction"}}
+    </button>
+    {{else}}
+    <button type="button" class="shipcombat-mark-done-btn" data-action="markDone" data-role-id="{{tabRoleId}}">
+        <i class="fa-solid fa-check"></i>
+        {{localize "SHIPCOMBAT.Action.MarkDone"}}
+    </button>
+    {{/if}}
+</div>

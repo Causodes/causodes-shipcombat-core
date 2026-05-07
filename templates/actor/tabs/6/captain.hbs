@@ -1,0 +1,18 @@
+{{!-- tabs/6/captain.hbs — Captain's station tab (6-player) --}}
+<section class="tab {{tab.cssClass}}" data-group="primary" data-tab="{{tab.id}}">
+
+    {{> "captain-claim-prompt"}}
+
+    {{#if (or isGM (lookup (lookup roles "captain") "isMyRole"))}}
+    {{> "captain-status-bar"}}
+    {{> "captain-leadership"}}
+    {{> "captain-voidshields"}}
+    {{> "captain-conditions"}}
+    {{> "captain-core-actions"}}
+    {{> "captain-hand"}}
+    {{> "captain-active-orders"}}
+    {{/if}}
+
+    {{> 'complete-turn' tabRoleId="captain" turnDone=(lookup @root.sys.turnDone "captain")}}
+
+</section>

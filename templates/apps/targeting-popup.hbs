@@ -1,0 +1,112 @@
+{{!-- targeting-popup.hbs  -  lists valid targets within a weapon's cone of fire --}}
+<div class="shipcombat-tp-wrapper">
+
+    {{!-- Fire mode summary --}}
+    <div class="shipcombat-tp-header">
+        <img src="{{weapon.img}}" class="shipcombat-tp-weapon-icon">
+        <div class="shipcombat-tp-header-text">
+            <span class="shipcombat-tp-weapon-name">{{weaponName}}</span>
+            <span class="shipcombat-tp-mode-name">{{fireModeLabel}}</span>
+        </div>
+        <div class="shipcombat-tp-header-stats">
+            {{#if fireModeDetails.salvoSize}}
+            <span class="shipcombat-tp-stat">
+                <i class="fa-solid fa-crosshairs"></i>
+                {{fireModeDetails.salvoSize}} {{localize "SHIPCOMBAT.Targeting.Salvo"}}
+            </span>
+            {{/if}}
+            {{#if fireModeDetails.cost}}
+            <span class="shipcombat-tp-stat shipcombat-tp-stat--cost">
+                <i class="fa-solid fa-cubes-stacked"></i>
+                {{fireModeDetails.cost}} {{fireModeDetails.resourceLabel}}
+            </span>
+            {{/if}}
+            {{#if fireModeDetails.dmgBonus}}
+            <span class="shipcombat-tp-stat shipcombat-tp-stat--bonus">
+                <i class="fa-solid fa-plus"></i>
+                {{fireModeDetails.dmgBonus}} {{localize "SHIPCOMBAT.Label.Damage"}}
+            </span>
+            {{/if}}
+        </div>
+    </div>
+
+    {{!-- Overcharge toggle (plasma cannons with the Overcharge trait only) --}}
+    {{#if hasOvercharge}}
+    <div class="shipcombat-tp-overcharge-row">
+        <button type="button" class="shipcombat-tp-overcharge-btn {{#if isOvercharged}}shipcombat-tp-overcharge--on{{/if}}"
+                data-action="toggleOvercharge">
+            <i class="fa-solid fa-bolt-lightning"></i>
+            {{#if isOvercharged}}
+                {{localize "SHIPCOMBAT.Targeting.OverchargeOn"}}
+                {{#if overchargedTraits.length}}
+                <span class="shipcombat-tp-oc-note">
+                    {{#each overchargedTraits}}{{this.label}} ({{this.oc}}){{#unless @last}}, {{/unless}}{{/each}}
+                </span>
+                {{/if}}
+            {{else}}
+                {{localize "SHIPCOMBAT.Targeting.OverchargeOff"}}
+                {{#if overchargedTraits.length}}
+                <span class="shipcombat-tp-oc-note">
+                    {{#each overchargedTraits}}{{this.label}} {{this.base}}→{{this.oc}}{{#unless @last}}, {{/unless}}{{/each}}
+                </span>
+                {{/if}}
+            {{/if}}
+        </button>
+    </div>
+    {{/if}}
+
+    {{!-- Target list --}}
+    {{#if noTargets}}
+    <div class="shipcombat-tp-empty">
+        <i class="fa-solid fa-ban"></i>
+        {{localize "SHIPCOMBAT.Targeting.NoTargets"}}
+    </div>
+    {{else}}
+    <div class="shipcombat-tp-targets">
+        {{#each targets}}
+        <div class="shipcombat-tp-target" data-token-id="{{this.tokenId}}">
+            <img src="{{this.img}}" class="shipcombat-tp-target-icon{{#if this.isL1}} shipcombat-tp-target-icon--l1{{/if}}">
+            <div class="shipcombat-tp-target-info">
+                <span class="shipcombat-tp-target-name">{{this.name}}</span>
+                {{#if this.isL1}}
+                <div class="shipcombat-tp-l1-meta">
+                    {{#if this.classification}}<span class="shipcombat-tp-l1-class"><i class="fa-solid fa-ship"></i> {{this.classification}}</span>{{/if}}
+                    {{#if this.bearing}}<span class="shipcombat-tp-l1-bearing"><i class="fa-solid fa-compass"></i> {{this.bearing}}°</span>{{/if}}
+                </div>
+                {{/if}}
+                <div class="shipcombat-tp-target-details">
+                    {{#if this.showDistance}}
+                    <span class="shipcombat-tp-detail">
+                        <i class="fa-solid fa-ruler"></i>
+                        {{this.distance}} {{localize "SHIPCOMBAT.Label.VoidUnits"}}
+                    </span>
+                    {{/if}}
+                    <span class="shipcombat-tp-detail shipcombat-tp-zone shipcombat-tp-zone--{{this.zone}}">
+                        {{this.zoneLabel}}
+                    </span>
+                    <span class="shipcombat-tp-detail">
+                        <i class="fa-solid fa-shield-halved"></i>
+                        {{this.hitQuadrantLabel}}
+                    </span>
+                </div>
+            </div>
+            <div class="shipcombat-tp-target-stats">
+                <div class="shipcombat-tp-acc {{#if (shipcombatEq this.zone 1)}}shipcombat-tp-acc--boosted{{/if}} {{#if this.rangingFireBonus}}shipcombat-tp-acc--ranged{{/if}}"
+                     data-tooltip="{{this.accuracyTooltip}}">
+                    {{this.totalAccuracy}}%
+                    {{#if this.rangingFireBonus}}<i class="fa-solid fa-crosshairs-simple shipcombat-ranging-active"></i>{{/if}}
+                </div>
+                {{#if this.showArmour}}
+                <div class="shipcombat-tp-defenses">
+                    <span class="shipcombat-tp-armour-val"><i class="fa-solid fa-chess-rook"></i> {{this.targetArmour}}</span>
+                </div>
+                {{/if}}
+            </div>
+            <button class="shipcombat-tp-fire-btn" data-action="confirmFire" data-token-id="{{this.tokenId}}">
+                <i class="fa-solid fa-crosshairs"></i>
+            </button>
+        </div>
+        {{/each}}
+    </div>
+    {{/if}}
+</div>

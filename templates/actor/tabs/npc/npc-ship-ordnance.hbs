@@ -1,0 +1,152 @@
+<section class="tab {{tab.cssClass}}" data-group="primary" data-tab="{{tab.id}}">
+
+    {{!-- ═══ Torpedo Loadout ═══ --}}
+    <div class="sheet-list">
+        <div class="list-header row-content">
+            <div class="list-name">{{localize "SHIPCOMBAT.NpcShip.TorpedoTemplates"}}</div>
+        </div>
+        <div class="list-content" data-ordnance-drop="1" data-ordnance-slot="torpedo">
+            {{#if torpedoTemplates.length}}
+            <div class="shipcombat-ov-ordnance-box">
+                {{#each torpedoTemplates}}
+                <div class="shipcombat-ov-comp-row" data-template-id="{{id}}" data-ordnance-slot="torpedo">
+                    <a class="shipcombat-ov-comp-chip shipcombat-ord-chip" data-action="npcOpenOrdTemplate"
+                       data-tooltip="{{localize 'SHIPCOMBAT.NpcShip.OpenSheet'}}">
+                        {{#if img}}<img src="{{img}}">{{/if}}<span>{{name}}</span>
+                    </a>
+                    <a class="shipcombat-ov-unassign" data-action="npcRemoveOrdTemplate"
+                       data-tooltip="{{localize 'SHIPCOMBAT.NpcShip.RemoveTemplate'}}">
+                        <i class="fa-solid fa-xmark"></i>
+                    </a>
+                </div>
+                {{/each}}
+            </div>
+            {{else}}
+            <div class="shipcombat-ord-drop-hint">
+                <i class="fa-solid fa-circle-down"></i> {{localize "SHIPCOMBAT.NpcShip.DropTorpedoHint"}}
+            </div>
+            {{/if}}
+        </div>
+        {{#if torpedoTemplates.length}}
+        <div class="shipcombat-npc-launch-row">
+            <span class="shipcombat-npc-launch-label">{{localize "SHIPCOMBAT.NpcShip.TorpedoCount"}}</span>
+            <input type="number" class="shipcombat-npc-launch-count"
+                   data-config="torpedoCount"
+                   data-template-id="{{torpedoTemplates.[0].id}}"
+                   value="{{torpedoTemplates.[0].torpedoCount}}"
+                   min="1" max="20">
+            <button class="shipcombat-battery-fire-btn" data-action="npcLaunchTorpedo">
+                <i class="fa-solid fa-rocket"></i> {{localize "SHIPCOMBAT.NpcShip.LaunchTorpedo"}}
+            </button>
+        </div>
+        {{/if}}
+    </div>
+
+    {{!-- ═══ Strike Craft Loadout ═══ --}}
+    <div class="sheet-list">
+        <div class="list-header row-content">
+            <div class="list-name">{{localize "SHIPCOMBAT.NpcShip.StrikeCraftTemplates"}}</div>
+        </div>
+        <div class="list-content" data-ordnance-drop="1" data-ordnance-slot="strikeCraft">
+            {{#if craftTemplates.length}}
+            <div class="shipcombat-ov-ordnance-box">
+                {{#each craftTemplates}}
+                <div class="shipcombat-ov-comp-row" data-template-id="{{id}}" data-ordnance-slot="strikeCraft">
+                    <a class="shipcombat-ov-comp-chip shipcombat-ord-chip" data-action="npcOpenOrdTemplate"
+                       data-tooltip="{{localize 'SHIPCOMBAT.NpcShip.OpenSheet'}}">
+                        {{#if img}}<img src="{{img}}">{{/if}}<span>{{name}}</span>
+                    </a>
+                    <a class="shipcombat-ov-unassign" data-action="npcRemoveOrdTemplate"
+                       data-tooltip="{{localize 'SHIPCOMBAT.NpcShip.RemoveTemplate'}}">
+                        <i class="fa-solid fa-xmark"></i>
+                    </a>
+                </div>
+                {{/each}}
+            </div>
+            {{else}}
+            <div class="shipcombat-ord-drop-hint">
+                <i class="fa-solid fa-circle-down"></i> {{localize "SHIPCOMBAT.NpcShip.DropCraftHint"}}
+            </div>
+            {{/if}}
+        </div>
+        {{#if craftTemplates.length}}
+        <div class="shipcombat-npc-launch-row">
+            <span class="shipcombat-npc-launch-label">{{localize "SHIPCOMBAT.NpcShip.SquadronSize"}}</span>
+            <input type="number" class="shipcombat-npc-launch-count"
+                   data-config="squadronSize"
+                   data-template-id="{{craftTemplates.[0].id}}"
+                   value="{{craftTemplates.[0].squadronSize}}"
+                   min="1" max="20">
+            <button class="shipcombat-battery-fire-btn" data-action="npcLaunchStrikeCraft">
+                <i class="fa-solid fa-jet-fighter"></i> {{localize "SHIPCOMBAT.NpcShip.LaunchStrikeCraft"}}
+            </button>
+        </div>
+        {{/if}}
+    </div>
+
+    {{!-- ═══ Deployed Ordnance ═══ --}}
+    <div class="sheet-list shipcombat-deployed-ordnance">
+        <div class="list-header row-content">
+            <div class="list-name">{{localize "SHIPCOMBAT.NpcShip.DeployedOrdnance"}} ({{deployedCount}})</div>
+        </div>
+        <div class="list-content">
+            {{#unless deployedCount}}
+            <div class="shipcombat-deployed-empty">
+                {{localize "SHIPCOMBAT.NpcShip.NoDeployedOrdnance"}}
+            </div>
+            {{/unless}}
+
+            {{!-- Torpedoes --}}
+            {{#each deployedTorpedoes}}
+            <div class="shipcombat-deployed-row shipcombat-deployed--torpedo {{#if turnComplete}}shipcombat-deployed--done{{/if}}"
+                 data-token-id="{{tokenId}}">
+                <img src="{{img}}" class="shipcombat-deployed-icon" />
+                <span class="shipcombat-deployed-name">{{name}}</span>
+                <span class="shipcombat-deployed-type"><i class="fa-solid fa-rocket"></i></span>
+                <div class="shipcombat-deployed-hull">
+                    <span class="shipcombat-hull-fraction">{{hull.value}}/{{hull.max}}</span>
+                    <span class="shipcombat-hull-label">hp</span>
+                </div>
+                <div class="shipcombat-deployed-controls">
+                    <button data-action="panToOrdnance" data-token-id="{{tokenId}}"
+                            data-tooltip="{{localize 'SHIPCOMBAT.Ordnance.PanTo'}}">
+                        <i class="fa-solid fa-eye"></i>
+                    </button>
+                </div>
+            </div>
+            {{/each}}
+
+            {{!-- Strike Craft --}}
+            {{#each deployedCraft}}
+            <div class="shipcombat-deployed-row shipcombat-deployed--craft {{#if turnComplete}}shipcombat-deployed--done{{/if}} {{#if rtb}}shipcombat-deployed--rtb{{/if}}"
+                 data-token-id="{{tokenId}}">
+                <img src="{{img}}" class="shipcombat-deployed-icon" />
+                <span class="shipcombat-deployed-name">{{name}}</span>
+                <span class="shipcombat-deployed-type">
+                    <i class="fa-solid fa-jet-fighter-up"></i>
+                    {{#if rtb}}<i class="fa-solid fa-rotate-left shipcombat-rtb-icon"></i>{{/if}}
+                </span>
+                <div class="shipcombat-deployed-hull">
+                    <span class="shipcombat-hull-fraction">{{hull.value}}/{{hull.max}}</span>
+                    <span class="shipcombat-hull-label">losses</span>
+                </div>
+                <div class="shipcombat-deployed-controls">
+                    <button data-action="panToOrdnance" data-token-id="{{tokenId}}"
+                            data-tooltip="{{localize 'SHIPCOMBAT.Ordnance.PanTo'}}">
+                        <i class="fa-solid fa-eye"></i>
+                    </button>
+                </div>
+            </div>
+            {{/each}}
+        </div>
+        {{#if deployedCraft.length}}
+        <div class="shipcombat-battery-actions">
+            <button class="shipcombat-battery-fire-btn" data-action="npcRTB"
+                    data-tooltip="{{localize 'SHIPCOMBAT.Ordnance.RecallCraftRange'}}">
+                <i class="fa-solid fa-plane-arrival"></i> {{localize "SHIPCOMBAT.NpcShip.RTBCraft"}}
+            </button>
+        </div>
+        {{/if}}
+    </div>
+
+</section>

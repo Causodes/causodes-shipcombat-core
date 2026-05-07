@@ -1,0 +1,19 @@
+{{!-- Ordnance: Main Actions (crew commitment grid) --}}
+<div class="sheet-list shipcombat-ordnance-actions">
+    <div class="list-header row-content">
+        <div class="list-name">{{localize "SHIPCOMBAT.Ordnance.MainAction"}}</div>
+    </div>
+    <div class="list-content">
+        <div class="shipcombat-ordnance-action-grid shipcombat-action-grid-2col">
+            {{#each ordnanceCtx.actions}}
+            <button class="shipcombat-ordnance-action-btn" data-action="ordnanceMasterAction" data-action-id="{{id}}"
+                    {{#unless canAfford}}disabled{{/unless}}
+                    data-tooltip="{{tooltip}}">
+                <i class="{{icon}}"></i>
+                <span>{{labelLocalized}}</span>
+                <small>{{effectiveCrew}} crew / {{effectiveDuration}}T</small>
+            </button>
+            {{/each}}
+        </div>
+    </div>
+</div>

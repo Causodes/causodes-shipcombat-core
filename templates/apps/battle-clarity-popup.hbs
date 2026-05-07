@@ -1,0 +1,31 @@
+{{!-- battle-clarity-popup.hbs  -  Battle Clarity core action target picker --}}
+<div class="shipcombat-tp-wrapper">
+
+    {{#if noTargets}}
+    <div class="shipcombat-tp-empty">
+        <i class="fa-solid fa-ban"></i>
+        {{localize "SHIPCOMBAT.Captain.Core.BCNoTargets"}}
+    </div>
+    {{else}}
+    <div class="shipcombat-tp-targets">
+        {{#each targets}}
+        <div class="shipcombat-tp-target">
+            <img src="{{this.img}}" class="shipcombat-tp-target-icon">
+            <div class="shipcombat-tp-target-info">
+                <span class="shipcombat-tp-target-name">{{this.name}}</span>
+            </div>
+            <div class="shipcombat-tp-target-stats">
+                <div class="shipcombat-tp-lock-badge" style="color:{{this.lockColour}};border-color:{{this.lockColour}}">
+                    {{this.lockLabel}}
+                </div>
+            </div>
+            <button class="shipcombat-tp-fire-btn" data-action="confirmDesignate" data-token-id="{{this.tokenId}}"
+                    data-tooltip="{{localize "SHIPCOMBAT.Captain.Core.BCDesignate"}}">
+                <i class="fa-solid fa-crosshairs"></i>
+            </button>
+        </div>
+        {{/each}}
+    </div>
+    {{/if}}
+
+</div>

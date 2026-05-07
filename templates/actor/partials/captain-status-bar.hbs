@@ -1,0 +1,41 @@
+{{!-- Captain: Status Bar (stance + aux power) --}}
+<div class="sheet-list shipcombat-role-status-bar">
+    <div class="list-header row-content">
+        <div class="list-name">{{#if statusTitle}}{{statusTitle}}{{else}}{{localize "SHIPCOMBAT.Captain.StatusTitle"}}{{/if}}</div>
+        {{#with (lookup roles "captain")}}
+        {{> "payload-status-badge"
+            payloadId=payloadId payloadLabel=payloadLabel payloadDesc=payloadDesc}}
+        {{> "core-status-banner"
+            coreCount=coreCount hasCoreStaged=hasCoreStaged}}
+        {{/with}}
+    </div>
+    <div class="list-content">
+        <div class="shipcombat-role-status-panel">
+            {{!-- Stance row --}}
+            <div class="shipcombat-resource-bar-row shipcombat-stance-row shipcombat-stance--{{captainCtx.stance}} {{#if captainCtx.hasPendingStance}}shipcombat-stance--pending{{/if}}">
+                <span class="shipcombat-resource-bar-label">
+                    <i class="fa-solid fa-flag"></i> {{localize "SHIPCOMBAT.Captain.StanceLabel"}}
+                </span>
+                <span class="shipcombat-stance-value"{{#if captainCtx.stanceDesc}} data-tooltip="{{captainCtx.stanceDesc}}"{{/if}}>{{captainCtx.stanceLabel}}</span>
+                {{#if captainCtx.hasPendingStance}}
+                <span class="shipcombat-stance-pending-hint">
+                    <i class="fa-solid fa-arrow-right-long"></i> {{captainCtx.pendingLabel}}
+                </span>
+                {{/if}}
+                <div class="shipcombat-triage-counter"
+                     data-tooltip="{{captainCtx.triageCount}}/{{captainCtx.triageMax}}: {{localize 'SHIPCOMBAT.Captain.TriageTooltip'}}">
+                    <i class="fa-solid fa-wrench"></i>
+                    {{captainCtx.triageCount}}/{{captainCtx.triageMax}}
+                </div>
+            </div>
+            {{!-- Auxiliary Power bar (read-only) --}}
+            <div class="shipcombat-resource-bar-row">
+                <span class="shipcombat-resource-bar-label">{{localize "SHIPCOMBAT.Engineer.CoreBank"}}</span>
+                <div class="shipcombat-resource-bar-track shipcombat-resource-bar-track--plasma">
+                    <div class="shipcombat-resource-bar-fill" style="width: {{captainCtx.auxPowerPct}}%"></div>
+                </div>
+                <span class="shipcombat-resource-bar-value shipcombat-resource-bar-value--plasma">{{captainCtx.auxiliaryPower}}/{{captainCtx.auxPowerCapacity}}</span>
+            </div>
+        </div>
+    </div>
+</div>

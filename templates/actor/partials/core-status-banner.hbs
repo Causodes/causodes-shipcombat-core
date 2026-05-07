@@ -1,0 +1,21 @@
+{{!-- Inline header badge  -  params: coreCount, hasCoreStaged --}}
+{{#if (shipcombatGt coreCount 0)}}
+<div class="shipcombat-core-badge shipcombat-core-badge--assigned">
+    <i class="fa-solid fa-bolt shipcombat-core-pulse"></i>
+    {{#if (shipcombatGt coreCount 1)}}
+    <span>{{localize "SHIPCOMBAT.CoreBanner.Ready"}} ×{{coreCount}}</span>
+    {{else}}
+    <span>{{localize "SHIPCOMBAT.CoreBanner.Ready"}}</span>
+    {{/if}}
+</div>
+{{else if hasCoreStaged}}
+<div class="shipcombat-core-badge shipcombat-core-badge--staged">
+    <i class="fa-solid fa-clock"></i>
+    <span>{{localize "SHIPCOMBAT.CoreBanner.Staged"}}</span>
+</div>
+{{else}}
+<div class="shipcombat-core-badge shipcombat-core-badge--none">
+    <i class="fa-solid fa-circle-xmark"></i>
+    <span>{{localize "SHIPCOMBAT.CoreBanner.None"}}</span>
+</div>
+{{/if}}

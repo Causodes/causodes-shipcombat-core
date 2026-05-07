@@ -1,0 +1,9 @@
+{{!-- Gunner: Captain Boost Banner --}}
+{{#if gunnerCtx.captainBoosts.length}}
+<div class="shipcombat-captain-boost-bar">
+    <span class="shipcombat-captain-boost-bar-label"><i class="fa-solid fa-flag"></i> {{localize "SHIPCOMBAT.Captain.ActiveOrdersShort"}}:</span>
+    {{#each gunnerCtx.captainBoosts}}
+    <span class="shipcombat-captain-boost-chip">{{label}}</span>
+    {{/each}}
+</div>
+{{/if}}

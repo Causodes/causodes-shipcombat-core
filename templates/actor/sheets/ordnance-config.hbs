@@ -1,0 +1,173 @@
+<section class="tab {{tab.cssClass}}" data-group="primary" data-tab="{{tab.id}}">
+<div class="shipcombat-torpedo-sheet {{#if isStrikeCraft}}shipcombat-strikecraft-sheet{{/if}}">
+
+    {{!-- ── Ordnance Type ─────────────────────────────────────────────────── --}}
+    <div class="shipcombat-torpedo-traits">
+        <h4>Ordnance Type</h4>
+        <div class="shipcombat-torpedo-trait-grid">
+            <div class="shipcombat-torpedo-trait" style="grid-column: 1 / -1;">
+                <select name="system.subtype">
+                    <option value="" {{#unless subtype}}selected{{/unless}}>(select type)</option>
+                    <option value="torpedo" {{#if isTorpedo}}selected{{/if}}>Torpedo</option>
+                    <option value="strikeCraft" {{#if isStrikeCraft}}selected{{/if}}>Strike Craft</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+{{#if isTorpedo}}
+{{!-- ═══════════════════════════ TORPEDO CONFIG ════════════════════════════ --}}
+
+    {{!-- Warhead Count --}}
+    <div class="shipcombat-torpedo-bar">
+        <label>Warheads</label>
+        <div class="shipcombat-torpedo-bar-track">
+            <div class="shipcombat-torpedo-bar-fill hull" style="width: {{hullPct}}%"></div>
+            <span class="shipcombat-torpedo-bar-text">
+                <input type="number" name="system.hull.value" value="{{sys.hull.value}}" class="shipcombat-torpedo-inline" />
+                /
+                <input type="number" name="system.hull.max" value="{{sys.hull.max}}" class="shipcombat-torpedo-inline" />
+            </span>
+        </div>
+    </div>
+
+    {{!-- Fuel --}}
+    <div class="shipcombat-torpedo-bar">
+        <label>Fuel</label>
+        <div class="shipcombat-torpedo-bar-track">
+            <div class="shipcombat-torpedo-bar-fill fuel" style="width: {{fuelPct}}%"></div>
+            <span class="shipcombat-torpedo-bar-text">
+                <input type="number" name="system.fuel.value" value="{{sys.fuel.value}}" class="shipcombat-torpedo-inline" />
+                /
+                <input type="number" name="system.fuel.max" value="{{sys.fuel.max}}" class="shipcombat-torpedo-inline" />
+            </span>
+        </div>
+    </div>
+
+    {{!-- Movement + Payload stats --}}
+    <div class="shipcombat-torpedo-stats">
+        <div class="shipcombat-torpedo-stat">
+            <label>SPD</label>
+            <input type="number" name="system.movement.speed" value="{{sys.movement.speed}}" />
+        </div>
+        <div class="shipcombat-torpedo-stat">
+            <label>MAN</label>
+            <input type="number" name="system.movement.maneuverability" value="{{sys.movement.maneuverability}}" />
+        </div>
+        <div class="shipcombat-torpedo-stat">
+            <label>DMG</label>
+            <input type="number" name="system.payloadDamage" value="{{sys.payloadDamage}}" />
+        </div>
+        <div class="shipcombat-torpedo-stat">
+            <label>RADIUS</label>
+            <input type="number" name="system.payloadRadius" value="{{sys.payloadRadius}}" />
+        </div>
+    </div>
+
+    {{> "vessel-weapon-traits" title="Warhead Traits"}}
+
+{{else if isStrikeCraft}}
+{{!-- ══════════════════════════ STRIKE CRAFT CONFIG ════════════════════════ --}}
+
+    {{!-- Flight (hull) --}}
+    <div class="shipcombat-torpedo-bar">
+        <label>Flight</label>
+        <div class="shipcombat-torpedo-bar-track">
+            <div class="shipcombat-torpedo-bar-fill hull" style="width: {{hullPct}}%"></div>
+            <span class="shipcombat-torpedo-bar-text">
+                <input type="number" name="system.hull.value" value="{{sys.hull.value}}" class="shipcombat-torpedo-inline" />
+                /
+                <input type="number" name="system.hull.max" value="{{sys.hull.max}}" class="shipcombat-torpedo-inline" />
+            </span>
+        </div>
+    </div>
+
+    {{!-- Fuel --}}
+    <div class="shipcombat-torpedo-bar">
+        <label>Fuel</label>
+        <div class="shipcombat-torpedo-bar-track">
+            <div class="shipcombat-torpedo-bar-fill fuel" style="width: {{fuelPct}}%"></div>
+            <span class="shipcombat-torpedo-bar-text">
+                <input type="number" name="system.fuel.value" value="{{sys.fuel.value}}" class="shipcombat-torpedo-inline" />
+                /
+                <input type="number" name="system.fuel.max" value="{{sys.fuel.max}}" class="shipcombat-torpedo-inline" />
+            </span>
+        </div>
+    </div>
+
+    {{!-- Ammunition --}}
+    <div class="shipcombat-torpedo-bar">
+        <label>Ammo</label>
+        <div class="shipcombat-torpedo-bar-track">
+            <div class="shipcombat-torpedo-bar-fill ammo" style="width: {{ammoPct}}%"></div>
+            <span class="shipcombat-torpedo-bar-text">
+                <input type="number" name="system.ammo.value" value="{{sys.ammo.value}}" class="shipcombat-torpedo-inline" />
+                /
+                <input type="number" name="system.ammo.max" value="{{sys.ammo.max}}" class="shipcombat-torpedo-inline" />
+            </span>
+        </div>
+    </div>
+
+    {{!-- Movement stats --}}
+    <div class="shipcombat-torpedo-stats">
+        <div class="shipcombat-torpedo-stat">
+            <label>SPD</label>
+            <input type="number" name="system.movement.speed" value="{{sys.movement.speed}}" />
+        </div>
+        <div class="shipcombat-torpedo-stat">
+            <label>MAN</label>
+            <input type="number" name="system.movement.maneuverability" value="{{sys.movement.maneuverability}}" />
+        </div>
+    </div>
+
+    {{!-- Sensor stats --}}
+    <div class="shipcombat-torpedo-stats">
+        <div class="shipcombat-torpedo-stat">
+            <label data-tooltip="{{localize 'SHIPCOMBAT.Component.AutoScanRange'}}" data-tooltip-direction="UP">ASR</label>
+            <input type="number" name="system.autoScanRange" value="{{sys.autoScanRange}}" />
+        </div>
+        <div class="shipcombat-torpedo-stat">
+            <label data-tooltip="{{localize 'SHIPCOMBAT.Component.BandSize'}}" data-tooltip-direction="UP">BND</label>
+            <input type="number" name="system.sensorBandSize" value="{{sys.sensorBandSize}}" />
+        </div>
+        <div class="shipcombat-torpedo-stat">
+            <label data-tooltip="{{localize 'SHIPCOMBAT.Component.Rating'}}" data-tooltip-direction="UP">RTG</label>
+            <input type="number" name="system.sensorRating" value="{{sys.sensorRating}}" />
+        </div>
+    </div>
+
+    {{!-- Payload --}}
+    <div class="shipcombat-torpedo-traits">
+        <h4>Payload</h4>
+        <div class="shipcombat-torpedo-trait-grid">
+            <div class="shipcombat-torpedo-trait">
+                <label>DMG</label>
+                <input type="number" name="system.payloadDamage" value="{{sys.payloadDamage}}" />
+            </div>
+            <div class="shipcombat-torpedo-trait">
+                <label>ANGLE</label>
+                <input type="number" name="system.payloadAngle" value="{{sys.payloadAngle}}" />
+            </div>
+            <div class="shipcombat-torpedo-trait">
+                <label>SALVO</label>
+                <input type="number" name="system.payloadCount" value="{{sys.payloadCount}}" />
+            </div>
+        </div>
+    </div>
+
+    {{> "vessel-weapon-traits" title="Weapon Traits"}}
+
+    {{!-- Craft Type --}}
+    <div class="shipcombat-torpedo-traits">
+        <h4>Craft Type</h4>
+        <select name="system.craftType">
+            <option value="fighter" {{#if (eq sys.craftType "fighter")}}selected{{/if}}>{{localize "SHIPCOMBAT.CraftType.Fighter"}}</option>
+            <option value="bomber" {{#if (eq sys.craftType "bomber")}}selected{{/if}}>{{localize "SHIPCOMBAT.CraftType.Bomber"}}</option>
+        </select>
+    </div>
+
+{{/if}}
+{{!-- If subtype is blank, only the dropdown above is shown --}}
+
+</div>
+</section>

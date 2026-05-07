@@ -1,0 +1,117 @@
+{{!-- Captain: Card Hand (grid + deck footer) --}}
+<div class="sheet-list">
+    <div class="list-header row-content">
+        <div class="list-name">
+            {{localize "SHIPCOMBAT.Captain.Hand"}}
+            <span class="shipcombat-hand-count">({{captainCtx.handCount}}/6)</span>
+        </div>
+        {{#if captainCtx.handCapBonus}}
+        <span class="shipcombat-hand-cap-note" data-tooltip="{{localize 'SHIPCOMBAT.Captain.HandCapNoteTooltip'}}">
+            {{localize "SHIPCOMBAT.Captain.HandCapNote"}}
+        </span>
+        {{/if}}
+    </div>
+    <div class="list-content">
+        {{#if captainCtx.hand.length}}
+        <div class="shipcombat-captain-hand-grid">
+        {{#each captainCtx.hand}}
+        <div class="shipcombat-captain-card shipcombat-captain-card--{{category}}" data-card-id="{{cardId}}" draggable="true">
+            <div class="shipcombat-captain-card-header">
+                <span class="shipcombat-captain-card-cat">{{catLabel}}</span>
+                {{#if targetRole}}
+                <span class="shipcombat-captain-card-target" data-tooltip="{{targetRoleLabel}}">
+                    <i class="{{targetRoleIcon}}"></i>
+                </span>
+                {{/if}}
+                {{#if setsStance}}
+                <span class="shipcombat-captain-card-stance-dot"
+                      data-tooltip="{{localize (concat 'SHIPCOMBAT.Captain.Stance.' setsStance)}}">
+                    <i class="fa-solid fa-flag"></i>
+                </span>
+                {{/if}}
+            </div>
+            <div class="shipcombat-captain-card-name">
+                <i class="{{icon}}"></i> {{label}}
+            </div>
+            <div class="shipcombat-captain-card-desc">{{desc}}</div>
+            {{#if setsStance}}
+            <div class="shipcombat-captain-card-stance-footer">
+                <i class="fa-solid fa-flag"></i>
+                {{localize (concat "SHIPCOMBAT.Captain.Stance." setsStance)}}
+            </div>
+            {{/if}}
+            <div class="shipcombat-captain-card-actions">
+                <a class="shipcombat-captain-card-action shipcombat-captain-card-action--reorder"
+                   data-action="captainReorderCard" data-direction="up"
+                   data-tooltip="{{localize 'SHIPCOMBAT.Captain.MoveCardUp'}}">
+                    <i class="fa-solid fa-chevron-left"></i>
+                </a>
+                <a class="shipcombat-captain-card-action shipcombat-captain-card-action--reorder"
+                   data-action="captainReorderCard" data-direction="down"
+                   data-tooltip="{{localize 'SHIPCOMBAT.Captain.MoveCardDown'}}">
+                    <i class="fa-solid fa-chevron-right"></i>
+                </a>
+                <a class="shipcombat-captain-card-action" data-action="captainPlayCard" data-card-id="{{cardId}}"
+                   data-tooltip="{{localize 'SHIPCOMBAT.Captain.PlayCard'}}">
+                    <i class="fa-solid fa-play"></i> {{localize "SHIPCOMBAT.Captain.PlayCard"}}
+                </a>
+                <a class="shipcombat-captain-card-action shipcombat-captain-card-action--discard"
+                   data-action="captainDiscardCard" data-card-id="{{cardId}}"
+                   data-tooltip="{{localize 'SHIPCOMBAT.Captain.DiscardCard'}}">
+                    <i class="fa-solid fa-trash-can"></i>
+                </a>
+                {{#unless @root.captainCtx.mulliganUsed}}
+                <a class="shipcombat-captain-card-action shipcombat-captain-card-action--mulligan"
+                   data-action="captainMulligan" data-card-id="{{cardId}}"
+                   data-tooltip="{{localize 'SHIPCOMBAT.Captain.Mulligan'}}">
+                    <i class="fa-solid fa-rotate"></i>
+                </a>
+                {{/unless}}
+            </div>
+        </div>
+        {{/each}}
+        </div>
+        {{else}}
+        <div class="list-row">
+            <div class="row-content">
+                <div class="list-name shipcombat-empty-label">
+                    {{localize "SHIPCOMBAT.Captain.HandEmpty"}}
+                </div>
+            </div>
+        </div>
+        {{/if}}
+    </div>
+    {{!-- Deck / Discard footer --}}
+    <div class="list-footer row-content shipcombat-deck-footer">
+        <div class="shipcombat-deck-footer-piles">
+            <span class="shipcombat-pile-count">
+                <i class="fa-solid fa-layer-group"></i>
+                {{localize "SHIPCOMBAT.Captain.DrawPile"}}: {{captainCtx.drawPileCount}}
+            </span>
+            <span class="shipcombat-pile-count">
+                <i class="fa-solid fa-trash-can"></i>
+                {{localize "SHIPCOMBAT.Captain.DiscardPile"}}: {{captainCtx.discardPileCount}}
+            </span>
+        </div>
+        <div class="shipcombat-deck-footer-actions">
+            <button type="button"
+                    data-action="captainFullRedraw"
+                    class="shipcombat-full-redraw-btn"
+                    {{#unless captainCtx.canFullRedraw}}disabled{{/unless}}
+                    data-tooltip="{{localize 'SHIPCOMBAT.Captain.FullRedrawHint'}}">
+                <i class="fa-solid fa-arrows-rotate"></i>
+                {{localize "SHIPCOMBAT.Captain.FullRedraw"}}
+            </button>
+            {{#if captainCtx.canDraw}}
+            <span class="shipcombat-draw-row">
+                <input type="number" class="shipcombat-draw-count-input" min="1" max="{{captainCtx.drawCount}}"
+                       value="{{captainCtx.drawCount}}" data-max-draw="{{captainCtx.drawCount}}">
+                <button type="button" data-action="captainDraw"
+                        data-tooltip="{{localize 'SHIPCOMBAT.Captain.DrawCard'}} ({{localize 'SHIPCOMBAT.Captain.DrawMax'}}: {{captainCtx.drawCount}})">
+                    <i class="fa-solid fa-hand"></i> {{localize "SHIPCOMBAT.Captain.DrawCard"}}
+                </button>
+            </span>
+            {{/if}}
+        </div>
+    </div>
+</div>

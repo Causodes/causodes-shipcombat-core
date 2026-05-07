@@ -1,0 +1,122 @@
+{{!-- Engineer: Core Distribution (overclock/dispatch/allocation/vent) --}}
+<div class="sheet-list shipcombat-role-section">
+
+    {{#unless engineerCtx.coresSelected}}
+    <div class="shipcombat-section-overlay{{#if (shipcombatOr engineerCtx.ventLocked (shipcombatEq engineerCtx.actionsRemaining 0))}} shipcombat-section-overlay--taken{{else if engineerCtx.powerFluctuation}} shipcombat-section-overlay--critical{{/if}}">
+        {{#if engineerCtx.ventLocked}}
+            <div class="shipcombat-overlay-lock-indicator">
+                <i class="fa-solid fa-lock fa-lg"></i>
+                <span>{{localize "SHIPCOMBAT.Engineer.VentLockedDesc"}}</span>
+            </div>
+        {{else if (shipcombatEq engineerCtx.actionsRemaining 0)}}
+            <div class="shipcombat-overlay-lock-indicator">
+                <i class="fa-solid fa-ban fa-lg"></i>
+                <span>{{localize "SHIPCOMBAT.Engineer.ActionTakenDesc"}}</span>
+            </div>
+        {{else if engineerCtx.powerFluctuation}}
+            <div class="shipcombat-overlay-lock-indicator shipcombat-overlay-lock-indicator--critical">
+                <i class="fa-solid fa-triangle-exclamation fa-lg"></i>
+                <span>{{localize "SHIPCOMBAT.Engineer.CoreCritLocked"}}</span>
+                <span class="shipcombat-overlay-crit-desc">{{localize "SHIPCOMBAT.Engineer.CoreCritLockedDesc"}}</span>
+            </div>
+        {{else}}
+        <button class="shipcombat-section-overlay-btn" data-action="selectAction" data-action-type="cores">
+            {{localize "SHIPCOMBAT.Engineer.CoreDistribution"}}
+        </button>
+        {{/if}}
+    </div>
+    {{/unless}}
+
+    <div class="list-header row-content">
+        <div class="list-name">
+            {{localize "SHIPCOMBAT.Engineer.CoreDistribution"}}
+            {{#if engineerCtx.ventLocked}}
+            <span class="shipcombat-muted">  -  {{localize "SHIPCOMBAT.Engineer.VentLocked"}}</span>
+            {{/if}}
+        </div>
+    </div>
+    <div class="list-content shipcombat-helm-panel">
+
+        <div>
+            <p class="shipcombat-helm-section-label" style="text-align:center; margin:0 0 0.2rem">{{localize "SHIPCOMBAT.Label.PowerCores"}}</p>
+            <div class="shipcombat-core-pips" style="justify-content:center">
+                {{#each powerCorePips}}
+                    <div class="shipcombat-core-pip shipcombat-core-pip--{{state}}" data-pip-state="{{state}}"></div>
+                {{/each}}
+            </div>
+        </div>
+        {{#if engineerCtx.coresExhausted}}
+            <div style="text-align:center"><span class="shipcombat-muted" style="font-size:0.7rem">{{localize "SHIPCOMBAT.Engineer.CoreExhausted"}}</span></div>
+        {{/if}}
+
+        <div class="shipcombat-core-action-row">
+            <button class="shipcombat-eng-btn shipcombat-overclock-btn" data-action="overclock"
+                    {{#unless engineerCtx.canOverclock}}disabled{{/unless}}
+                    data-tooltip="{{localize 'SHIPCOMBAT.Tooltip.Overclock'}} ({{engineerCtx.overclockTier}} {{engineerCtx.overclockModifier}})">
+                {{localize "SHIPCOMBAT.Action.Overclock"}}
+            </button>
+            <button class="shipcombat-eng-btn shipcombat-dispatch-btn" data-action="dispatchCores"
+                    {{#unless engineerCtx.hasStaged}}disabled{{/unless}}
+                    data-tooltip="{{localize 'SHIPCOMBAT.Tooltip.DispatchCores'}}">
+                {{localize "SHIPCOMBAT.Engineer.DispatchCores"}}
+            </button>
+        </div>
+
+        <div class="shipcombat-core-alloc-table">
+            <div class="shipcombat-core-alloc-row shipcombat-core-alloc-row--shield">
+                <span class="shipcombat-core-alloc-name">{{localize "SHIPCOMBAT.Engineer.ShieldCommitment"}}</span>
+                <span class="shipcombat-core-alloc-detail shipcombat-muted">{{localize "SHIPCOMBAT.Engineer.ProjectedShieldPool"}}: <strong class="shipcombat-shieldpool-active">{{engineerCtx.projectedShieldPool}}</strong> / {{engineerCtx.maxVoidFlux}}</span>
+                <div class="shipcombat-core-alloc-ctrl">
+                    <span class="shipcombat-core-flux-label shipcombat-muted">{{engineerCtx.shieldStrengthPerCore}} {{localize "SHIPCOMBAT.Engineer.FluxPerCore"}}</span>
+                    <button class="shipcombat-alloc-btn" data-action="uncommitShieldCore">&minus;</button>
+                    <span class="shipcombat-core-alloc-count">{{engineerCtx.stagedShieldCores}}</span>
+                    <button class="shipcombat-alloc-btn" data-action="commitShieldCore">+</button>
+                </div>
+            </div>
+            <div class="shipcombat-core-alloc-row shipcombat-core-alloc-row--aux">
+                <span class="shipcombat-core-alloc-name">{{localize "SHIPCOMBAT.Engineer.AuxPowerAlloc"}}</span>
+                <span class="shipcombat-core-alloc-detail shipcombat-muted">{{localize "SHIPCOMBAT.Engineer.ProjectedAuxPower"}}: <strong>+{{engineerCtx.projectedAuxGain}}</strong></span>
+                <div class="shipcombat-core-alloc-ctrl">
+                    <span class="shipcombat-core-flux-label shipcombat-muted">{{engineerCtx.reserveMultiplier}} {{localize "SHIPCOMBAT.Engineer.AuxPerCore"}}</span>
+                    <button class="shipcombat-alloc-btn" data-action="uncommitAuxCore">&minus;</button>
+                    <span class="shipcombat-core-alloc-count">{{engineerCtx.stagedAuxCores}}</span>
+                    <button class="shipcombat-alloc-btn" data-action="commitAuxCore">+</button>
+                </div>
+            </div>
+            {{#each roles}}
+            {{#unless (shipcombatEq id "engineer")}}
+            <div class="shipcombat-core-alloc-row">
+                <span class="shipcombat-core-alloc-name">{{labelLocalized}}</span>
+                <span class="shipcombat-core-alloc-detail shipcombat-muted">{{#if assignedActor}}{{assignedActor.name}}{{else}}&mdash;{{/if}}</span>
+                <div class="shipcombat-core-alloc-ctrl">
+                    {{#if hasCoreAssigned}}
+                        <span class="shipcombat-core-btn--assigned"><i class="fa-solid fa-check"></i></span>
+                    {{else}}
+                        <a class="shipcombat-core-btn {{#if hasCoreStaged}}shipcombat-core-btn--staged{{/if}}"
+                           data-action="toggleCore" data-role-id="{{id}}"
+                           data-tooltip="{{localize 'SHIPCOMBAT.Tooltip.ToggleCore'}}">
+                            <i class="fa-solid fa-bolt"></i>
+                        </a>
+                    {{/if}}
+                </div>
+            </div>
+            {{/unless}}
+            {{/each}}
+        </div>
+
+        <div style="text-align:center; margin-top:0.25rem">
+            {{#if engineerCtx.ventPending}}
+            <button class="shipcombat-eng-btn shipcombat-action-danger shipcombat-action-vent-fired" disabled style="max-width:20rem; margin:0 auto">
+                {{localize "SHIPCOMBAT.Engineer.VentFired"}}
+            </button>
+            {{else}}
+            <button class="shipcombat-eng-btn shipcombat-action-danger" data-action="emergencyVent"
+                    data-tooltip="{{localize 'SHIPCOMBAT.Engineer.EmergencyVentDesc'}}" style="max-width:20rem; margin:0 auto"
+                    {{#unless engineerCtx.heat}}disabled{{/unless}}>
+                {{localize "SHIPCOMBAT.Engineer.EmergencyVent"}}
+            </button>
+            {{/if}}
+        </div>
+
+    </div>
+</div>

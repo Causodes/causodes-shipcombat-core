@@ -1,0 +1,9 @@
+{{!-- Read-only resource bar shared by torpedo and strike-craft headers.
+     Parameters: label, fillClass, pct, value, max --}}
+<div class="shipcombat-torpedo-bar">
+  <label>{{label}}</label>
+  <div class="shipcombat-torpedo-bar-track">
+    <div class="shipcombat-torpedo-bar-fill {{fillClass}}" style="width: {{pct}}%"></div>
+    <span class="shipcombat-torpedo-bar-text">{{value}} / {{max}}</span>
+  </div>
+</div>

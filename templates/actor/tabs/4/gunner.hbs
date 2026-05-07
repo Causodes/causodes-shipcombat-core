@@ -1,0 +1,88 @@
+{{!-- tabs/4/gunner.hbs -- Gunnery / Ordnance combined station tab (<= 4 players) --}}
+{{!-- Handles Gunner + Ordnance Master roles. Augur content is on the Captain tab. --}}
+<section class="tab {{tab.cssClass}}" data-group="primary" data-tab="{{tab.id}}">
+
+    {{> "gunner-claim-prompt"}}
+
+    {{#if (or isGM (lookup (lookup roles "gunner") "isMyRole"))}}
+    {{> "gunner-captain-boost"}}
+    {{> "gunner-combined-status-bar"}}
+    {{> "gunner-ordnance-allocation"}}
+
+    {{!-- ORDNANCE LAUNCH ACTIONS --}}
+    <div class="sheet-list shipcombat-ordnance-actions">
+        <div class="list-header row-content">
+            <div class="list-name">{{localize "SHIPCOMBAT.Ordnance.MainAction"}}</div>
+        </div>
+        <div class="list-content">
+            <div class="shipcombat-ordnance-action-grid">
+                {{#each ordnanceCtx.actions}}
+                {{#unless (shipcombatEq id "loadPayload")}}
+                <button class="shipcombat-ordnance-action-btn" data-action="ordnanceMasterAction" data-action-id="{{id}}"
+                        {{#unless canAfford}}disabled{{/unless}}
+                        data-tooltip="{{tooltip}}">
+                    <i class="{{icon}}"></i>
+                    <span>{{labelLocalized}}</span>
+                    <small>{{effectiveCrew}} crew / {{effectiveDuration}}T</small>
+                </button>
+                {{/unless}}
+                {{/each}}
+            </div>
+        </div>
+    </div>
+
+    {{!-- COMBINED CORE ACTIONS (Gunner + Ordnance, 3x2 grid) --}}
+    <div class="sheet-list shipcombat-gunner-core-actions shipcombat-gunner-core-actions--combined shipcombat-role-section">
+        {{#unless gunnerCtx.hasCoreAssigned}}
+        <div class="shipcombat-section-overlay shipcombat-section-overlay--taken">
+            <div class="shipcombat-overlay-lock-indicator">
+                <i class="fa-solid fa-lock fa-lg"></i>
+                <span>{{localize "SHIPCOMBAT.Tooltip.NoPowerCore"}}</span>
+            </div>
+        </div>
+        {{/unless}}
+        <div class="list-header row-content">
+            <div class="list-name">{{localize "SHIPCOMBAT.Label.CoreActions"}}</div>
+        </div>
+        <div class="list-content">
+            {{#each gunnerCtx.coreActions}}
+            <div class="shipcombat-core-action-card">
+                <button class="shipcombat-core-action-btn" data-action="gunnerCoreAction" data-core-action="{{id}}"
+                        {{#unless canAfford}}disabled{{/unless}}
+                        data-tooltip="{{descLocalized}}">
+                    <i class="{{icon}}"></i>
+                    <span>{{labelLocalized}}</span>
+                    <small>{{localize "SHIPCOMBAT.Label.PowerCores"}}</small>
+                </button>
+            </div>
+            {{/each}}
+            {{#each ordnanceCtx.coreActions}}
+            {{#unless (shipcombatEq id "magazineCrossfeed")}}
+            <div class="shipcombat-core-action-card">
+                <button class="shipcombat-core-action-btn" data-action="ordnanceMasterCoreAction" data-core-action="{{id}}"
+                        {{#unless canAfford}}disabled{{/unless}}
+                        data-tooltip="{{descLocalized}}">
+                    <i class="{{icon}}"></i>
+                    <span>{{labelLocalized}}</span>
+                    <small>{{localize "SHIPCOMBAT.Label.PowerCores"}}</small>
+                </button>
+            </div>
+            {{/unless}}
+            {{/each}}
+        </div>
+    </div>
+
+    {{!-- WEAPONS --}}
+    {{> "gunner-weapon-batteries"}}
+
+    {{!-- DEPLOYED ORDNANCE TRACKER --}}
+    {{#if useStrikeCraft}}
+    {{> "ordnance-deployed"}}
+    {{else}}
+    {{> "deployed-torpedoes"}}
+    {{/if}}
+    {{/if}}
+
+    {{> 'complete-turn' tabRoleId="gunner" turnDone=(lookup @root.sys.turnDone "gunner")}}
+
+</section>

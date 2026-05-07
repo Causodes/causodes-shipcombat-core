@@ -1,0 +1,35 @@
+{{!-- dead-reckoning-popup.hbs  -  Drag cards to set the draw order --}}
+<div class="shipcombat-dr-popup">
+
+    <p class="shipcombat-dr-instruction">
+        <i class="fa-solid fa-grip-lines"></i>
+        Drag cards to set the draw order. Position 1 will be drawn next.
+    </p>
+
+    <ol class="shipcombat-dr-list">
+        {{#each cards}}
+        <li class="shipcombat-dr-card" draggable="true" data-card-id="{{id}}">
+            <span class="shipcombat-dr-pos">{{pos}}</span>
+            <span class="shipcombat-dr-label">{{label}}</span>
+            <i class="fa-solid fa-grip-lines shipcombat-dr-grip"></i>
+        </li>
+        {{/each}}
+    </ol>
+
+    {{#if tailCount}}
+    <p class="shipcombat-dr-tail">
+        <i class="fa-solid fa-layer-group"></i>
+        Plus {{tailCount}} more order(s) below the preview (not reordered).
+    </p>
+    {{/if}}
+
+    <div class="shipcombat-dr-footer">
+        <button type="button" data-action="confirmOrder" class="shipcombat-dr-confirm-btn">
+            <i class="fa-solid fa-check"></i> Confirm Order
+        </button>
+        <button type="button" data-action="cancelOrder" class="shipcombat-dr-cancel-btn">
+            <i class="fa-solid fa-times"></i> Cancel
+        </button>
+    </div>
+
+</div>

@@ -1,0 +1,62 @@
+{{!-- strike-craft-attack-popup.hbs  -  target list for a strike craft attack run --}}
+<div class="shipcombat-tp-wrapper">
+
+    {{!-- Header: craft identity + ammo remaining --}}
+    <div class="shipcombat-tp-header">
+        <img src="{{craftImg}}" class="shipcombat-tp-weapon-icon">
+        <div class="shipcombat-tp-header-text">
+            <span class="shipcombat-tp-weapon-name">{{craftName}}</span>
+            <span class="shipcombat-tp-mode-name">{{craftTypeLabel}}  -  {{localize "SHIPCOMBAT.StrikeCraft.AttackRun"}}</span>
+        </div>
+
+    </div>
+
+    {{!-- Target list --}}
+    {{#if noTargets}}
+    <div class="shipcombat-tp-empty">
+        <i class="fa-solid fa-ban"></i>
+        {{localize "SHIPCOMBAT.StrikeCraft.NoTargets"}}
+    </div>
+    {{else}}
+    <div class="shipcombat-tp-targets">
+        {{#each targets}}
+        <div class="shipcombat-tp-target{{#if this.alreadyAttacked}} shipcombat-tp-target--done{{/if}}"
+             data-token-id="{{this.tokenId}}">
+            <img src="{{this.img}}" class="shipcombat-tp-target-icon">
+            <div class="shipcombat-tp-target-info">
+                <span class="shipcombat-tp-target-name">{{this.name}}</span>
+                <div class="shipcombat-tp-target-details">
+                    <span class="shipcombat-tp-detail">
+                        <i class="fa-solid fa-ruler"></i>
+                        {{this.distance}} {{localize "SHIPCOMBAT.Label.VoidUnits"}}
+                    </span>
+                    <span class="shipcombat-tp-detail shipcombat-tp-zone shipcombat-tp-zone--{{this.zone}}">
+                        {{this.zoneLabel}}
+                    </span>
+                    <span class="shipcombat-tp-detail">
+                        <i class="fa-solid fa-shield-halved"></i>
+                        {{this.hitQuadrantLabel}}
+                    </span>
+                </div>
+            </div>
+            <div class="shipcombat-tp-target-stats">
+                <div class="shipcombat-tp-acc{{#if (shipcombatEq this.zone 1)}} shipcombat-tp-acc--boosted{{/if}}"
+                     data-tooltip="{{this.accuracyTooltip}}">
+                    {{this.totalAccuracy}}%
+                </div>
+            </div>
+            {{#if this.alreadyAttacked}}
+            <div class="shipcombat-sc-attacked-badge" data-tooltip="{{localize 'SHIPCOMBAT.StrikeCraft.AlreadyAttacked'}}">
+                <i class="fa-solid fa-check"></i>
+            </div>
+            {{else}}
+            <button class="shipcombat-tp-fire-btn" data-action="confirmAttack" data-token-id="{{this.tokenId}}">
+                <i class="fa-solid fa-crosshairs"></i>
+            </button>
+            {{/if}}
+        </div>
+        {{/each}}
+    </div>
+    {{/if}}
+
+</div>

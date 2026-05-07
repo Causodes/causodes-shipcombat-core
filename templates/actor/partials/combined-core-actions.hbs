@@ -1,0 +1,32 @@
+{{!-- Combined Core Actions: Captain + Ordnance Master (5-player Supreme Commander tab) --}}
+<div class="sheet-list shipcombat-captain-core-actions shipcombat-captain-core-actions--combined shipcombat-role-section">
+    <div class="list-header row-content">
+        <div class="list-name">{{localize "SHIPCOMBAT.Label.CoreActions"}}</div>
+    </div>
+    <div class="list-content">
+        {{#each captainCtx.coreActions}}
+        <div class="shipcombat-core-action-card">
+            <button class="shipcombat-core-action-btn" data-action="captainCoreAction" data-core-action="{{id}}"
+                    {{#unless canAfford}}disabled{{/unless}}
+                    data-tooltip="{{descLocalized}}">
+                <i class="{{icon}}"></i>
+                <span>{{labelLocalized}}</span>
+                <small>{{localize "SHIPCOMBAT.Label.PowerCores"}}</small>
+            </button>
+        </div>
+        {{/each}}
+        {{#each ordnanceCtx.coreActions}}
+        {{#unless (shipcombatEq id "magazineCrossfeed")}}
+        <div class="shipcombat-core-action-card">
+            <button class="shipcombat-core-action-btn" data-action="ordnanceMasterCoreAction" data-core-action="{{id}}"
+                    {{#unless canAfford}}disabled{{/unless}}
+                    data-tooltip="{{descLocalized}}">
+                <i class="{{icon}}"></i>
+                <span>{{labelLocalized}}</span>
+                <small>{{localize "SHIPCOMBAT.Label.PowerCores"}}</small>
+            </button>
+        </div>
+        {{/unless}}
+        {{/each}}
+    </div>
+</div>

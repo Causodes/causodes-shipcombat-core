@@ -1,0 +1,19 @@
+{{!-- tabs/6/ordnance.hbs — Ordnance Master's station tab (6-player) --}}
+<section class="tab {{tab.cssClass}}" data-group="primary" data-tab="{{tab.id}}">
+
+    {{> "ordnance-claim-prompt"}}
+    {{> "ordnance-captain-boost"}}
+    {{> "ordnance-status-bar"}}
+    {{> "ordnance-requisition"}}
+    {{> "ordnance-main-actions"}}
+    {{> "ordnance-payload"}}
+    {{> "ordnance-core-actions"}}
+    {{#if useStrikeCraft}}
+    {{> "ordnance-deployed"}}
+    {{else}}
+    {{> "deployed-torpedoes"}}
+    {{/if}}
+
+    {{> 'complete-turn' tabRoleId="ordnance" turnDone=(lookup @root.sys.turnDone "ordnance")}}
+
+</section>

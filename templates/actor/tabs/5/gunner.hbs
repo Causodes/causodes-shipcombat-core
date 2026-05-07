@@ -1,0 +1,18 @@
+{{!-- tabs/5/gunner.hbs — Gunnery Officer tab (≤ 5 players) --}}
+{{!-- Same as 6-man but with Deployed Torpedoes above Mark Action Done. --}}
+<section class="tab {{tab.cssClass}}" data-group="primary" data-tab="{{tab.id}}">
+
+    {{> "gunner-claim-prompt"}}
+
+    {{#if (or isGM (lookup (lookup roles "gunner") "isMyRole"))}}
+    {{> "gunner-captain-boost"}}
+    {{> "gunner-status-bar"}}
+    {{> "gunner-ordnance-allocation"}}
+    {{> "gunner-core-actions"}}
+    {{> "gunner-weapon-batteries"}}
+    {{> "deployed-torpedoes"}}
+    {{/if}}
+
+    {{> 'complete-turn' tabRoleId="gunner" turnDone=(lookup @root.sys.turnDone "gunner")}}
+
+</section>

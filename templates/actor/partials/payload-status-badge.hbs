@@ -1,0 +1,7 @@
+{{!-- Inline header badge  -  params: payloadId, payloadLabel, payloadDesc --}}
+{{#if payloadId}}
+<div class="shipcombat-payload-badge" data-tooltip="{{payloadLabel}}: {{payloadDesc}}">
+    <i class="fa-solid fa-box"></i>
+    <span>{{localize "SHIPCOMBAT.Payload.ActivePayload"}}</span>
+</div>
+{{/if}}

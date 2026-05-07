@@ -1,0 +1,57 @@
+<section class="tab {{tab.cssClass}}" data-group="primary" data-tab="{{tab.id}}">
+
+{{#if isTorpedo}}
+{{!-- ═══════════════════════════ TORPEDO MAIN ═══════════════════════════ --}}
+<div class="shipcombat-torpedo-sheet">
+
+    {{> "vessel-trait-summary"}}
+
+    <div class="shipcombat-torpedo-movement">
+        {{> "vessel-movement-controls"}}
+    </div>
+
+    <div class="shipcombat-torpedo-detonate">
+        {{#if sys.designated}}
+        <button type="button" data-action="detonate" class="shipcombat-detonate-btn" disabled
+            data-tooltip="Torpedo has been designated — detonation is locked this round.">
+            <i class="fas fa-lock"></i> Detonate
+        </button>
+        {{else}}
+        <button type="button" data-action="detonate" class="shipcombat-detonate-btn">
+            <i class="fas fa-explosion"></i> Detonate
+        </button>
+        {{/if}}
+    </div>
+
+    {{> "vessel-turn-complete"}}
+
+</div>
+
+{{else if isStrikeCraft}}
+{{!-- ══════════════════════════ STRIKE CRAFT MAIN ══════════════════════════ --}}
+<div class="shipcombat-torpedo-sheet shipcombat-strikecraft-sheet">
+
+    {{> "vessel-trait-summary"}}
+
+    <div class="shipcombat-torpedo-movement">
+        {{> "vessel-movement-controls"}}
+    </div>
+
+    <div class="shipcombat-torpedo-detonate">
+        <button type="button" data-action="attack" class="shipcombat-attack-btn">
+            <i class="fas fa-crosshairs"></i> Attack
+        </button>
+    </div>
+
+    {{> "vessel-turn-complete"}}
+
+</div>
+
+{{else}}
+{{!-- ══════════════════════════ UNCONFIGURED ══════════════════════════════ --}}
+<div class="shipcombat-torpedo-sheet" style="display:flex;align-items:center;justify-content:center;height:100%;opacity:0.5;">
+    <p>Open the Configuration tab to set the ordnance type before use.</p>
+</div>
+{{/if}}
+
+</section>

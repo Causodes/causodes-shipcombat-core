@@ -1,0 +1,52 @@
+{{!-- tabs/5/captain.hbs — Supreme Commander tab (≤ 5 players) --}}
+{{!-- Handles both Captain and Ordnance Master roles.              --}}
+<section class="tab {{tab.cssClass}}" data-group="primary" data-tab="{{tab.id}}">
+
+    {{> "captain-claim-prompt"}}
+
+    {{#if (or isGM (lookup (lookup roles "captain") "isMyRole"))}}
+
+    {{!-- Command Deck: merged stance/triage/core-status + ordnance readiness (no payloads) --}}
+    {{> "command-deck-bar"}}
+    {{!-- Command Allocation: Presence roll feeds Resolve, Initiative, Efficiency, Expedience --}}
+    {{> "combined-leadership"}}
+
+    {{!-- ══════ CONDITION SECTION ══════ --}}
+    {{> "captain-conditions"}}
+
+    {{!-- ══════ ORDNANCE SECTIONS ══════ --}}
+    {{!-- Main Actions: 3×3 grid — loadPayload excluded in 5-man --}}
+    <div class="sheet-list shipcombat-ordnance-actions">
+        <div class="list-header row-content">
+            <div class="list-name">{{localize "SHIPCOMBAT.Ordnance.MainAction"}}</div>
+        </div>
+        <div class="list-content">
+            <div class="shipcombat-ordnance-action-grid">
+                {{#each ordnanceCtx.actions}}
+                {{#unless (shipcombatEq id "loadPayload")}}
+                <button class="shipcombat-ordnance-action-btn" data-action="ordnanceMasterAction" data-action-id="{{id}}"
+                        {{#unless canAfford}}disabled{{/unless}}
+                        data-tooltip="{{tooltip}}">
+                    <i class="{{icon}}"></i>
+                    <span>{{labelLocalized}}</span>
+                    <small>{{effectiveCrew}} crew / {{effectiveDuration}}T</small>
+                </button>
+                {{/unless}}
+                {{/each}}
+            </div>
+        </div>
+    </div>
+
+    {{> "combined-core-actions"}}
+    {{#if useStrikeCraft}}
+    {{> "deployed-strike-craft"}}
+    {{/if}}
+
+    {{!-- ══════ ORDERS SECTIONS ══════ --}}
+    {{> "captain-hand"}}
+    {{> "captain-active-orders"}}
+
+    {{> 'complete-turn' tabRoleId="captain" turnDone=(lookup @root.sys.turnDone "captain")}}
+    {{/if}}
+
+</section>

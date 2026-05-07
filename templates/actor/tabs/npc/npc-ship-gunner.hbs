@@ -1,0 +1,301 @@
+<section class="tab {{tab.cssClass}}" data-group="primary" data-tab="{{tab.id}}">
+
+    {{!-- ═══════ Ordnance Status ═══════ --}}
+    <div class="sheet-list shipcombat-role-status-bar">
+        <div class="list-header row-content">
+            <div class="list-name">{{localize "SHIPCOMBAT.Gunner.StatusTitle"}}</div>
+        </div>
+        <div class="list-content">
+            <div class="shipcombat-role-status-panel">
+                {{!-- Ammo --}}
+                <div class="shipcombat-resource-bar-row">
+                    <span class="shipcombat-resource-bar-label">{{localize "SHIPCOMBAT.Gunner.Ammo"}}</span>
+                    <div class="shipcombat-resource-bar-track shipcombat-resource-bar-track--plasma">
+                        <div class="shipcombat-resource-bar-fill shipcombat-bar-ammo" style="width: {{gunnerCtx.ammoPct}}%"></div>
+                    </div>
+                    <span class="shipcombat-resource-bar-value" style="color: #e8a33a">
+                        <input type="number" name="system.resources.gunner.ammo" value="{{gunnerCtx.ammo}}" min="0" class="shipcombat-npc-resource-input">
+                        /
+                        <input type="number" name="system.resources.gunner.ammoMax" value="{{gunnerCtx.ammoMax}}" min="1" class="shipcombat-npc-resource-input shipcombat-npc-max-input">
+                    </span>
+                </div>
+                {{!-- Heat --}}
+                <div class="shipcombat-resource-bar-row">
+                    <span class="shipcombat-resource-bar-label">{{localize "SHIPCOMBAT.Gunner.Heat"}}</span>
+                    <div class="shipcombat-resource-bar-track shipcombat-resource-bar-track--heat">
+                        <div class="shipcombat-resource-bar-fill-cover" style="width: calc(100% - {{gunnerCtx.heatPct}}%)"></div>
+                    </div>
+                    <span class="shipcombat-resource-bar-value" style="color: {{gunnerCtx.heatColor}}">
+                        <input type="number" name="system.heat" value="{{gunnerCtx.heat}}" min="0" max="{{gunnerCtx.heatMax}}" class="shipcombat-npc-resource-input">
+                        /
+                        <input type="number" name="system.heatMax" value="{{gunnerCtx.heatMax}}" min="1" class="shipcombat-npc-resource-input shipcombat-npc-max-input">
+                    </span>
+                </div>
+                {{!-- Auxiliary Power --}}
+                <div class="shipcombat-resource-bar-row">
+                    <span class="shipcombat-resource-bar-label">{{localize "SHIPCOMBAT.Sensors.PowerTrack"}}</span>
+                    <div class="shipcombat-resource-bar-track shipcombat-resource-bar-track--plasma">
+                        <div class="shipcombat-resource-bar-fill shipcombat-bar-charge" style="width: {{gunnerCtx.powerPct}}%"></div>
+                    </div>
+                    <span class="shipcombat-resource-bar-value" style="color: #7ec8e3">
+                        <input type="number" name="system.resources.gunner.power" value="{{gunnerCtx.power}}" min="0" class="shipcombat-npc-resource-input">
+                        /
+                        <input type="number" name="system.resources.gunner.powerMax" value="{{gunnerCtx.powerMax}}" min="1" class="shipcombat-npc-resource-input shipcombat-npc-max-input">
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{!-- ═══════ Weapon Batteries (by position) ═══════ --}}
+    {{!-- ═══════ Gunner Allocation ═══════ --}}
+    <div class="sheet-list">
+        <div class="list-header row-content">
+            <div class="list-name">{{localize "SHIPCOMBAT.Gunner.OrdnanceAllocation"}}</div>
+        </div>
+        <div class="list-content">
+            <div class="shipcombat-helm-stats">
+                <div class="shipcombat-helm-stat" data-tooltip="{{gunnerCtx.slTooltip}}">
+                    <span class="shipcombat-helm-stat-label">{{gunnerCtx.slLabel}}</span>
+                    {{#if gunnerCtx.ordnanceRolled}}
+                        <span class="shipcombat-helm-stat-value shipcombat-sl-badge">{{gunnerCtx.remainingSL}}</span>
+                    {{else}}
+                        <button class="shipcombat-roll-piloting-btn" data-action="npcRollOrdnance">
+                            <i class="fa-solid fa-dice"></i> {{gunnerCtx.rollLabel}}
+                        </button>
+                    {{/if}}
+                </div>
+                <div class="shipcombat-helm-stat" data-tooltip="{{localize 'SHIPCOMBAT.Gunner.AccuracyTooltip'}}">
+                    <span class="shipcombat-helm-stat-label">{{localize "SHIPCOMBAT.Gunner.Accuracy"}}</span>
+                    <div class="shipcombat-alloc-row">
+                        <button class="shipcombat-alloc-btn" data-action="npcAllocGunnerSL" data-stat="accuracy" data-delta="-1"
+                                {{#if gunnerCtx.allocLocked}}disabled{{/if}}>&minus;</button>
+                        <span class="shipcombat-helm-stat-value">{{gunnerCtx.allocAccuracy}}</span>
+                        <button class="shipcombat-alloc-btn" data-action="npcAllocGunnerSL" data-stat="accuracy" data-delta="1"
+                                {{#if gunnerCtx.allocLocked}}disabled{{/if}}>+</button>
+                    </div>
+                </div>
+                <div class="shipcombat-helm-stat" data-tooltip="{{localize 'SHIPCOMBAT.Gunner.PenetrationTooltip'}}">
+                    <span class="shipcombat-helm-stat-label">{{localize "SHIPCOMBAT.Gunner.Penetration"}}</span>
+                    <div class="shipcombat-alloc-row">
+                        <button class="shipcombat-alloc-btn" data-action="npcAllocGunnerSL" data-stat="penetration" data-delta="-1"
+                                {{#if gunnerCtx.allocLocked}}disabled{{/if}}>&minus;</button>
+                        <span class="shipcombat-helm-stat-value">{{gunnerCtx.allocPenetration}}</span>
+                        <button class="shipcombat-alloc-btn" data-action="npcAllocGunnerSL" data-stat="penetration" data-delta="1"
+                                {{#if gunnerCtx.allocLocked}}disabled{{/if}}>+</button>
+                    </div>
+                </div>
+                <div class="shipcombat-helm-stat" data-tooltip="{{localize 'SHIPCOMBAT.Gunner.FirepowerTooltip'}}">
+                    <span class="shipcombat-helm-stat-label">{{localize "SHIPCOMBAT.Gunner.Firepower"}}</span>
+                    <div class="shipcombat-alloc-row">
+                        <button class="shipcombat-alloc-btn" data-action="npcAllocGunnerSL" data-stat="firepower" data-delta="-1"
+                                {{#if gunnerCtx.allocLocked}}disabled{{/if}}>&minus;</button>
+                        <span class="shipcombat-helm-stat-value">{{gunnerCtx.allocFirepower}}</span>
+                        <button class="shipcombat-alloc-btn" data-action="npcAllocGunnerSL" data-stat="firepower" data-delta="1"
+                                {{#if gunnerCtx.allocLocked}}disabled{{/if}}>+</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{!-- ═══════ Weapon Batteries (by position) ═══════ --}}
+    {{#each weaponSections}}
+    <div class="sheet-list shipcombat-weapon-battery-section{{#if (and @root.helm.prowGunLocked (shipcombatEq this.id "prow"))}} shipcombat-prow-locked{{/if}}{{#if (and this.items.length (shipcombatEq this.id @root.gunnerCtx.blindedSectionId))}} shipcombat-sensor-blind{{/if}}" data-component-slot="weapon" data-component-position="{{this.id}}">
+        {{#if (and @root.helm.prowGunLocked (shipcombatEq this.id "prow"))}}
+        <div class="shipcombat-prow-locked-overlay">
+            <i class="fa-solid fa-ban"></i> {{localize "SHIPCOMBAT.Ram.ProwGunLocked"}}
+        </div>
+        {{/if}}
+        {{#if (and this.items.length (shipcombatEq this.id @root.gunnerCtx.blindedSectionId))}}
+        <div class="shipcombat-section-overlay shipcombat-section-overlay--critical">
+            <div class="shipcombat-overlay-lock-indicator shipcombat-overlay-lock-indicator--critical">
+                <i class="fa-solid fa-triangle-exclamation fa-lg"></i>
+                <span>{{localize "SHIPCOMBAT.Crit.WeaponSectionJammed"}}</span>
+                <span class="shipcombat-overlay-crit-desc">{{localize "SHIPCOMBAT.Crit.WeaponSectionJammedDesc"}}</span>
+            </div>
+        </div>
+        {{/if}}
+        <div class="list-header row-content">
+            <div class="list-name">{{this.labelLocalized}} ({{this.items.length}})</div>
+        </div>
+        <div class="list-content">
+            {{#if this.items.length}}
+                {{#each this.items}}
+                <div class="shipcombat-battery-card" data-uuid="{{this.uuid}}" data-id="{{this.id}}" data-weapon-arc="{{this.id}}" data-weapon-type="{{this.system.resourceType}}">
+                    <div class="shipcombat-battery-header">
+                        <img src="{{this.img}}" class="shipcombat-battery-icon">
+                        <span class="shipcombat-battery-name">{{this.name}}</span>
+                        <a class="list-control shipcombat-pin-arc" data-pin-weapon="{{this.id}}"
+                           data-tooltip="{{localize 'SHIPCOMBAT.Gunner.PinArc'}}"><i class="fa-solid fa-thumbtack"></i></a>
+                        <a class="list-control" data-action="deleteEmbedded"><i class="fa-solid fa-xmark"></i></a>
+                    </div>
+
+                    {{!-- Traits --}}
+                    {{#if this.traitTags.length}}
+                    <div class="shipcombat-battery-traits">
+                        {{#each this.traitTags}}
+                        <span class="shipcombat-trait-tag shipcombat-trait--{{this.key}}" data-tooltip="{{this.label}}{{#if this.value}} ({{this.value}}){{/if}}">
+                            {{this.label}}{{#if this.value}} ({{this.value}}){{/if}}
+                        </span>
+                        {{/each}}
+                    </div>
+                    {{/if}}
+
+                    {{!-- MACRO CANNON --}}
+                    {{#if (shipcombatEq this.system.resourceType "ammo")}}
+                    <div class="shipcombat-battery-body shipcombat-battery--macro">
+                        <div class="shipcombat-battery-stats-row">
+                            <div class="shipcombat-battery-stat">
+                                <span class="shipcombat-battery-stat-label">{{localize "SHIPCOMBAT.Label.Damage"}}</span>
+                                <span class="shipcombat-battery-stat-value">{{this.system.damage}}</span>
+                            </div>
+                            <div class="shipcombat-battery-stat">
+                                <span class="shipcombat-battery-stat-label">{{localize "SHIPCOMBAT.Label.Range"}}</span>
+                                <span class="shipcombat-battery-stat-value">{{this.system.range}}</span>
+                            </div>
+                            <div class="shipcombat-battery-stat" data-macro-stat-display="ammo">
+                                <span class="shipcombat-battery-stat-label">{{localize "SHIPCOMBAT.Gunner.ReadyRounds"}}</span>
+                                <span class="shipcombat-battery-stat-value shipcombat-macro-stat-ammo" style="color:#e8a33a">-</span>
+                            </div>
+                            <div class="shipcombat-battery-stat" data-macro-stat-display="hit">
+                                <span class="shipcombat-battery-stat-label">{{localize "SHIPCOMBAT.Gunner.HitMod"}}</span>
+                                <span class="shipcombat-battery-stat-value shipcombat-macro-stat-hit">-</span>
+                            </div>
+                            <div class="shipcombat-battery-stat" data-macro-stat-display="salvo">
+                                <span class="shipcombat-battery-stat-label">{{localize "SHIPCOMBAT.Gunner.Salvo"}}</span>
+                                <span class="shipcombat-battery-stat-value shipcombat-macro-stat-salvo">-</span>
+                            </div>
+                        </div>
+                        <div class="shipcombat-macro-tier-picker" data-weapon-id="{{this.id}}">
+                            {{#each this.fireTiers}}
+                            <div class="shipcombat-macro-tier-pip {{#unless this.canAfford}}shipcombat-tier-dimmed{{/unless}} {{#if this.isExclusive}}shipcombat-tier-exclusive{{/if}}"
+                                 data-tier-id="{{this.id}}"
+                                 data-tier-ammo="{{this.ammo}}"
+                                 data-tier-hit="{{this.hitMod}}"
+                                 data-tier-salvo="{{this.salvoSize}}"
+                                 data-can-afford="{{this.canAfford}}"
+                                 {{#if this.desc}}data-tooltip="{{this.desc}}" data-tooltip-direction="DOWN"{{/if}}>
+                                <span class="shipcombat-macro-pip-label">{{this.label}}</span>
+                                <div class="shipcombat-macro-pip-detail">
+                                    <span class="shipcombat-macro-pip-ammo">{{this.ammo}} rds</span>
+                                </div>
+                            </div>
+                            {{/each}}
+                        </div>
+                        <div class="shipcombat-battery-actions">
+                            <button class="shipcombat-battery-fire-btn shipcombat-fire--macro" data-action="npcFireWeapon"
+                                    data-weapon-id="{{this.id}}" data-fire-mode="" disabled>
+                                <i class="fa-solid fa-crosshairs"></i>
+                                <span class="shipcombat-macro-fire-label">{{localize "SHIPCOMBAT.Gunner.SelectFireMode"}}</span>
+                            </button>
+                        </div>
+                    </div>
+                    {{/if}}
+
+                    {{!-- PLASMA CANNON --}}
+                    {{#if (shipcombatEq this.system.resourceType "heat")}}
+                    <div class="shipcombat-battery-body shipcombat-battery--plasma">
+                        <div class="shipcombat-battery-stats-row">
+                            <div class="shipcombat-battery-stat">
+                                <span class="shipcombat-battery-stat-label">{{localize "SHIPCOMBAT.Label.Damage"}}</span>
+                                <span class="shipcombat-battery-stat-value shipcombat-plasma-dmg">{{this.plasma.totalDamage}}</span>
+                            </div>
+                            <div class="shipcombat-battery-stat">
+                                <span class="shipcombat-battery-stat-label">{{localize "SHIPCOMBAT.Label.Range"}}</span>
+                                <span class="shipcombat-battery-stat-value">{{this.system.range}}</span>
+                            </div>
+                            <div class="shipcombat-battery-stat">
+                                <span class="shipcombat-battery-stat-label">{{localize "SHIPCOMBAT.Gunner.HeatPerShot"}}</span>
+                                <span class="shipcombat-battery-stat-value shipcombat-val-heat">+{{this.plasma.heatPerShot}}</span>
+                            </div>
+                            <div class="shipcombat-battery-stat">
+                                <span class="shipcombat-battery-stat-label">{{localize "SHIPCOMBAT.Gunner.Salvo"}}</span>
+                                <span class="shipcombat-battery-stat-value">{{this.plasma.salvoSize}}</span>
+                            </div>
+                        </div>
+                        <div class="shipcombat-battery-actions">
+                            {{#if this.plasma.canFire}}
+                            <button class="shipcombat-battery-fire-btn shipcombat-fire--plasma" data-action="npcFireWeapon" data-fire-mode="plasmaShot" data-weapon-id="{{this.id}}">
+                                <i class="fa-solid fa-bolt"></i> {{localize "SHIPCOMBAT.Gunner.PlasmaShot"}}
+                            </button>
+                            {{/if}}
+                        </div>
+                    </div>
+                    {{/if}}
+
+                    {{!-- LANCE BATTERY --}}
+                    {{#if (shipcombatEq this.system.resourceType "power")}}
+                    <div class="shipcombat-battery-body shipcombat-battery--lance">
+                        <div class="shipcombat-battery-stats-row">
+                            <div class="shipcombat-battery-stat">
+                                <span class="shipcombat-battery-stat-label">{{localize "SHIPCOMBAT.Label.Damage"}}</span>
+                                <span class="shipcombat-battery-stat-value">{{this.system.damage}}</span>
+                            </div>
+                            <div class="shipcombat-battery-stat">
+                                <span class="shipcombat-battery-stat-label">{{localize "SHIPCOMBAT.Label.Range"}}</span>
+                                <span class="shipcombat-battery-stat-value">{{this.system.range}}</span>
+                            </div>
+                        </div>
+                        <div class="shipcombat-lance-charge-meter">
+                            <span class="shipcombat-lance-charge-label">{{localize "SHIPCOMBAT.Gunner.Power"}}</span>
+                            <div class="shipcombat-lance-pips">
+                                {{#each this.lance.tiers}}
+                                <div class="shipcombat-lance-tier-group {{#if this.isActive}}shipcombat-lance-tier-active{{/if}}">
+                                    <span class="shipcombat-lance-tier-label">{{this.label}}</span>
+                                    <span class="shipcombat-lance-tier-dmg">×{{this.multiplier}}</span>
+                                </div>
+                                {{/each}}
+                            </div>
+                            <span class="shipcombat-lance-charge-value">{{this.lance.power}}/{{this.lance.powerMax}}</span>
+                        </div>
+                        <div class="shipcombat-battery-actions">
+                            {{#if this.lance.canFire}}
+                            <button class="shipcombat-battery-fire-btn shipcombat-fire--lance" data-action="npcFireWeapon" data-fire-mode="lanceFire" data-weapon-id="{{this.id}}">
+                                <i class="fa-solid fa-bolt-lightning"></i>
+                                {{#if this.lance.activeTierLabel}}
+                                    {{this.lance.activeTierLabel}} ({{this.lance.activeDamage}} dmg)
+                                {{else}}
+                                    {{localize "SHIPCOMBAT.Gunner.LanceFire"}}
+                                {{/if}}
+                            </button>
+                            {{/if}}
+                        </div>
+                    </div>
+                    {{/if}}
+
+                    {{!-- POINT DEFENSE --}}
+                    {{#if (shipcombatEq this.system.resourceType "none")}}
+                    <div class="shipcombat-battery-body shipcombat-battery--pd">
+                        <div class="shipcombat-battery-stats-row">
+                            <div class="shipcombat-battery-stat">
+                                <span class="shipcombat-battery-stat-label">{{localize "SHIPCOMBAT.Label.Damage"}}</span>
+                                <span class="shipcombat-battery-stat-value">{{this.system.damage}}</span>
+                            </div>
+                            <div class="shipcombat-battery-stat">
+                                <span class="shipcombat-battery-stat-label">{{localize "SHIPCOMBAT.Label.Range"}}</span>
+                                <span class="shipcombat-battery-stat-value">{{this.system.range}}</span>
+                            </div>
+                        </div>
+                        <div class="shipcombat-battery-actions">
+                            <button class="shipcombat-battery-fire-btn shipcombat-fire--pd" data-action="npcFireWeapon" data-fire-mode="pointDefense" data-weapon-id="{{this.id}}">
+                                <i class="fa-solid fa-shield-halved"></i> {{localize "SHIPCOMBAT.Gunner.Fire"}}
+                            </button>
+                        </div>
+                    </div>
+                    {{/if}}
+
+                </div>
+                {{/each}}
+            {{else}}
+                <div class="list-row">
+                    <div class="row-content">
+                        <span class="shipcombat-empty-slot">{{localize "SHIPCOMBAT.Label.Empty"}}</span>
+                    </div>
+                </div>
+            {{/if}}
+        </div>
+    </div>
+    {{/each}}
+
+</section>

@@ -1,0 +1,24 @@
+{{!-- Shared weapon/warhead traits grid for torpedo and strike-craft config tabs.
+     Parameters: title (e.g. "Warhead Traits" or "Weapon Traits")
+     Requires sys.traits context --}}
+<div class="shipcombat-torpedo-traits">
+    <h4>{{title}}</h4>
+    <div class="shipcombat-torpedo-trait-grid">
+        <div class="shipcombat-torpedo-trait">
+            <label>Rend</label>
+            <input type="number" name="system.traits.rend" value="{{sys.traits.rend}}" />
+        </div>
+        <div class="shipcombat-torpedo-trait">
+            <label>AP</label>
+            <input type="number" name="system.traits.armourPenetration" value="{{sys.traits.armourPenetration}}" />
+        </div>
+        <div class="shipcombat-torpedo-trait">
+            <label>Shd Burn</label>
+            <input type="number" name="system.traits.shieldBurn" value="{{sys.traits.shieldBurn}}" />
+        </div>
+        <div class="shipcombat-torpedo-trait">
+            <label>Shd Bypass</label>
+            <input type="checkbox" name="system.traits.shieldBypass" {{checked sys.traits.shieldBypass}} />
+        </div>
+    </div>
+</div>

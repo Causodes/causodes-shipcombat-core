@@ -1,0 +1,66 @@
+{{!-- Captain: Voidshield Allocation (arc compass + sector controls) --}}
+<div class="sheet-list">
+    <div class="list-header row-content">
+        <div class="list-name">{{localize "SHIPCOMBAT.Sensors.VoidshieldAllocation"}}</div>
+    </div>
+    <div class="list-content shipcombat-shield-alloc-row">
+
+        {{!-- Sector max list (left) --}}
+        <div class="shipcombat-shield-sector-list">
+          <div class="shipcombat-ssl-head">{{localize "SHIPCOMBAT.Sensors.ZoneMax"}}</div>
+          {{#each shipSectors}}
+          <div class="shipcombat-ssl-row">
+            <span class="shipcombat-ssl-label">{{label}}</span>
+            <span class="shipcombat-ssl-max">{{zoneThreshold}}</span>
+          </div>
+          {{/each}}
+        </div>
+
+        {{!-- SVG Arc Compass with overlaid +/- controls --}}
+        <div class="shipcombat-arc-compass-wrap">
+            <svg class="shipcombat-arc-compass-svg" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+                <path d="M 50.14 42.64 A 76 76 0 0 1 149.86 42.64 L 138.05 56.23 A 58 58 0 0 0 61.95 56.23 Z"
+                      fill="{{#if captainCtx.shields.bow.over}}#44aaff{{else}}#00ff88{{/if}}" fill-opacity="{{captainCtx.shields.bow.pct}}"
+                      stroke="{{#if captainCtx.shields.bow.over}}#44aaff{{else}}#00ff88{{/if}}" stroke-opacity="0.75" stroke-width="1"/>
+                <path d="M 157.36 50.14 A 76 76 0 0 1 157.36 149.86 L 143.77 138.05 A 58 58 0 0 0 143.77 61.95 Z"
+                      fill="{{#if captainCtx.shields.starboard.over}}#44aaff{{else}}#00ff88{{/if}}" fill-opacity="{{captainCtx.shields.starboard.pct}}"
+                      stroke="{{#if captainCtx.shields.starboard.over}}#44aaff{{else}}#00ff88{{/if}}" stroke-opacity="0.75" stroke-width="1"/>
+                <path d="M 149.86 157.36 A 76 76 0 0 1 50.14 157.36 L 61.95 143.77 A 58 58 0 0 0 138.05 143.77 Z"
+                      fill="{{#if captainCtx.shields.stern.over}}#44aaff{{else}}#00ff88{{/if}}" fill-opacity="{{captainCtx.shields.stern.pct}}"
+                      stroke="{{#if captainCtx.shields.stern.over}}#44aaff{{else}}#00ff88{{/if}}" stroke-opacity="0.75" stroke-width="1"/>
+                <path d="M 42.64 149.86 A 76 76 0 0 1 42.64 50.14 L 56.23 61.95 A 58 58 0 0 0 56.23 138.05 Z"
+                      fill="{{#if captainCtx.shields.port.over}}#44aaff{{else}}#00ff88{{/if}}" fill-opacity="{{captainCtx.shields.port.pct}}"
+                      stroke="{{#if captainCtx.shields.port.over}}#44aaff{{else}}#00ff88{{/if}}" stroke-opacity="0.75" stroke-width="1"/>
+                <circle cx="100" cy="100" r="36"
+                        fill="#0a0f0a" fill-opacity="0.88"
+                        stroke="#00ff88" stroke-opacity="0.22" stroke-width="1"/>
+                <polygon points="100,6 93,22 107,22"
+                         fill="{{#if captainCtx.shields.bow.over}}#44aaff{{else}}#00ff88{{/if}}" fill-opacity="0.90"/>
+            </svg>
+
+            <span class="shipcombat-arc-val shipcombat-arc-val--bow{{#if captainCtx.shields.bow.over}} shipcombat-arc-val--over{{/if}}"         data-sector="bow"       data-field="shields">{{captainCtx.shields.bow.val}}</span>
+            <span class="shipcombat-arc-val shipcombat-arc-val--starboard{{#if captainCtx.shields.starboard.over}} shipcombat-arc-val--over{{/if}}" data-sector="starboard" data-field="shields">{{captainCtx.shields.starboard.val}}</span>
+            <span class="shipcombat-arc-val shipcombat-arc-val--stern{{#if captainCtx.shields.stern.over}} shipcombat-arc-val--over{{/if}}"       data-sector="stern"     data-field="shields">{{captainCtx.shields.stern.val}}</span>
+            <span class="shipcombat-arc-val shipcombat-arc-val--port{{#if captainCtx.shields.port.over}} shipcombat-arc-val--over{{/if}}"         data-sector="port"      data-field="shields">{{captainCtx.shields.port.val}}</span>
+
+            <div class="shipcombat-arc-center">
+                <div class="shipcombat-arc-pool-val">{{sys.shieldPool.current}}</div>
+                <span class="shipcombat-arc-dir">{{localize "SHIPCOMBAT.Sensors.PoolAvailable"}}</span>
+            </div>
+        </div>
+
+        {{!-- Controls panel (right) --}}
+        <div class="shipcombat-arc-hint-panel">
+          <div class="shipcombat-ssl-head">{{localize "SHIPCOMBAT.Sensors.Controls"}}</div>
+          <div class="shipcombat-arc-hint-row"><span class="shipcombat-arc-hint-key">Scroll</span><span class="shipcombat-arc-hint-val">Adjust</span></div>
+          <div class="shipcombat-arc-hint-row"><span class="shipcombat-arc-hint-key">Left-Click</span><span class="shipcombat-arc-hint-val">+1</span></div>
+          <div class="shipcombat-arc-hint-row"><span class="shipcombat-arc-hint-key">Right-Click</span><span class="shipcombat-arc-hint-val">−1</span></div>
+          <button class="shipcombat-eng-btn shipcombat-controls-flux-btn" data-action="fluxToCharge"
+                  data-tooltip="{{localize 'SHIPCOMBAT.Engineer.FluxToChargeTooltip'}}"
+                  {{#unless sys.shieldPool.current}}disabled{{/unless}}>
+              {{localize "SHIPCOMBAT.Engineer.FluxToChargeShort"}}
+          </button>
+        </div>
+
+    </div>
+</div>

@@ -1,0 +1,12 @@
+{{!--
+  component-extended-fields  –  default (no-op) partial.
+
+  System adapters that declare extra component fields via
+  SystemAdapter.getComponentSchemaExtensions() should override this partial
+  via ShipCombat.registerPartialOverride("component-extended-fields", path)
+  in their "init" hook, and render any system.extended.* fields there.
+
+  Context available:
+    slot   – component slot string ("weapon", "armour", "engine", ...)
+    system – full item system data (access extended fields as system.extended.*)
+--}}

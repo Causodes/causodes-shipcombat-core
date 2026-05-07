@@ -1,0 +1,27 @@
+{{!-- tabs/4/captain.hbs — Supreme Commander / Augur combined station tab (≤ 4 players) --}}
+{{!-- Handles Captain + Sensors (Augur) roles. Ordnance launch actions are on the Gunner tab. --}}
+<section class="tab {{tab.cssClass}}" data-group="primary" data-tab="{{tab.id}}">
+
+    {{> "captain-claim-prompt"}}
+
+    {{#if (or isGM (lookup (lookup roles "captain") "isMyRole"))}}
+
+    {{> "captain-status-bar"}}
+    {{> "captain-leadership"}}
+
+    {{!-- ══════ CONDITION SECTION ══════ --}}
+    {{> "captain-conditions"}}
+
+        {{!-- ══════ AUGUR SECTIONS ══════ --}}
+    {{> "sensors-radar"}}
+    {{> "sensors-bda"}}
+    {{> "sensors-abilities-ref"}}
+
+    {{!-- ══════ ORDERS SECTIONS ══════ --}}
+    {{> "captain-hand"}}
+    {{> "captain-active-orders"}}
+
+    {{> 'complete-turn' tabRoleId="captain" turnDone=(lookup @root.sys.turnDone "captain")}}
+    {{/if}}
+
+</section>

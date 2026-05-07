@@ -1,0 +1,29 @@
+{{!-- Ordnance: Payload Allocation --}}
+<div class="sheet-list shipcombat-payload-section">
+    <div class="list-header row-content">
+        <div class="list-name">{{localize "SHIPCOMBAT.Ordnance.PayloadAllocation"}}</div>
+    </div>
+    <div class="list-content">
+        {{#each ordnanceCtx.payloadOptions}}
+        <div class="shipcombat-payload-role-row">
+            <span class="shipcombat-payload-role-label">{{roleLabel}}</span>
+            <div class="shipcombat-payload-buttons">
+                {{#each items}}
+                <button class="shipcombat-payload-btn"
+                        data-action="sendPayload" data-payload-id="{{id}}"
+                        {{#unless canSend}}disabled{{/unless}}
+                        data-tooltip="{{descLocalized}}">
+                    <i class="{{icon}}"></i>
+                    <span>{{labelLocalized}}</span>
+                </button>
+                {{/each}}
+                {{#if hasActive}}
+                <div class="shipcombat-payload-deployed-overlay">
+                    <i class="fa-solid fa-check-circle"></i> {{localize "SHIPCOMBAT.Ordnance.Deployed"}}
+                </div>
+                {{/if}}
+            </div>
+        </div>
+        {{/each}}
+    </div>
+</div>

@@ -1,0 +1,117 @@
+{{!-- Pilot: Overcharged Actions (single combined section — Flip and Burn / Full Plasma Burn / Strafe / Retrograde Thrust) --}}
+{{!-- hasCoreAssigned is sourced from @root.helm.hasCoreAssigned (buildHelmContext) which covers
+     both engineer-dispatched cores (assignedCores.pilot) AND captain-card cores (resources.pilot.coreCount). --}}
+<div class="sheet-list shipcombat-pilot-core-actions shipcombat-role-section">
+    {{#unless helm.hasCoreAssigned}}
+    <div class="shipcombat-section-overlay shipcombat-section-overlay--taken">
+        <div class="shipcombat-overlay-lock-indicator">
+            <i class="fa-solid fa-lock fa-lg"></i>
+            <span>{{localize "SHIPCOMBAT.Tooltip.NoPowerCore"}}</span>
+        </div>
+    </div>
+    {{/unless}}
+    <div class="list-header row-content">
+        <div class="list-name">
+            {{localize "SHIPCOMBAT.Label.CoreActions"}}
+            <span class="shipcombat-muted">  —  {{localize "SHIPCOMBAT.Label.Overcharged"}}</span>
+        </div>
+    </div>
+    <div class="list-content">
+
+        {{!-- ── 1. Flip and Burn ── --}}
+        <div class="list-row {{#unless helm.hasCoreAssigned}}inactive{{/unless}} shipcombat-pilot-action-row">
+            <div class="row-content">
+                <div class="list-name"><strong>{{localize "SHIPCOMBAT.Action.PilotFlipAndBurn"}}</strong></div>
+            </div>
+            <div class="description">{{localize "SHIPCOMBAT.Action.PilotFlipAndBurnDesc"}}</div>
+            <div class="shipcombat-helm-panel shipcombat-flipburn-panel" data-flip-burn-panel>
+                <div class="shipcombat-helm-confirm-row">
+                    {{#if helm.hasCoreAssigned}}
+                        {{#if helm.flipAndBurnAvailable}}
+                            <button type="button" class="shipcombat-helm-confirm" data-action="pilotFlipAndBurn">
+                                <i class="fa-solid fa-check"></i> {{localize "SHIPCOMBAT.Helm.ConfirmCoreAction"}}
+                            </button>
+                        {{else}}
+                            <span class="shipcombat-helm-note">{{localize "SHIPCOMBAT.Warning.FlipBurnNeedsPower"}}</span>
+                        {{/if}}
+                    {{/if}}
+                </div>
+            </div>
+        </div>
+        <hr class="shipcombat-divider">
+
+        {{!-- ── 2. Full Plasma Burn (Maximum Overdrive) ── --}}
+        <div class="list-row {{#unless helm.hasCoreAssigned}}inactive{{/unless}} shipcombat-pilot-action-row">
+            <div class="row-content">
+                <div class="list-name"><strong>{{localize "SHIPCOMBAT.Action.PilotOverdrive"}}</strong></div>
+            </div>
+            <div class="description">{{localize "SHIPCOMBAT.Action.PilotOverdriveDesc"}}</div>
+            <div class="shipcombat-helm-panel shipcombat-overdrive-panel">
+                <div class="shipcombat-helm-confirm-row">
+                    {{#if helm.hasCoreAssigned}}
+                        <button type="button" class="shipcombat-helm-confirm" data-action="pilotOverdrive">
+                            <i class="fa-solid fa-check"></i> {{localize "SHIPCOMBAT.Helm.ConfirmCoreAction"}}
+                        </button>
+                    {{/if}}
+                </div>
+            </div>
+        </div>
+        <hr class="shipcombat-divider">
+
+        {{!-- ── 3. Strafe ── --}}
+        <div class="list-row {{#unless helm.hasCoreAssigned}}inactive{{/unless}} shipcombat-pilot-action-row">
+            <div class="row-content">
+                <div class="list-name"><strong>{{localize "SHIPCOMBAT.Action.PilotStrafe"}}</strong></div>
+            </div>
+            <div class="description">{{localize "SHIPCOMBAT.Action.PilotStrafeDesc"}}</div>
+            <div class="shipcombat-helm-panel shipcombat-strafe-panel">
+                <div class="shipcombat-helm-control-block">
+                    <div class="shipcombat-helm-bearing">
+                        <span class="shipcombat-bearing-label shipcombat-strafe-label">← {{localize "SHIPCOMBAT.Helm.StrafePort"}} {{helm.strafeMax}}</span>
+                        <input type="range" class="shipcombat-bearing-slider" data-strafe-slider
+                               min="-{{helm.strafeMax}}" max="{{helm.strafeMax}}" step="1" value="0">
+                        <span class="shipcombat-bearing-label shipcombat-strafe-label">{{localize "SHIPCOMBAT.Helm.StrafeStarboard"}} {{helm.strafeMax}} →</span>
+                    </div>
+                    <div class="shipcombat-bearing-readout"><span data-strafe-display>{{localize "SHIPCOMBAT.Helm.StrafeCenter"}}</span></div>
+                </div>
+                <div class="shipcombat-helm-confirm-row">
+                    {{#if helm.hasCoreAssigned}}
+                        <button type="button" class="shipcombat-helm-confirm" data-action="pilotStrafe" data-strafe-confirm>
+                            <i class="fa-solid fa-check"></i> {{localize "SHIPCOMBAT.Helm.Confirm"}}
+                        </button>
+                        <span class="shipcombat-helm-note">{{localize "SHIPCOMBAT.Helm.ConfirmNote"}}</span>
+                    {{/if}}
+                </div>
+            </div>
+        </div>
+        <hr class="shipcombat-divider">
+
+        {{!-- ── 4. Retrograde Thrust ── --}}
+        <div class="list-row {{#unless helm.hasCoreAssigned}}inactive{{/unless}} shipcombat-pilot-action-row">
+            <div class="row-content">
+                <div class="list-name"><strong>{{localize "SHIPCOMBAT.Action.PilotRetrograde"}}</strong></div>
+            </div>
+            <div class="description">{{localize "SHIPCOMBAT.Action.PilotRetrogradeDesc"}}</div>
+            <div class="shipcombat-helm-panel shipcombat-retro-panel">
+                <div class="shipcombat-helm-control-block">
+                    <div class="shipcombat-helm-bearing">
+                        <span class="shipcombat-bearing-label shipcombat-retro-label">1 {{localize "SHIPCOMBAT.Label.VoidUnits"}}</span>
+                        <input type="range" class="shipcombat-bearing-slider" data-retro-slider
+                               min="1" max="{{helm.retroMax}}" step="1" value="1">
+                        <span class="shipcombat-bearing-label shipcombat-retro-label">{{helm.retroMax}} {{localize "SHIPCOMBAT.Label.VoidUnits"}}</span>
+                    </div>
+                    <div class="shipcombat-bearing-readout"><span data-retro-display></span></div>
+                </div>
+                <div class="shipcombat-helm-confirm-row">
+                    {{#if helm.hasCoreAssigned}}
+                        <button type="button" class="shipcombat-helm-confirm" data-action="pilotRetrograde">
+                            <i class="fa-solid fa-check"></i> {{localize "SHIPCOMBAT.Helm.Confirm"}}
+                        </button>
+                        <span class="shipcombat-helm-note">{{localize "SHIPCOMBAT.Helm.ConfirmNote"}}</span>
+                    {{/if}}
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>

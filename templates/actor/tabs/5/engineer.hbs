@@ -1,0 +1,18 @@
+{{!-- tabs/5/engineer.hbs — Engineer tab (5-player). Includes voidshield allocation. --}}
+<section class="tab {{tab.cssClass}}" data-group="primary" data-tab="{{tab.id}}">
+
+    {{> "engineer-claim-prompt"}}
+
+    {{#if (or isGM (lookup (lookup roles "engineer") "isMyRole"))}}
+    {{> "engineer-captain-boost"}}
+    {{> "engineer-status-bar"}}
+    {{> "captain-voidshields"}}
+    {{> "engineer-core-distribution"}}
+    {{> "engineer-heat-management"}}
+    {{> "engineer-fire-suppression"}}
+    {{> "engineer-hull-repair"}}
+    {{/if}}
+
+    {{> 'complete-turn' tabRoleId="engineer" turnDone=(lookup @root.sys.turnDone "engineer")}}
+
+</section>

@@ -1,0 +1,16 @@
+{{!-- tabs/6/sensors.hbs — Sensors Operator's station tab --}}
+<section class="tab {{tab.cssClass}}" data-group="primary" data-tab="{{tab.id}}">
+
+    {{> "sensors-claim-prompt"}}
+
+    {{#if (or isGM (lookup (lookup roles "sensors") "isMyRole"))}}
+    {{> "sensors-captain-boost"}}
+    {{> "sensors-status-bar"}}
+    {{> "sensors-radar"}}
+    {{> "sensors-bda"}}
+    {{> "sensors-abilities-ref"}}
+    {{/if}}
+
+    {{> 'complete-turn' tabRoleId="sensors" turnDone=(lookup @root.sys.turnDone "sensors")}}
+
+</section>

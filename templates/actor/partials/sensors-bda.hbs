@@ -1,0 +1,17 @@
+{{!-- Sensors: BDA Button --}}
+{{#if (or sensorsCtx.bdaAvailable sensorsCtx.bdaCorrectionPending)}}
+<div class="sheet-list shipcombat-bda-section {{#if sensorsCtx.bdaCorrectionPending}}shipcombat-bda-section--correction{{else}}shipcombat-bda-section--available{{/if}}">
+    <div class="list-content">
+        <button class="shipcombat-bda-roll-btn" data-action="openBDAPopup"
+                data-tooltip="{{localize 'SHIPCOMBAT.BDA.OpenPopupTooltip'}}">
+            <i class="fa-solid fa-satellite-dish"></i>
+            {{#if sensorsCtx.bdaCorrectionPending}}
+                {{localize "SHIPCOMBAT.BDA.CorrectionTitle"}}
+                <span class="shipcombat-bda-sl-badge">SL {{sensorsCtx.bdaResultSL}}</span>
+            {{else}}
+                {{localize "SHIPCOMBAT.BDA.Title"}}
+            {{/if}}
+        </button>
+    </div>
+</div>
+{{/if}}

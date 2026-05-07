@@ -1,0 +1,23 @@
+{{!-- Sensors: Status Bar (power track) --}}
+<div class="sheet-list shipcombat-role-status-bar">
+    <div class="list-header row-content">
+        <div class="list-name">{{localize "SHIPCOMBAT.Sensors.StatusTitle"}}</div>
+        {{#with (lookup roles "sensors")}}
+        {{> "payload-status-badge"
+            payloadId=payloadId payloadLabel=payloadLabel payloadDesc=payloadDesc}}
+        {{> "core-status-banner"
+            coreCount=coreCount coreActionsPlayedLabels=@root.sensorsCtx.coreActionsPlayedLabels hasCoreStaged=hasCoreStaged}}
+        {{/with}}
+    </div>
+    <div class="list-content">
+        <div class="shipcombat-role-status-panel">
+            <div class="shipcombat-resource-bar-row">
+                <span class="shipcombat-resource-bar-label">{{localize "SHIPCOMBAT.Sensors.PowerTrack"}}</span>
+                <div class="shipcombat-resource-bar-track shipcombat-resource-bar-track--plasma">
+                    <div class="shipcombat-resource-bar-fill shipcombat-bar-data" style="width: {{sensorsCtx.powerPct}}%"></div>
+                </div>
+                <span class="shipcombat-resource-bar-value" style="color: #7ec8e3">{{sensorsCtx.power}}/{{sensorsCtx.powerMax}}</span>
+            </div>
+        </div>
+    </div>
+</div>

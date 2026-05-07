@@ -1,0 +1,63 @@
+{{!-- Ram Target Popup - styled to match targeting-popup.hbs --}}
+<div class="shipcombat-tp-wrapper">
+
+    {{!-- Header: burst icon + title + power remaining --}}
+    <div class="shipcombat-tp-header">
+        <div class="shipcombat-tp-weapon-icon" style="display:flex;align-items:center;justify-content:center;font-size:1.2rem;color:#ff6b6b;">
+            <i class="fa-solid fa-burst"></i>
+        </div>
+        <div class="shipcombat-tp-header-text">
+            <span class="shipcombat-tp-weapon-name">{{localize "SHIPCOMBAT.Dialog.RamTitle"}}</span>
+            <span class="shipcombat-tp-mode-name">{{localize "SHIPCOMBAT.Ram.PopupHint"}}</span>
+        </div>
+        <div class="shipcombat-tp-header-stats">
+            <span class="shipcombat-tp-stat shipcombat-tp-stat--cost">
+                <i class="fa-solid fa-bolt-lightning"></i>
+                {{powerRemaining}}% / {{powerMax}}%
+            </span>
+        </div>
+    </div>
+
+    {{!-- Target list --}}
+    {{#if noTargets}}
+    <div class="shipcombat-tp-empty">
+        <i class="fa-solid fa-ban"></i>
+        {{localize "SHIPCOMBAT.Ram.NoTargets"}}
+    </div>
+    {{else}}
+    <div class="shipcombat-tp-targets">
+        {{#each targets}}
+        <div class="shipcombat-tp-target shipcombat-ram-target-row" data-token-id="{{this.tokenId}}">
+            <img src="{{this.img}}" class="shipcombat-tp-target-icon">
+            <div class="shipcombat-tp-target-info">
+                <span class="shipcombat-tp-target-name">{{this.name}}</span>
+                <div class="shipcombat-tp-target-details">
+                    <span class="shipcombat-tp-detail">
+                        <i class="fa-solid fa-ruler"></i>
+                        {{this.distance}} {{shipcombatTerm "DistanceUnitAbbr"}}
+                    </span>
+                    <span class="shipcombat-tp-detail">
+                        <i class="fa-solid fa-shield-halved"></i>
+                        {{this.hitSectorLabel}}
+                    </span>
+                    <span class="shipcombat-tp-detail">
+                        <i class="fa-solid fa-bolt-lightning"></i>
+                        {{this.thrustPctDisplay}}%
+                    </span>
+                </div>
+            </div>
+            <button class="shipcombat-tp-fire-btn" data-action="confirmRam" data-token-id="{{this.tokenId}}"
+                    data-tooltip="{{localize "SHIPCOMBAT.Ram.ConfirmTooltip"}}">
+                <i class="fa-solid fa-burst"></i>
+            </button>
+        </div>
+        {{/each}}
+    </div>
+
+    <p class="shipcombat-ram-warning">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        {{localize "SHIPCOMBAT.Ram.LockoutWarning"}}
+    </p>
+    {{/if}}
+
+</div>

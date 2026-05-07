@@ -1,0 +1,53 @@
+<section class="tab {{tab.cssClass}}" data-group="primary" data-tab="{{tab.id}}">
+<div class="shipcombat-torpedo-sheet">
+
+    {{!-- Warhead Count --}}
+    <div class="shipcombat-torpedo-bar">
+        <label>Warheads</label>
+        <div class="shipcombat-torpedo-bar-track">
+            <div class="shipcombat-torpedo-bar-fill hull" style="width: {{hullPct}}%"></div>
+            <span class="shipcombat-torpedo-bar-text">
+                <input type="number" name="system.hull.value" value="{{sys.hull.value}}" class="shipcombat-torpedo-inline" />
+                /
+                <input type="number" name="system.hull.max" value="{{sys.hull.max}}" class="shipcombat-torpedo-inline" />
+            </span>
+        </div>
+    </div>
+
+    {{!-- Fuel --}}
+    <div class="shipcombat-torpedo-bar">
+        <label>Fuel</label>
+        <div class="shipcombat-torpedo-bar-track">
+            <div class="shipcombat-torpedo-bar-fill fuel" style="width: {{fuelPct}}%"></div>
+            <span class="shipcombat-torpedo-bar-text">
+                <input type="number" name="system.fuel.value" value="{{sys.fuel.value}}" class="shipcombat-torpedo-inline" />
+                /
+                <input type="number" name="system.fuel.max" value="{{sys.fuel.max}}" class="shipcombat-torpedo-inline" />
+            </span>
+        </div>
+    </div>
+
+    {{!-- Movement + Payload stats --}}
+    <div class="shipcombat-torpedo-stats">
+        <div class="shipcombat-torpedo-stat">
+            <label>SPD</label>
+            <input type="number" name="system.movement.speed" value="{{sys.movement.speed}}" />
+        </div>
+        <div class="shipcombat-torpedo-stat">
+            <label>MAN</label>
+            <input type="number" name="system.movement.maneuverability" value="{{sys.movement.maneuverability}}" />
+        </div>
+        <div class="shipcombat-torpedo-stat">
+            <label>DMG</label>
+            <input type="number" name="system.payloadDamage" value="{{sys.payloadDamage}}" />
+        </div>
+        <div class="shipcombat-torpedo-stat">
+            <label>RADIUS</label>
+            <input type="number" name="system.payloadRadius" value="{{sys.payloadRadius}}" />
+        </div>
+    </div>
+
+    {{> "vessel-weapon-traits" title="Warhead Traits"}}
+
+</div>
+</section>

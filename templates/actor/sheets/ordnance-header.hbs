@@ -1,0 +1,39 @@
+<div class="shipcombat-header shipcombat-torpedo-header-block">
+
+  <header class="sheet-header">
+    <img class="profile" src="{{actor.img}}" data-action="editImage" data-edit="img">
+    <div class="header-details">
+      <div class="details-row name">
+        <input type="text" name="name" value="{{actor.name}}" placeholder="Ordnance"
+               {{#unless owner}}disabled{{/unless}}>
+      </div>
+
+      {{#if isTorpedo}}
+      <div class="shipcombat-torpedo-bars">
+        {{> "vessel-resource-bar"
+            label="Warheads Lost" fillClass="hull" pct=hullPct value=sys.hull.value max=sys.hull.max}}
+        {{> "vessel-resource-bar"
+            label="Fuel" fillClass="fuel" pct=fuelPct value=sys.fuel.value max=sys.fuel.max}}
+      </div>
+
+      {{else if isStrikeCraft}}
+      <div class="shipcombat-torpedo-bars">
+        {{> "vessel-resource-bar"
+            label="Flight Losses" fillClass="hull" pct=hullPct value=sys.hull.value max=sys.hull.max}}
+        {{> "vessel-resource-bar"
+            label="Fuel" fillClass="fuel" pct=fuelPct value=sys.fuel.value max=sys.fuel.max}}
+        {{> "vessel-resource-bar"
+            label="Ammo" fillClass="ammo" pct=ammoPct value=sys.ammo.value max=sys.ammo.max}}
+      </div>
+
+      {{else}}
+      {{!-- Unconfigured: prompt the user to set a subtype --}}
+      <div class="shipcombat-torpedo-bars" style="align-items:center;padding:4px 0;">
+        <em style="font-size:0.75rem;opacity:0.6;">Set ordnance type on the Configuration tab.</em>
+      </div>
+      {{/if}}
+
+    </div>
+  </header>
+
+</div>

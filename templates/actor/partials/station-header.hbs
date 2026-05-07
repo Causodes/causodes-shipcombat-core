@@ -1,0 +1,10 @@
+{{#if role}}
+<div class="sheet-list">
+    <div class="list-header row-content">
+        <div class="list-name">{{role.labelLocalized}}</div>
+        {{#if role.assignedUser}}
+            <div>{{role.assignedUser.name}}</div>
+        {{/if}}
+    </div>
+</div>
+{{/if}}

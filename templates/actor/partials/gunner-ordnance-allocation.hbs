@@ -1,0 +1,50 @@
+{{!-- Gunner: Ordnance SL Allocation (roll + accuracy/penetration/firepower) --}}
+<div class="sheet-list">
+    <div class="list-header row-content">
+        <div class="list-name">{{localize "SHIPCOMBAT.Gunner.OrdnanceAllocation"}}</div>
+    </div>
+    <div class="list-content">
+        <div class="shipcombat-helm-stats">
+            <div class="shipcombat-helm-stat" data-tooltip="{{gunnerCtx.slTooltip}}">
+                <span class="shipcombat-helm-stat-label">{{gunnerCtx.slLabel}}</span>
+                {{#if gunnerCtx.ordnanceRolled}}
+                    <span class="shipcombat-helm-stat-value shipcombat-sl-badge">{{gunnerCtx.remainingSL}}</span>
+                {{else}}
+                    <button class="shipcombat-roll-piloting-btn" data-action="rollOrdnance">
+                        <i class="fa-solid fa-dice"></i> {{gunnerCtx.rollLabel}}
+                    </button>
+                {{/if}}
+            </div>
+            <div class="shipcombat-helm-stat" data-tooltip="{{localize 'SHIPCOMBAT.Gunner.AccuracyTooltip'}}">
+                <span class="shipcombat-helm-stat-label">{{localize "SHIPCOMBAT.Gunner.Accuracy"}}</span>
+                <div class="shipcombat-alloc-row">
+                    <button class="shipcombat-alloc-btn" data-action="allocGunnerSL" data-stat="accuracy" data-delta="-1"
+                            {{#if gunnerCtx.allocLocked}}disabled{{/if}}>&minus;</button>
+                    <span class="shipcombat-helm-stat-value">{{gunnerCtx.allocAccuracy}}</span>
+                    <button class="shipcombat-alloc-btn" data-action="allocGunnerSL" data-stat="accuracy" data-delta="1"
+                            {{#if gunnerCtx.allocLocked}}disabled{{/if}}>+</button>
+                </div>
+            </div>
+            <div class="shipcombat-helm-stat" data-tooltip="{{localize 'SHIPCOMBAT.Gunner.PenetrationTooltip'}}">
+                <span class="shipcombat-helm-stat-label">{{localize "SHIPCOMBAT.Gunner.Penetration"}}</span>
+                <div class="shipcombat-alloc-row">
+                    <button class="shipcombat-alloc-btn" data-action="allocGunnerSL" data-stat="penetration" data-delta="-1"
+                            {{#if gunnerCtx.allocLocked}}disabled{{/if}}>&minus;</button>
+                    <span class="shipcombat-helm-stat-value">{{gunnerCtx.allocPenetration}}</span>
+                    <button class="shipcombat-alloc-btn" data-action="allocGunnerSL" data-stat="penetration" data-delta="1"
+                            {{#if gunnerCtx.allocLocked}}disabled{{/if}}>+</button>
+                </div>
+            </div>
+            <div class="shipcombat-helm-stat" data-tooltip="{{localize 'SHIPCOMBAT.Gunner.FirepowerTooltip'}}">
+                <span class="shipcombat-helm-stat-label">{{localize "SHIPCOMBAT.Gunner.Firepower"}}</span>
+                <div class="shipcombat-alloc-row">
+                    <button class="shipcombat-alloc-btn" data-action="allocGunnerSL" data-stat="firepower" data-delta="-1"
+                            {{#if gunnerCtx.allocLocked}}disabled{{/if}}>&minus;</button>
+                    <span class="shipcombat-helm-stat-value">{{gunnerCtx.allocFirepower}}</span>
+                    <button class="shipcombat-alloc-btn" data-action="allocGunnerSL" data-stat="firepower" data-delta="1"
+                            {{#if gunnerCtx.allocLocked}}disabled{{/if}}>+</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

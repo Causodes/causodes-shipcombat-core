@@ -1,0 +1,95 @@
+{{!-- bda-pending.hbs  -  BDA awaiting-assessment + result chat card --}}
+<div class="shipcombat-fire-result shipcombat-bda-pending">
+
+    {{!-- ═ Header ═ --}}
+    <div class="shipcombat-fire-header">
+        <div class="shipcombat-bda-icon-wrap">
+            <i class="fa-solid fa-satellite-dish"></i>
+        </div>
+        <div class="shipcombat-fire-title">
+            <strong>{{localize "SHIPCOMBAT.BDA.Title"}}</strong>
+            {{#if rolled}}
+                {{#if success}}
+                    <span class="shipcombat-fire-mode shipcombat-fire-success">{{localize "SHIPCOMBAT.BDA.Assessed"}}</span>
+                {{else if hasFireResult}}
+                    <span class="shipcombat-fire-mode shipcombat-fire-failure">{{localize "SHIPCOMBAT.BDA.LockLostSubtitle"}}</span>
+                {{else}}
+                    <span class="shipcombat-fire-mode shipcombat-fire-failure">{{localize "SHIPCOMBAT.BDA.FailedSubtitle"}}</span>
+                {{/if}}
+            {{else}}
+                <span class="shipcombat-fire-mode">{{localize "SHIPCOMBAT.BDA.PendingSubtitle"}}</span>
+            {{/if}}
+        </div>
+    </div>
+
+    {{!-- ═ Target Row ═ --}}
+    <div class="shipcombat-fire-target-row">
+        <i class="fa-solid fa-crosshairs"></i>
+        <span>{{targetName}}</span>
+    </div>
+
+    {{#if rolled}}
+    {{!-- ═══ Post-Roll State ═══ --}}
+
+    {{!-- SL / Outcome block --}}
+    <div class="shipcombat-fire-roll">
+        {{#if success}}
+            <div class="shipcombat-fire-sl shipcombat-fire-success">{{signedSL}} SL</div>
+            <div class="shipcombat-fire-outcome shipcombat-fire-success">{{outcome}}</div>
+        {{else}}
+            <div class="shipcombat-fire-sl shipcombat-fire-failure">{{signedSL}} SL</div>
+            <div class="shipcombat-fire-outcome shipcombat-fire-failure">{{outcome}}</div>
+        {{/if}}
+    </div>
+
+    {{!-- Correction block (success only) --}}
+    {{#if success}}
+    {{#if correctionChosen}}
+    <div class="shipcombat-bda-correction-result">
+        <i class="{{correctionIcon}}"></i>
+        <div class="shipcombat-bda-correction-info">
+            <span class="shipcombat-bda-correction-label">{{correctionLabel}}</span>
+            <span class="shipcombat-bda-correction-desc">{{correctionDesc}}</span>
+        </div>
+    </div>
+    {{else}}
+    <div class="shipcombat-bda-pending-msg shipcombat-bda-pending-msg--subtle">
+        <i class="fa-solid fa-arrow-right"></i>
+        {{localize "SHIPCOMBAT.BDA.AwaitingCorrection"}}
+    </div>
+    {{/if}}
+    {{/if}}
+
+    {{!-- ═══ Embedded Attack Result ═══ --}}
+    {{#if hasFireResult}}
+    <div class="shipcombat-bda-fire-result-divider">
+        <span>{{localize "SHIPCOMBAT.BDA.AttackResult"}}</span>
+    </div>
+    {{{fireResultHtml}}}
+    {{else if rolled}}
+    {{!-- BDA failed  -  no attack data available --}}
+    <div class="shipcombat-bda-failed-notice">
+        {{localize "SHIPCOMBAT.BDA.FailedNotice"}}
+    </div>
+    {{/if}}
+
+    {{else}}
+    {{!-- ═══ Pre-Roll State ═══ --}}
+    <div class="shipcombat-bda-pending-msg">
+        <i class="fa-regular fa-hourglass-half"></i>
+        {{localize "SHIPCOMBAT.BDA.Pending"}}
+    </div>
+    {{#if weaponName}}
+    <div class="shipcombat-bda-weapon-summary">
+        {{#if weaponImg}}<img src="{{weaponImg}}" class="shipcombat-bda-weapon-icon">{{/if}}
+        <span class="shipcombat-bda-weapon-name">{{weaponName}}</span>
+        {{#if fireModeLabel}}<span class="shipcombat-bda-fire-mode">{{fireModeLabel}}</span>{{/if}}
+    </div>
+    {{/if}}
+    <button class="shipcombat-bda-launch-btn" data-action="openBDAFromChat">
+        <i class="fa-solid fa-dice"></i>
+        {{localize "SHIPCOMBAT.BDA.LaunchAssessment"}}
+    </button>
+    {{/if}}
+
+</div>

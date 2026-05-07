@@ -1,0 +1,38 @@
+{{!-- Sensors: Sensor Radar --}}
+<div class="sheet-list shipcombat-radar-section{{#if sensorsCtx.sensorBlind}} shipcombat-sensor-blind{{/if}}">
+    <div class="list-header row-content">
+        <div class="list-name">{{localize "SHIPCOMBAT.Sensors.SensorRadar"}}</div>
+    </div>
+    {{#if sensorsCtx.sensorBlind}}
+    <div class="shipcombat-sensor-blind-overlay shipcombat-radar-blind-overlay">
+        <i class="fa-solid fa-satellite-dish"></i> {{localize "SHIPCOMBAT.Crit.SensorBlindRadar"}}
+    </div>
+    {{/if}}
+    <div class="list-content">
+        {{#unless sensorsCtx.sensorBlind}}
+        <div class="shipcombat-radar-toolbar">
+            <button class="shipcombat-bearing-toggle-btn {{#if sensorsCtx.isTrueBearing}}active{{/if}}" data-action="toggleBearing"
+                    data-tooltip="{{localize 'SHIPCOMBAT.Sensors.BearingToggle'}}">
+                <i class="fa-solid fa-compass-drafting"></i>
+                {{#if sensorsCtx.isTrueBearing}}TRUE{{else}}REL{{/if}}
+            </button>
+            <button class="shipcombat-bearing-toggle-btn shipcombat-popout-btn" data-action="popOutRadar"
+                    data-tooltip="{{localize 'SHIPCOMBAT.Sensors.PopOutRadar'}}">
+                <i class="fa-solid fa-up-right-from-square"></i>
+            </button>
+        </div>
+        <div class="shipcombat-radar-wrap">
+            <canvas data-sensor-radar></canvas>
+            {{!-- Popup injected by SensorRadar.js on blip click --}}
+        </div>
+        <div class="shipcombat-radar-toolbar-bottom">
+            <div class="shipcombat-radar-zoom-wrap" data-tooltip="Radar scale (scroll wheel on radar also works)">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input type="range" class="shipcombat-radar-zoom" min="5" max="{{sensorsCtx.maxScanRange}}" step="1"
+                       value="{{sensorsCtx.radarScale}}" />
+                <span class="shipcombat-radar-zoom-label">{{sensorsCtx.radarScale}}</span>
+            </div>
+        </div>
+        {{/unless}}
+    </div>
+</div>

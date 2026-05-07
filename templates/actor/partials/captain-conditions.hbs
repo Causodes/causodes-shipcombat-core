@@ -1,0 +1,41 @@
+{{!-- Captain: Conditions Panel --}}
+<div class="sheet-list">
+    <div class="list-header row-content">
+        <div class="list-name">{{localize "SHIPCOMBAT.Captain.Conditions"}}</div>
+    </div>
+    <div class="list-content">
+        {{#if captainCtx.hasAnyCondition}}
+        {{#each captainCtx.conditionsList}}
+        {{#if hasCondition}}
+        <div class="list-row shipcombat-crit-row {{tierClass}}" data-loc-id="{{locId}}" data-tooltip='{{conditionEffect}}'>
+            <div class="row-content">
+                <div class="list-name">
+                    <span class="shipcombat-crit-location">{{locLabel}}</span>
+                    <span class="shipcombat-crit-name">{{conditionName}}</span>
+                </div>
+                <div class="shipcombat-crit-tier-badge {{tierClass}}">{{tierLabel}}</div>
+                <div class="list-controls">
+                    <button type="button"
+                            data-action="captainTriage"
+                            data-loc-id="{{locId}}"
+                            {{#unless canTriage}}disabled{{/unless}}
+                            data-tooltip="{{triageName}}">
+                        <i class="fa-solid fa-wrench"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        {{/if}}
+        {{/each}}
+        {{else}}
+        <div class="list-row">
+            <div class="row-content">
+                <div class="list-name shipcombat-empty-label">
+                    <i class="fa-solid fa-circle-check"></i>
+                    {{localize "SHIPCOMBAT.Captain.NoConditions"}}
+                </div>
+            </div>
+        </div>
+        {{/if}}
+    </div>
+</div>

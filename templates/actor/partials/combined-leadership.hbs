@@ -1,0 +1,93 @@
+{{!-- 5-man: Combined Command Allocation — Presence roll drives Resolve, Efficiency & Expedience --}}
+<div class="sheet-list">
+    <div class="list-header row-content shipcombat-leadership-header">
+        <div class="list-name">{{localize "SHIPCOMBAT.Captain.CommandAllocation"}}</div>
+        <a class="shipcombat-full-reset-link" data-action="rollInitiative"
+           data-tooltip="{{localize 'SHIPCOMBAT.Captain.RollInitiativeBtn'}}">
+            <i class="fa-solid fa-dice-d20"></i>
+        </a>
+    </div>
+    <div class="list-content">
+        <div class="shipcombat-helm-stats">
+
+            {{!-- Presence (Leadership) roll --}}
+            <div class="shipcombat-helm-stat" data-tooltip="{{captainCtx.slTooltip}}">
+                <span class="shipcombat-helm-stat-label">{{captainCtx.slLabel}}</span>
+                {{#if captainCtx.leadershipRolled}}
+                    <span class="shipcombat-helm-stat-value shipcombat-sl-badge">{{captainCtx.remainingLeadershipSL}}</span>
+                {{else}}
+                    <button class="shipcombat-roll-piloting-btn" data-action="rollLeadershipSL">
+                        <i class="fa-solid fa-dice"></i> {{captainCtx.rollLabel}}
+                    </button>
+                {{/if}}
+            </div>
+
+            {{!-- Resolve --}}
+            <div class="shipcombat-helm-stat" data-tooltip="{{localize 'SHIPCOMBAT.Captain.ResolveTooltip'}}">
+                <span class="shipcombat-helm-stat-label">{{localize "SHIPCOMBAT.Captain.Resolve"}}</span>
+                <div class="shipcombat-alloc-row">
+                    <button class="shipcombat-alloc-btn" data-action="allocLeadershipSL" data-stat="resolve" data-delta="-1"
+                            {{#unless captainCtx.leadershipRolled}}disabled{{/unless}}
+                            {{#if captainCtx.hasPlayedCards}}disabled{{/if}}
+                            {{#if ordnanceCtx.actionUsed}}disabled{{/if}}
+                            {{#unless captainCtx.allocResolve}}disabled{{/unless}}>
+                        &minus;
+                    </button>
+                    <span class="shipcombat-helm-stat-value">{{captainCtx.allocResolve}}</span>
+                    <button class="shipcombat-alloc-btn" data-action="allocLeadershipSL" data-stat="resolve" data-delta="1"
+                            {{#unless captainCtx.leadershipRolled}}disabled{{/unless}}
+                            {{#if captainCtx.hasPlayedCards}}disabled{{/if}}
+                            {{#if ordnanceCtx.actionUsed}}disabled{{/if}}
+                            {{#if (gte (add (add captainCtx.allocResolve ordnanceCtx.allocEfficiency) ordnanceCtx.allocExpedience) captainCtx.leadershipSL)}}disabled{{/if}}>
+                        +
+                    </button>
+                </div>
+            </div>
+
+            {{!-- Efficiency --}}
+            <div class="shipcombat-helm-stat" data-tooltip="{{localize 'SHIPCOMBAT.Ordnance.EfficiencyTooltip'}}">
+                <span class="shipcombat-helm-stat-label">{{localize "SHIPCOMBAT.Ordnance.Efficiency"}}</span>
+                <div class="shipcombat-alloc-row">
+                    <button class="shipcombat-alloc-btn" data-action="allocOrdnanceSL" data-stat="efficiency" data-delta="-1"
+                            {{#unless captainCtx.leadershipRolled}}disabled{{/unless}}
+                            {{#if captainCtx.hasPlayedCards}}disabled{{/if}}
+                            {{#if ordnanceCtx.actionUsed}}disabled{{/if}}
+                            {{#unless ordnanceCtx.allocEfficiency}}disabled{{/unless}}>
+                        &minus;
+                    </button>
+                    <span class="shipcombat-helm-stat-value">{{ordnanceCtx.allocEfficiency}}</span>
+                    <button class="shipcombat-alloc-btn" data-action="allocOrdnanceSL" data-stat="efficiency" data-delta="1"
+                            {{#unless captainCtx.leadershipRolled}}disabled{{/unless}}
+                            {{#if captainCtx.hasPlayedCards}}disabled{{/if}}
+                            {{#if ordnanceCtx.actionUsed}}disabled{{/if}}
+                            {{#if (gte (add (add captainCtx.allocResolve ordnanceCtx.allocEfficiency) ordnanceCtx.allocExpedience) captainCtx.leadershipSL)}}disabled{{/if}}>
+                        +
+                    </button>
+                </div>
+            </div>
+
+            {{!-- Expedience --}}
+            <div class="shipcombat-helm-stat" data-tooltip="{{localize 'SHIPCOMBAT.Ordnance.ExpedienceTooltip'}}">
+                <span class="shipcombat-helm-stat-label">{{localize "SHIPCOMBAT.Ordnance.Expedience"}}</span>
+                <div class="shipcombat-alloc-row">
+                    <button class="shipcombat-alloc-btn" data-action="allocOrdnanceSL" data-stat="expedience" data-delta="-1"
+                            {{#unless captainCtx.leadershipRolled}}disabled{{/unless}}
+                            {{#if captainCtx.hasPlayedCards}}disabled{{/if}}
+                            {{#if ordnanceCtx.actionUsed}}disabled{{/if}}
+                            {{#unless ordnanceCtx.allocExpedience}}disabled{{/unless}}>
+                        &minus;
+                    </button>
+                    <span class="shipcombat-helm-stat-value">{{ordnanceCtx.allocExpedience}}</span>
+                    <button class="shipcombat-alloc-btn" data-action="allocOrdnanceSL" data-stat="expedience" data-delta="1"
+                            {{#unless captainCtx.leadershipRolled}}disabled{{/unless}}
+                            {{#if captainCtx.hasPlayedCards}}disabled{{/if}}
+                            {{#if ordnanceCtx.actionUsed}}disabled{{/if}}
+                            {{#if (gte (add (add captainCtx.allocResolve ordnanceCtx.allocEfficiency) ordnanceCtx.allocExpedience) captainCtx.leadershipSL)}}disabled{{/if}}>
+                        +
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>

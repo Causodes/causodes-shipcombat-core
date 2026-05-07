@@ -1,0 +1,7 @@
+{{!-- Active trait tag summary shared by torpedo and strike-craft action tabs.
+     Requires activeTraits context --}}
+{{#if activeTraits.length}}
+<div class="shipcombat-torpedo-trait-summary">
+    {{#each activeTraits}}<span class="shipcombat-torpedo-tag">{{this}}</span>{{/each}}
+</div>
+{{/if}}

@@ -1,0 +1,53 @@
+{{!-- Sensors: Augur Abilities Reference Table --}}
+<div class="sheet-list shipcombat-augur-abilities-section">
+    <div class="list-header row-content">
+        <div class="list-name">{{localize "SHIPCOMBAT.Sensors.AbilitiesReference"}}</div>
+    </div>
+    <div class="list-content">
+        <table class="shipcombat-augur-abilities-table">
+            <thead>
+                <tr>
+                    <th class="shipcombat-abl-name">{{localize "SHIPCOMBAT.Sensors.Ability"}}</th>
+                    <th class="shipcombat-abl-cost">{{localize "SHIPCOMBAT.Sensors.Cost"}}</th>
+                    <th class="shipcombat-abl-desc">{{localize "SHIPCOMBAT.Sensors.Description"}}</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="shipcombat-abl-category-row"><td colspan="3">{{localize "SHIPCOMBAT.Sensors.LockUpgrades"}}</td></tr>
+                <tr>
+                    <td class="shipcombat-abl-name"><i class="fa-solid fa-satellite-dish {{sensorsCtx.lockTier0.tierClass}}"></i> {{sensorsCtx.lockTier0.labelLocalized}}</td>
+                    <td class="shipcombat-abl-cost">{{sensorsCtx.lockTier0.cost}} AP</td>
+                    <td class="shipcombat-abl-desc">
+                        {{sensorsCtx.lockTier0.descLocalized}}
+                    </td>
+                </tr>
+                {{#each sensorsCtx.lockActions}}
+                <tr>
+                    <td class="shipcombat-abl-name"><i class="fa-solid fa-satellite-dish {{tierClass}}"></i> {{labelLocalized}}</td>
+                    <td class="shipcombat-abl-cost">{{cost}} AP</td>
+                    <td class="shipcombat-abl-desc">
+                        {{descLocalized}}
+                        <div class="shipcombat-abl-meta">{{localize "SHIPCOMBAT.Sensors.DecayRounds" rounds=decayRounds}} {{localize "SHIPCOMBAT.Sensors.GunnerConsumesLock"}}</div>
+                    </td>
+                </tr>
+                {{/each}}
+                <tr class="shipcombat-abl-category-row"><td colspan="3">{{localize "SHIPCOMBAT.Sensors.UtilityActions"}}</td></tr>
+                {{#each sensorsCtx.utilityActions}}
+                <tr>
+                    <td class="shipcombat-abl-name"><i class="fa-solid fa-wrench"></i> {{labelLocalized}}</td>
+                    <td class="shipcombat-abl-cost">{{cost}} AP</td>
+                    <td class="shipcombat-abl-desc">{{descLocalized}}</td>
+                </tr>
+                {{/each}}
+                <tr class="shipcombat-abl-category-row"><td colspan="3">{{localize "SHIPCOMBAT.Sensors.CoreAbilities"}}</td></tr>
+                {{#each sensorsCtx.coreActions}}
+                <tr>
+                    <td class="shipcombat-abl-name"><i class="fa-solid fa-bolt"></i> {{labelLocalized}}</td>
+                    <td class="shipcombat-abl-cost">{{ap}} AP</td>
+                    <td class="shipcombat-abl-desc">{{descLocalized}}</td>
+                </tr>
+                {{/each}}
+            </tbody>
+        </table>
+    </div>
+</div>
