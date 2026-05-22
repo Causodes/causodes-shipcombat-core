@@ -11,6 +11,7 @@
  */
 
 import { MODULE_ID, CRIT_CONDITIONS, CRIT_LOCATIONS, critLocationFromRoll, critSeverityFromRoll } from "../constants.js";
+import { SystemAdapter } from "../systems/SystemAdapter.js";
 
 const TIER_ORDER = ["low", "medium", "high"];
 
@@ -28,11 +29,11 @@ const TIER_ORDER = ["low", "medium", "high"];
  * @param {boolean} [forceCrit=false]    – Bypass threshold (Devastation Protocol)
  * @param {number}  [thresholdReduction=0] – Reduce crit threshold by this many percentage points (Fire for Effect: SL value)
  */
-export async function rollCrit(targetActor, totalDamage, forceCrit = false, thresholdReduction = 0) {
+export async function rollCrit(targetActor, totalDamage, forceCrit = false, thresholdReduction = 0, forceLow = false) {
   if (!targetActor) return;
   if (!forceCrit && totalDamage <= 0) return;
 
-  const hullMax = targetActor.system?.hull?.max ?? 50;
+  const hullMax = SystemAdapter.current.getShipData(targetActor)?.hull?.max ?? 50;
   const critThresholdPct = Math.max(0, 0.10 - (thresholdReduction / 100));
   const thresholdMet = forceCrit || totalDamage > hullMax * critThresholdPct;
 
@@ -41,7 +42,10 @@ export async function rollCrit(targetActor, totalDamage, forceCrit = false, thre
 
   // ── 1. Determine severity tier ────────────────────────────────────────────
   let rolledTier;
-  if (thresholdMet) {
+  if (forceLow) {
+    // Per-crit-hit path (SF2e): always start at Low — escalation handles progression
+    rolledTier = "low";
+  } else if (thresholdMet) {
     // Full roll: d10 for tier
     const sevRoll = await new Roll("1d10").evaluate();
     if (game.dice3d) game.dice3d.showForRoll(sevRoll, game.user, true);
@@ -76,7 +80,7 @@ export async function rollCrit(targetActor, totalDamage, forceCrit = false, thre
   const locId         = locationEntry.id;
   const condDef       = CRIT_CONDITIONS[locId];
 
-  const existing     = targetActor.system?.conditions?.[locId] ?? {};
+  const existing     = SystemAdapter.current.getShipData(targetActor)?.conditions?.[locId] ?? {};
   const existingTier = existing?.tier ?? null;
 
   let finalTier   = rolledTier;
@@ -126,10 +130,10 @@ export async function rollCrit(targetActor, totalDamage, forceCrit = false, thre
   }
 
   // ── 4. Apply condition (and any extra hull damage) to the target actor ──────
-  const updates = { [`system.conditions.${locId}`]: newMeta };
+  const updates = { [SystemAdapter.current.systemPath(`conditions.${locId}`)]: newMeta };
   if (extraHullDmg > 0) {
-    const hullVal = targetActor.system?.hull?.value ?? 0;
-    updates["system.hull.value"] = Math.min(hullMax, hullVal + extraHullDmg);
+    const hullVal = SystemAdapter.current.getShipData(targetActor)?.hull?.value ?? 0;
+    updates[SystemAdapter.current.systemPath("hull.value")] = Math.min(hullMax, hullVal + extraHullDmg);
   }
   await targetActor.update(updates);
 

@@ -1,0 +1,42 @@
+/**
+ * appv1-compact.css — AppV1 ship sheet base styles.
+ *
+ * Scoped to form.shipcombat-v1 (hardcoded on the form in ship-sheet-v1.hbs).
+ * Foundry V14 removed the global AppV1 tab-hide rule; AppV1 apps still toggle
+ * .active via the Tabs helper, so we must provide the show/hide CSS ourselves.
+ */
+
+/* ── Tab visibility (AppV1 Tabs helper toggles .active) ─────────────────── */
+form.shipcombat-v1 .sheet-body .sheet-content > .tab {
+  display: none;
+}
+
+form.shipcombat-v1 .sheet-body .sheet-content > .tab.active {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* ── Torpedo / Strike Craft actor drop zones (AppV1 sheets) ──────────────────
+   Mirrors the impmal system's dashed-border drop-zone style for v1 sheets,
+   which don't get the impmal.css rule (scoped to .application.actor.impmal). */
+.crb-style.shipcombat-v1 .sheet-list.vehicle-actors .droppable {
+  height:        2rem;
+  border:        1px dashed rgba(0, 0, 0, 0.30);
+  border-radius: 10px;
+  line-height:   2rem;
+  text-align:    center;
+  margin:        0.5rem;
+  opacity:       0.5;
+  cursor:        pointer;
+}
+
+.crb-style.shipcombat-v1 .sheet-list.vehicle-actors.hover {
+  box-shadow: 0 0 8px inset rgba(0, 0, 0, 0.15);
+}
+
+.crb-style.shipcombat-v1 .sheet-list.vehicle-actors .droppable.hover {
+  opacity:    0.85;
+  background: rgba(0, 0, 0, 0.05);
+}

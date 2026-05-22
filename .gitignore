@@ -1,1 +1,4 @@
-tests/
+.git/
+node_modules/
+*.log
+/tests

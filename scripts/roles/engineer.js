@@ -27,7 +27,7 @@
 import { emitToGM } from "../socket.js";
 import { heatColor } from "../theme.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
-import { MODULE_ID } from "../constants.js";
+import { MODULE_ID, hullDisplay } from "../constants.js";
 
 function _getHeatCapacity(shipActor) {
   const reactor = shipActor?.items?.find(i => i.type === `${MODULE_ID}.component` && i.system.slot === "reactor");
@@ -54,7 +54,7 @@ function _getOverclockModifier(heat) {
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 async function _resolveEngineerActor(sheet) {
-  const sys = sheet.actor.system;
+  const sys = SystemAdapter.current.getShipData(sheet.actor);
   const ref = sys.crewActors?.engineer;
   if (ref?.uuid) {
     try { return await fromUuid(ref.uuid); } catch { /* ignore */ }
@@ -73,7 +73,7 @@ async function _resolveEngineerActor(sheet) {
 async function _onSelectAction(event, target) {
   const actionType = target.dataset.actionType;
   if (!actionType) return;
-  const sys = this.actor.system;
+  const sys = SystemAdapter.current.getShipData(this.actor);
   const current = sys.resources?.engineer?.actionChoices ?? [];
   if (current.includes(actionType)) return; // already selected
   const updated = [...current, actionType];
@@ -85,7 +85,7 @@ async function _onSelectAction(event, target) {
  * Success: +1 core to pool. Failure: no core. Heat always increases by 1.
  */
 async function _onOverclock() {
-  const sys  = this.actor.system;
+  const sys  = SystemAdapter.current.getShipData(this.actor);
   const heat = sys.resources?.engineer?.heat ?? 0;
   const heatMax = _getHeatCapacity(this.actor);
   if (heat >= heatMax) {
@@ -142,7 +142,7 @@ async function _onUncommitAuxCore() {
  * reduce heat by coresSpent + SL (min 1).
  */
 async function _onManageHeat() {
-  const sys = this.actor.system;
+  const sys = SystemAdapter.current.getShipData(this.actor);
   const bank = sys.resources?.engineer?.auxiliaryPower ?? 0;
   const coresStaged = Math.min(sys.resources?.engineer?.heatCoresStaged ?? 1, bank);
   if (coresStaged < 1) {
@@ -176,7 +176,7 @@ async function _onManageHeat() {
  * Moved to Core Distribution section.
  */
 async function _onEmergencyVent() {
-  const heat = this.actor.system.resources?.engineer?.heat ?? 0;
+  const heat = SystemAdapter.current.getShipData(this.actor).resources?.engineer?.heat ?? 0;
   if (heat <= 0) return;
 
   const ok = await foundry.applications.api.DialogV2.confirm({
@@ -194,7 +194,7 @@ async function _onEmergencyVent() {
  * Engineering test SL = additional fire severity reduction (post-roll).
  */
 async function _onSuppressFire() {
-  const sys  = this.actor.system;
+  const sys  = SystemAdapter.current.getShipData(this.actor);
   const fire = sys.internalFire ?? 0;
   const bank = sys.resources?.engineer?.auxiliaryPower ?? 0;
 
@@ -231,7 +231,7 @@ async function _onSuppressFire() {
 /** Adjust heatCoresStaged by delta, clamped [1, coreBank]. */
 async function _onAdjustHeatCores(event, target) {
   const delta = Number(target.dataset.delta) || 0;
-  const sys = this.actor.system;
+  const sys = SystemAdapter.current.getShipData(this.actor);
   const bank = sys.resources?.engineer?.auxiliaryPower ?? 0;
   const current = sys.resources?.engineer?.heatCoresStaged ?? 1;
   const next = Math.max(1, Math.min(bank, current + delta));
@@ -241,7 +241,7 @@ async function _onAdjustHeatCores(event, target) {
 /** Adjust fireCoresStaged by delta, clamped [1, min(coreBank, internalFire)]. */
 async function _onAdjustFireCores(event, target) {
   const delta = Number(target.dataset.delta) || 0;
-  const sys = this.actor.system;
+  const sys = SystemAdapter.current.getShipData(this.actor);
   const bank = sys.resources?.engineer?.auxiliaryPower ?? 0;
   const fire = sys.internalFire ?? 0;
   const maxSpend = Math.min(bank, fire);
@@ -253,7 +253,7 @@ async function _onAdjustFireCores(event, target) {
 /** Adjust repairPlasmaStaged by delta, clamped [1, coreBank]. */
 async function _onAdjustRepairPlasma(event, target) {
   const delta = Number(target.dataset.delta) || 0;
-  const sys = this.actor.system;
+  const sys = SystemAdapter.current.getShipData(this.actor);
   const bank = sys.resources?.engineer?.auxiliaryPower ?? 0;
   const current = sys.resources?.engineer?.repairPlasmaStaged ?? 1;
   const next = Math.max(1, Math.min(bank, current + delta));
@@ -266,7 +266,7 @@ async function _onAdjustRepairPlasma(event, target) {
  * Cannot repair while internal fire is active.
  */
 async function _onRepairHull() {
-  const sys  = this.actor.system;
+  const sys  = SystemAdapter.current.getShipData(this.actor);
   const heat = sys.resources?.engineer?.heat ?? 0;
   const fire = sys.internalFire ?? 0;
   const bank = sys.resources?.engineer?.auxiliaryPower ?? 0;
@@ -310,7 +310,7 @@ async function _onRepairHull() {
 
 /** Convert 1 voidshield flux into 1 Auxiliary Power. */
 async function _onFluxToCharge() {
-  const pool = this.actor.system.shieldPool?.current ?? 0;
+  const pool = SystemAdapter.current.getShipData(this.actor).shieldPool?.current ?? 0;
   if (pool <= 0) return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.NpcShip.NoFluxRemaining"));
   emitToGM("fluxToCharge", {});
 }
@@ -418,8 +418,15 @@ export function buildEngineerContext(sys, opts = {}) {
     overclockModifier: overclockTier.modifier,
     hull:              sys.hull?.value ?? 0,
     hullMax:           sys.hull?.max ?? 50,
-    hullPct:           sys.hull?.max > 0 ? Math.round(((sys.hull?.value ?? 0) / sys.hull.max) * 100) : 0,
-    canRepairHull:     internalFire === 0 && auxiliaryPower > 0 && (sys.hull?.value ?? 0) > 0 && heat < heatMax,
+    hullPct:           hullDisplay(sys.hull?.value ?? 0, sys.hull?.max ?? 50).pct,
+    hullDisplayValue:  hullDisplay(sys.hull?.value ?? 0, sys.hull?.max ?? 50).displayValue,
+    // hullFull: true when hull is at maximum health (mode-aware).
+    // HP mode:     hull.value = current HP; full = value >= max.
+    // Wounds mode: hull.value = damage taken; full = value === 0.
+    hullFull: SystemAdapter.current.hullDisplayMode === "hpRemaining"
+      ? (sys.hull?.value ?? 0) >= (sys.hull?.max ?? Infinity)
+      : (sys.hull?.value ?? 0) <= 0,
+    canRepairHull:     internalFire === 0 && auxiliaryPower > 0 && (sys.hull?.value ?? 0) > 0 && (sys.hull?.value ?? 0) < (sys.hull?.max ?? Infinity) && heat < heatMax,
     // Shield allocation  -  Engineer manages sector distribution (moved from Captain in v10)
     shields: _buildShieldSectors(sys, opts),
     // ── Captain boost cards targeting Engineer ───────────────────────────────────

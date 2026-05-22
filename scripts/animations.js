@@ -27,7 +27,7 @@ import { MODULE_ID, WEAPON_FIRED_HOOK } from "./constants.js";
 const CATEGORY_ASSETS = {
   macrocannon: {
     muzzle:     "jb2a.muzzle_flash.burst.01.yellow",
-    projectile: "jb2a.bullet.01.orange",
+    projectile: "jb2a.fire_bolt.orange",   // FireBolt_01_Regular_Orange, distance-aware
     impact:     "jb2a.explosion.01.orange",
   },
   nova_cannon: {
@@ -36,8 +36,8 @@ const CATEGORY_ASSETS = {
     impact:     "jb2a.explosion.04.orange",
   },
   railgun: {
-    // No muzzle flash — silent kinetic penetrator
-    projectile: "jb2a.bullet.01.blue",
+    // FireballBeam Blue — distance-aware heavy kinetic beam
+    projectile: "jb2a.fireball.beam.blue",
     impact:     "jb2a.explosion.01.blue",
   },
   pdc_projectile: {
@@ -46,25 +46,21 @@ const CATEGORY_ASSETS = {
     impact:     "jb2a.explosion.01.orange",
   },
   lance: {
-    // Eldritch-blast style beam — single shot regardless of salvo
+    // Eldritch-blast style beam — single shot, distance-aware via stretchTo
     projectile: "jb2a.eldritch_blast.lightblue",
     beam: true,
   },
   laser_pdc: {
     // Fast pulse — no visible impact
-    projectile: "jb2a.lasershot.red",
-  },
-  melta: {
-    projectile: "jb2a.energy_beam.normal.dark_red.01",
-    impact:     "jb2a.explosion.01.orange",
-    beam: true,
+    projectile: "jb2a.bullet.Snipe.red",
   },
   plasma: {
-    projectile: "jb2a.lasershot.blue",
+    // MagicMissile Blue — distance-aware, multiple visual variants per distance
+    projectile: "jb2a.magic_missile.blue",
     impact:     "jb2a.explosion.01.blue",
   },
   missile: {
-    projectile: "jb2a.ranged_missile.001.orangeyellow",
+    projectile: "jb2a.pack_hound_missile.orange.01",
     impact:     "jb2a.explosion.04.orange",
   },
   // Torpedo detonation — pure stationary blast at the torpedo token
@@ -81,7 +77,6 @@ const SCALE = {
   pdc_projectile: 0.5,
   laser_pdc:      0.5,
   lance:          1.0,
-  melta:          0.9,
   plasma:         0.9,
   missile:        1.0,
   torpedo_detonation: 2.5,
@@ -101,8 +96,16 @@ function actorToken(actor) {
 
 // ── Main animation dispatcher ─────────────────────────────────────────────
 
-// ms between successive shots in a salvo
+// ms between successive shots in a salvo (default, and per-category overrides)
 const SHOT_STAGGER = 180;
+const CATEGORY_STAGGER = {
+  missile:     550,
+  macrocannon: 550,
+  nova_cannon: 550,
+  railgun:     550,
+  lance:       550,
+  plasma:      550,
+};
 
 async function playWeaponAnimation({ weaponCategory, firingActor, targetToken, totalHits, totalSalvo, blastRadius }) {
   if (!weaponCategory) return;
@@ -135,7 +138,7 @@ async function playWeaponAnimation({ weaponCategory, firingActor, targetToken, t
 
     for (let i = 0; i < shotCount; i++) {
       const isHit = i < hitCount;
-      const d = i * SHOT_STAGGER;
+      const d = i * (CATEGORY_STAGGER[weaponCategory] ?? SHOT_STAGGER);
 
       // ── Muzzle flash: rotated to face target ──
       if (assets.muzzle && sourceToken) {

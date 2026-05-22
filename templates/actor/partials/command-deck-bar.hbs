@@ -22,6 +22,10 @@
                     <i class="fa-solid fa-arrow-right-long"></i> {{captainCtx.pendingLabel}}
                 </span>
                 {{/if}}
+                <a class="shipcombat-roll-initiative-btn" data-action="rollInitiative"
+                   data-tooltip="{{localize 'SHIPCOMBAT.Captain.RollInitiativeBtn'}}">
+                    <i class="fa-solid fa-dice-d20"></i>
+                </a>
                 <div class="shipcombat-triage-counter"
                      data-tooltip="{{captainCtx.triageCount}}/{{captainCtx.triageMax}}: {{localize 'SHIPCOMBAT.Captain.TriageTooltip'}}">
                     <i class="fa-solid fa-wrench"></i>

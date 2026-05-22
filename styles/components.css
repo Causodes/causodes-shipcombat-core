@@ -1,0 +1,44 @@
+/* ── Ship Component Item Sheets ──────────────────────────────────────────── */
+
+/* Per-sector zone threshold grid (shield component details tab) */
+.shipcombat-zone-threshold-block {
+  margin: 0.25rem 0 0.1rem;
+}
+
+.shipcombat-zone-threshold-title {
+  font-size: 0.78rem;
+  font-weight: bold;
+  opacity: 0.75;
+  margin: 0 0 0.3rem;
+  padding: 0;
+}
+
+.shipcombat-zone-threshold-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.3rem 1rem;
+}
+
+.shipcombat-zone-threshold-cell {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+.shipcombat-zone-threshold-lbl {
+  font-size: 0.82rem;
+  opacity: 0.75;
+  white-space: nowrap;
+}
+
+.shipcombat-zone-threshold-cell input[type="number"] {
+  width: 3.5rem;
+  text-align: right;
+}
+
+/* Center-align all plain number/text inputs in the weapon battery fieldset */
+.shipcombat-component .tab[data-tab="details"] fieldset input[type="number"],
+.shipcombat-component .tab[data-tab="details"] fieldset input[type="text"] {
+  text-align: center;
+}

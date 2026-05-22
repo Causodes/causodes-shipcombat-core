@@ -7,6 +7,7 @@
 
 import { MODULE_ID } from "../constants.js";
 import { ordnanceTypeName } from "../actors/ordnance/ordnance-types.js";
+import { SystemAdapter } from "../systems/SystemAdapter.js";
 
 /**
  * Spawn a torpedo or strike craft token near the ship.
@@ -26,7 +27,7 @@ export async function spawnOrdnance({ type, parentShipTokenId, x, y, rotation, t
   // ── Try to clone from the ship's embedded ordnance actor template ──
   const shipToken = canvas?.scene?.tokens.get(parentShipTokenId);
   const shipActor = shipToken?.actor;
-  const templates = shipActor?.system?.ordnanceActors?.[slotKey] ?? [];
+  const templates = SystemAdapter.current.getShipData(shipActor)?.ordnanceActors?.[slotKey] ?? [];
   // Use the specified template if provided, otherwise fall back to the first
   const templateRef = (templateId ? templates.find(t => t.id === templateId) : null) ?? templates[0];
 
@@ -41,6 +42,8 @@ export async function spawnOrdnance({ type, parentShipTokenId, x, y, rotation, t
     }
   }
 
+  const hullInitVal = SystemAdapter.current.hullDisplayMode === "hpRemaining" ? hullOverride : 0;
+
   let actorData;
   if (templateRef?.actorData) {
     // Inline embedded data  -  use directly (no external actor needed)
@@ -51,7 +54,7 @@ export async function spawnOrdnance({ type, parentShipTokenId, x, y, rotation, t
     });
     actorData.system.parentShipTokenId = parentShipTokenId;
     actorData.system.turnComplete = type !== "strikeCraft";  // craft can manoeuvre on launch turn
-    actorData.system.hull = { value: 0, max: hullOverride };
+    actorData.system.hull = { value: hullInitVal, max: hullOverride };
   } else if (templateRef?.uuid) {
     // Legacy UUID reference  -  fetch from world actors
     let templateActor = null;
@@ -64,13 +67,13 @@ export async function spawnOrdnance({ type, parentShipTokenId, x, y, rotation, t
       });
       actorData.system.parentShipTokenId = parentShipTokenId;
       actorData.system.turnComplete = type !== "strikeCraft";
-      actorData.system.hull = { value: 0, max: hullOverride };
+      actorData.system.hull = { value: hullInitVal, max: hullOverride };
     } else {
       actorData = {
         name: defaultName,
         type: unifiedType,
         flags: { [MODULE_ID]: { fromOrdnanceMaster: true } },
-        system: { subtype, parentShipTokenId, hull: { value: 0, max: hullOverride } },
+        system: { subtype, parentShipTokenId, hull: { value: hullInitVal, max: hullOverride } },
       };
     }
   } else {
@@ -78,7 +81,7 @@ export async function spawnOrdnance({ type, parentShipTokenId, x, y, rotation, t
       name: defaultName,
       type: unifiedType,
       flags: { [MODULE_ID]: { fromOrdnanceMaster: true } },
-      system: { subtype, parentShipTokenId, hull: { value: 0, max: hullOverride } },
+      system: { subtype, parentShipTokenId, hull: { value: hullInitVal, max: hullOverride } },
     };
   }
 
@@ -101,7 +104,7 @@ export async function spawnOrdnance({ type, parentShipTokenId, x, y, rotation, t
 
   // In realistic mode, seed initial velocity: half own speed (in launch heading) + ship velocity.
   if (game.settings?.get(MODULE_ID, "movementMode") === "realistic") {
-    const shipPilot  = shipActor?.system?.resources?.pilot ?? {};
+    const shipPilot  = SystemAdapter.current.getShipData(shipActor)?.resources?.pilot ?? {};
     const shipVx     = shipPilot.velocityX ?? 0;
     const shipVy     = shipPilot.velocityY ?? 0;
     const ownSpeed   = actorData.system?.movement?.speed ?? 0;
@@ -126,6 +129,11 @@ export async function spawnOrdnance({ type, parentShipTokenId, x, y, rotation, t
       const tokenOverrides = { x, y, rotation, hidden: false, disposition: CONST.TOKEN_DISPOSITIONS.NEUTRAL };
       tokenOverrides.width = 0.5;
       tokenOverrides.height = 0.5;
+      // Restore custom token texture. Priority:
+      //   1. templateRef.tokenImg — stored explicitly at registration, survives normalisation
+      //   2. actorData.prototypeToken.texture.src — serialised actor data (may be normalised)
+      const _origTextureSrc = templateRef?.tokenImg ?? actorData?.prototypeToken?.texture?.src;
+      if (_origTextureSrc) tokenOverrides.texture = { src: _origTextureSrc };
       const tokenData = await actor.getTokenDocument(tokenOverrides);
       await canvas.scene.createEmbeddedDocuments("Token", [tokenData.toObject()]);
     } catch (err) {
@@ -147,7 +155,7 @@ export async function setOrdnanceRtb(tokenId, rtb) {
   if (!game.user.isGM || !canvas?.scene) return;
   const td = canvas.scene.tokens.get(tokenId);
   if (!td?.actor) return;
-  await td.actor.update({ "system.rtb": !!rtb });
+  await td.actor.update({ [SystemAdapter.current.systemPath("rtb")]: !!rtb });
 }
 
 /**
@@ -157,7 +165,7 @@ export async function setOrdnanceTurnDone(tokenId, done) {
   if (!game.user.isGM || !canvas?.scene) return;
   const td = canvas.scene.tokens.get(tokenId);
   if (!td?.actor) return;
-  await td.actor.update({ "system.turnComplete": !!done });
+  await td.actor.update({ [SystemAdapter.current.systemPath("turnComplete")]: !!done });
 }
 
 /**
@@ -169,7 +177,7 @@ export async function designateHostileTorpedo(tokenId) {
   if (!game.user.isGM || !canvas?.scene) return;
   const td = canvas.scene.tokens.get(tokenId);
   if (!td?.actor) return;
-  await td.actor.update({ "system.designated": true });
+  await td.actor.update({ [SystemAdapter.current.systemPath("designated")]: true });
 }
 
 /**
@@ -180,7 +188,7 @@ export async function torpedoPowerBoost(tokenId) {
   if (!game.user.isGM || !canvas?.scene) return;
   const td = canvas.scene.tokens.get(tokenId);
   if (!td?.actor) return;
-  await td.actor.update({ "system.powerBoostActive": true });
+  await td.actor.update({ [SystemAdapter.current.systemPath("powerBoostActive")]: true });
 }
 
 /**
@@ -206,10 +214,14 @@ export async function blastOrdnance({ torpedoTokenIds, craftDamages, torName } =
   for (const { tokenId, damage } of (craftDamages ?? [])) {
     const td = canvas.scene.tokens.get(tokenId);
     if (!td?.actor) continue;
-    const hull = td.actor.system.hull ?? { value: 0, max: 1 };
-    const newValue = Math.min(hull.max, (hull.value ?? 0) + damage);
-    await td.actor.update({ "system.hull.value": newValue });
-    if (newValue >= hull.max) craftDestroyed.push(tokenId);
+    const hull        = td.actor.system.hull ?? { value: 0, max: 1 };
+    const _isHP       = SystemAdapter.current.hullDisplayMode === "hpRemaining";
+    const newValue    = _isHP
+      ? Math.max(0, (hull.value ?? 0) - damage)
+      : Math.min(hull.max, (hull.value ?? 0) + damage);
+    await td.actor.update({ [SystemAdapter.current.systemPath("hull.value")]: newValue });
+    const isDestroyed = _isHP ? newValue <= 0 : newValue >= hull.max;
+    if (isDestroyed) craftDestroyed.push(tokenId);
   }
   if (craftDestroyed.length > 0) {
     await canvas.scene.deleteEmbeddedDocuments("Token", craftDestroyed);

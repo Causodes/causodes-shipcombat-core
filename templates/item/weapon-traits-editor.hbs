@@ -1,0 +1,36 @@
+{{!--
+  modules/causodes-shipcombat-core/templates/item/weapon-traits-editor.hbs
+  AppV1 dialog for editing weapon / ordnance traits on a ship-component item.
+
+  Context from _WeaponTraitsEditorV1.getData():
+    rows  – Array of { def, name, enabled, val }
+              def.key          – trait key
+              def.hasValue     – whether the trait has a numeric value
+              def.enabledKey   – key for the enabled boolean (optional)
+              def.allowNegative – whether the numeric value can be negative
+              name             – localised trait name
+              enabled          – current enabled state
+              val              – current numeric value (0 if not applicable)
+--}}
+<form autocomplete="off">
+  <div class="flexcol" style="gap:0.2rem">
+    {{#each rows}}
+    <div class="form-group">
+      <label for="trait-{{def.key}}">{{name}}</label>
+      <div class="form-fields">
+        {{#if def.hasValue}}
+        <input type="number" name="{{def.key}}-value" value="{{val}}"
+          {{#unless def.allowNegative}}min="0"{{/unless}}
+          style="width:3.5rem;text-align:center">
+        {{/if}}
+        <input type="checkbox" id="trait-{{def.key}}"
+          name="{{#if def.enabledKey}}{{def.enabledKey}}{{else}}{{def.key}}{{/if}}"
+          {{#if enabled}}checked{{/if}}>
+      </div>
+    </div>
+    {{/each}}
+  </div>
+  <div class="form-group" style="margin-top:0.75rem;justify-content:flex-end">
+    <button type="button" data-action="saveTraits">{{localize "Save"}}</button>
+  </div>
+</form>

@@ -1,0 +1,537 @@
+/* ── Gunner: Resource bar colours ──────────────────────────────────────── */
+.shipcombat-bar-ammo {
+  background: #e67e22;
+}
+.shipcombat-bar-charge {
+  background: #7ec8e3;
+}
+.shipcombat-bar-heat {
+  background: linear-gradient(90deg, #f39c12 0%, #c0392b 100%);
+}
+.shipcombat-resource-label {
+  flex: 0 0 5rem;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+}
+.shipcombat-core-consume-btn {
+  flex: 0 0 auto;
+  background: none;
+  border: 1px solid var(--color-border-light);
+  border-radius: 4px;
+  color: #f39c12;
+  cursor: pointer;
+  padding: 2px 6px;
+  font-size: 0.75rem;
+}
+.shipcombat-core-consume-btn:hover {
+  background: rgba(243,156,18,0.15);
+}
+
+
+/* ── Weapon Arc Pin Toggle ───────────────────────────────────────────────── */
+
+.shipcombat-pin-arc {
+  opacity: 0.35;
+  transition: opacity 0.15s, color 0.15s;
+  cursor: pointer;
+}
+.shipcombat-pin-arc:hover {
+  opacity: 0.7;
+}
+.shipcombat-pin-arc.shipcombat-pin-active {
+  opacity: 1;
+  color: var(--color-text-hyperlink, #6ea9ff);
+}
+
+/* ── Weapon Battery Cards ──────────────────────────────────────────────── */
+.shipcombat-battery-card {
+  position: relative;
+  border: 1px solid var(--color-border-light, rgba(255,255,255,0.12));
+  border-radius: 6px;
+  margin: 0.35rem 0;
+  /* overflow: hidden intentionally removed — overlay must not be clipped */
+}
+
+.shipcombat-battery-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.5rem;
+  background: rgba(255,255,255,0.04);
+  border-bottom: 1px solid var(--color-border-light, rgba(255,255,255,0.08));
+}
+
+.shipcombat-battery-icon {
+  width: 1.4rem;
+  height: 1.4rem;
+  flex: 0 0 1.4rem;
+  border: none;
+}
+
+.shipcombat-battery-name {
+  flex: 1;
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+.shipcombat-battery-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.35rem 0.5rem;
+}
+
+.shipcombat-battery-stats-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.shipcombat-battery-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.shipcombat-battery-stat-label {
+  font-size: 0.55rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.55;
+}
+
+.shipcombat-battery-stat-value {
+  font-size: 0.85rem;
+  font-weight: bold;
+}
+
+.shipcombat-battery-actions {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.shipcombat-battery-fire-btn {
+  border: 1px solid var(--color-border-light);
+  border-radius: 4px;
+  background: rgba(255,255,255,0.05);
+  color: inherit;
+  cursor: pointer;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.75rem;
+  transition: background 0.15s;
+}
+.shipcombat-battery-fire-btn:hover {
+  background: rgba(255,255,255,0.12);
+}
+
+/* Type accent borders */
+.shipcombat-battery--macro  { border-left: 3px solid #e8a33a; }
+.shipcombat-battery--plasma { border-left: 3px solid #ff6644; }
+.shipcombat-battery--lance  { border-left: 3px solid #7ec8e3; }
+.shipcombat-battery--pd     { border-left: 3px solid #7ec8e3; }
+
+/* ── Weapon Trait Tags ─────────────────────────────────────────────────── */
+.shipcombat-battery-traits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.3rem;
+  padding: 0.15rem 0.5rem 0.25rem;
+}
+.shipcombat-trait-tag {
+  display: inline-block;
+  font-size: 0.6rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+  letter-spacing: 0.02em;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+}
+.shipcombat-trait--shieldBypass     { color: #7ec8e3; border-color: rgba(126,200,227,0.3); }
+.shipcombat-trait--unlimitedRof     { color: #f1c40f; border-color: rgba(241,196,15,0.3); }
+.shipcombat-trait--shieldBurn       { color: #e74c3c; border-color: rgba(231,76,60,0.3); }
+.shipcombat-trait--voidWeakened     { color: #9b59b6; border-color: rgba(155,89,182,0.3); }
+.shipcombat-trait--rend             { color: #e67e22; border-color: rgba(230,126,34,0.3); }
+.shipcombat-trait--armourPenetration { color: #1abc9c; border-color: rgba(26,188,156,0.3); }
+
+/* ── Misconfigured Warning ─────────────────────────────────────────────── */
+.shipcombat-battery-warning {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.7rem;
+  color: #f39c12;
+  background: rgba(243,156,18,0.1);
+  border-top: 1px solid rgba(243,156,18,0.2);
+}
+.shipcombat-battery-warning i { margin-right: 0.3rem; }
+
+/* ── Macro Cannon Tier Picker ──────────────────────────────────────────── */
+.shipcombat-macro-tier-picker {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.2rem 0;
+  flex-wrap: wrap;
+}
+.shipcombat-macro-tier-pip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  min-width: 3.5rem;
+  padding: 0.2rem 0.3rem;
+  border-radius: 3px;
+  border: 1px solid rgba(232,163,58,0.18);
+  background: rgba(232,163,58,0.07);
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.15s, border-color 0.15s, background 0.15s;
+  text-align: center;
+}
+.shipcombat-macro-tier-pip:hover:not(.shipcombat-tier-dimmed) {
+  opacity: 0.85;
+  border-color: rgba(232,163,58,0.4);
+  background: rgba(232,163,58,0.14);
+}
+.shipcombat-macro-tier-pip.shipcombat-macro-pip-selected {
+  opacity: 1;
+  border-color: rgba(232,163,58,0.7);
+  background: rgba(232,163,58,0.22);
+  box-shadow: 0 0 0 1px rgba(232,163,58,0.3) inset;
+}
+.shipcombat-macro-tier-pip.shipcombat-tier-dimmed {
+  opacity: 0.25;
+  cursor: not-allowed;
+}
+.shipcombat-macro-tier-pip.shipcombat-tier-exclusive .shipcombat-macro-pip-label {
+  font-style: italic;
+  color: #f1c40f;
+}
+.shipcombat-macro-pip-label {
+  font-size: 0.58rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.shipcombat-macro-pip-detail {
+  display: flex;
+  gap: 0.2rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.shipcombat-macro-pip-ammo {
+  font-size: 0.52rem;
+  color: #e8a33a;
+  opacity: 0.8;
+}
+.shipcombat-macro-pip-salvo {
+  font-size: 0.52rem;
+  opacity: 0.6;
+}
+.shipcombat-macro-stat-ammo { color: #e67e22; }
+.shipcombat-fire--macro {
+  background: rgba(232,163,58,0.15);
+  color: #e8a33a;
+  border-color: rgba(232,163,58,0.3);
+}
+.shipcombat-fire--macro:hover:not(:disabled) { background: rgba(232,163,58,0.32); }
+
+/* Keep table styles for NPC gunner sheet which still uses the table */
+/* ── Macro Cannon Fire Tier Table (NPC) ────────────────────────────────── */
+.shipcombat-macro-tiers {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.68rem;
+  table-layout: fixed;
+}
+.shipcombat-macro-tiers thead th {
+  padding: 0.1rem 0.25rem;
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  opacity: 0.55;
+  text-align: left;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.shipcombat-th-ammo, .shipcombat-th-mod, .shipcombat-th-salvo, .shipcombat-th-fire { text-align: center; }
+.shipcombat-th-ammo  { width: 2.8rem; }
+.shipcombat-th-mod   { width: 2.8rem; }
+.shipcombat-th-salvo { width: 2.8rem; }
+.shipcombat-th-fire  { width: 2.2rem; }
+.shipcombat-macro-tier td {
+  padding: 0.1rem 0.25rem;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.shipcombat-tier-name   { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.shipcombat-tier-ammo   { text-align: center; color: #e67e22; }
+.shipcombat-tier-mod    { text-align: center; }
+.shipcombat-tier-salvo  { text-align: center; }
+.shipcombat-tier-hits   { text-align: center; font-weight: bold; }
+.shipcombat-fp-bonus  { font-size: 0.6rem; opacity: 0.65; font-weight: normal; }
+.shipcombat-tier-fire { text-align: center; }
+.shipcombat-tier-dimmed { opacity: 0.3; }
+.shipcombat-tier-exclusive .shipcombat-tier-name {
+  font-style: italic;
+  color: #f1c40f;
+}
+.shipcombat-tier-fire-btn {
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 4px;
+  background: rgba(232,163,58,0.15);
+  color: #e8a33a;
+  cursor: pointer;
+  padding: 0.15rem 0.4rem;
+  font-size: 0.7rem;
+  transition: background 0.15s;
+}
+.shipcombat-tier-fire-btn:hover { background: rgba(232,163,58,0.35); }
+.shipcombat-tier-fire-btn[disabled] {
+  opacity: 0.28;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* ── Plasma Cannon ─────────────────────────────────────────────────────── */
+.shipcombat-plasma-dmg { color: #ff6644; }
+.shipcombat-fp-note {
+  font-size: 0.6rem;
+  opacity: 0.55;
+  font-weight: normal;
+  margin-left: 0.2rem;
+}
+.shipcombat-val-heat { color: #ff6644; }
+.shipcombat-plasma-shots {
+  padding: 0 0.1rem;
+}
+.shipcombat-plasma-remaining {
+  font-size: 0.7rem;
+  color: #ff8866;
+  opacity: 0.75;
+}
+.shipcombat-fire--plasma {
+  background: rgba(255,102,68,0.15);
+  color: #ff6644;
+  border-color: rgba(255,102,68,0.3);
+}
+.shipcombat-fire--plasma:hover { background: rgba(255,102,68,0.35); }
+
+/* ── Lance Battery ─────────────────────────────────────────────────────── */
+.shipcombat-lance-charge-meter {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.1rem 0;
+}
+.shipcombat-lance-charge-label {
+  font-size: 0.55rem;
+  text-transform: uppercase;
+  opacity: 0.55;
+  letter-spacing: 0.03em;
+}
+.shipcombat-lance-pips {
+  display: flex;
+  gap: 0.3rem;
+  flex: 1;
+}
+.shipcombat-lance-tier-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.15rem 0.3rem;
+  border-radius: 3px;
+  border: 1px solid rgba(126,200,227,0.15);
+  background: rgba(126,200,227,0.06);
+  font-size: 0.6rem;
+  opacity: 0.4;
+  transition: opacity 0.15s, border-color 0.15s;
+}
+.shipcombat-lance-tier-active {
+  opacity: 1;
+  border-color: rgba(126,200,227,0.55);
+  background: rgba(126,200,227,0.2);
+}
+.shipcombat-lance-tier-label { font-size: 0.55rem; white-space: nowrap; }
+.shipcombat-lance-tier-dmg   { font-weight: bold; color: #7ec8e3; }
+.shipcombat-lance-charge-value {
+  font-size: 0.8rem;
+  font-weight: bold;
+  color: #7ec8e3;
+}
+.shipcombat-fire--lance {
+  background: rgba(126,200,227,0.15);
+  color: #7ec8e3;
+  border-color: rgba(126,200,227,0.3);
+}
+.shipcombat-fire--lance:hover { background: rgba(126,200,227,0.35); }
+
+/* ── Point Defense ─────────────────────────────────────────────────────── */
+.shipcombat-fire--pd {
+  background: rgba(126,200,227,0.15);
+  color: #7ec8e3;
+  border-color: rgba(126,200,227,0.3);
+}
+.shipcombat-fire--pd:hover { background: rgba(126,200,227,0.35); }
+
+/* ── Fire-blocked label ────────────────────────────────────────────────── */
+.shipcombat-fire-blocked {
+  font-size: 0.7rem;
+  opacity: 0.5;
+  font-style: italic;
+  padding: 0.25rem 0;
+}
+
+/* ── Fire Result Chat Card ─────────────────────────────────────────────── */
+
+.shipcombat-fire-result {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.4rem;
+}
+.shipcombat-fire-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.shipcombat-fire-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  object-fit: cover;
+  border: 1px solid rgba(255,255,255,0.15);
+}
+.shipcombat-fire-title {
+  display: flex;
+  flex-direction: column;
+}
+.shipcombat-fire-title strong { font-size: 0.85rem; }
+.shipcombat-fire-mode {
+  font-size: 0.7rem;
+  opacity: 0.6;
+}
+.shipcombat-fire-target-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+}
+.shipcombat-fire-target-row i { opacity: 0.5; }
+.shipcombat-fire-quadrant { opacity: 0.65; font-size: 0.75rem; }
+
+.shipcombat-fire-auto {
+  text-align: center;
+  padding: 0.4rem;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: #44ff88;
+  background: rgba(68,255,136,0.08);
+  border: 1px solid rgba(68,255,136,0.2);
+  border-radius: 4px;
+}
+.shipcombat-fire-auto i { margin-right: 0.3rem; }
+
+.shipcombat-fire-roll {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.35rem;
+  background: rgba(0,0,0,0.15);
+  border-radius: 4px;
+}
+.shipcombat-fire-comparison {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+.shipcombat-fire-vs {
+  opacity: 0.4;
+  font-size: 0.7rem;
+  font-weight: 400;
+  text-transform: uppercase;
+}
+.shipcombat-fire-tn { opacity: 0.75; }
+.shipcombat-fire-sl {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.shipcombat-fire-outcome {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.shipcombat-fire-success { color: #44ff88; }
+.shipcombat-fire-failure { color: #e74c3c; }
+
+.shipcombat-fire-details {
+  display: flex;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  opacity: 0.7;
+  justify-content: center;
+}
+.shipcombat-fire-detail i { margin-right: 0.15rem; }
+.shipcombat-fire-cost { color: #e8a33a; }
+
+
+/* ── Gunner: Combined Core Actions (4-man 3x2 grid) ─────────────────────── */
+
+.shipcombat-gunner-core-actions .list-content {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+  padding: 4px 6px;
+}
+.shipcombat-gunner-core-actions--combined .list-content {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+/* ── Prow gun lockout overlay (post-ram) ─────────────────────────────────── */
+.shipcombat-weapon-battery-section.shipcombat-prow-locked {
+  position: relative;
+  pointer-events: none;
+}
+.shipcombat-weapon-battery-section.shipcombat-prow-locked > :not(.shipcombat-prow-locked-overlay) {
+  opacity: 0.35;
+}
+.shipcombat-prow-locked-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  font-weight: bold;
+  color: #ff6b6b;
+  background: rgba(0,0,0,0.55);
+  pointer-events: none;
+}
+
+/* ── Sensor-blind weapon SECTION overlay (weaponsSensors Low+) ──────────── */
+.shipcombat-weapon-battery-section.shipcombat-sensor-blind {
+  position: relative;
+  pointer-events: none;
+}
+/* Dim content but not the overlay itself (same pattern as .shipcombat-role-section in engineer) */
+.shipcombat-weapon-battery-section.shipcombat-sensor-blind > :not(.shipcombat-section-overlay) {
+  opacity: 0.35;
+}
+/* Counteract engineer's `.shipcombat-role-section:has(.shipcombat-section-overlay) > :not(.shipcombat-section-overlay)`
+   rule which dims the entire weapon-battery-section (and thus its child overlay) to 0.35
+   because :has() walks descendants. Force the inner overlay back to full opacity. */
+.shipcombat-role-section:has(.shipcombat-weapon-battery-section.shipcombat-sensor-blind .shipcombat-section-overlay) > .shipcombat-weapon-battery-section.shipcombat-sensor-blind {
+  opacity: 1;
+}
+/* The overlay itself reuses .shipcombat-section-overlay + .shipcombat-section-overlay--critical
+   from engineer.css. Only add sizing tweaks specific to weapon battery sections. */
+.shipcombat-weapon-battery-section .shipcombat-section-overlay {
+  border-radius: 6px;
+}
+

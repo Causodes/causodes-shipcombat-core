@@ -45,6 +45,11 @@
                         {{this.thrustPctDisplay}}%
                     </span>
                 </div>
+                <div class="shipcombat-ram-dmg-preview">
+                    <span class="shipcombat-ram-dmg-in" data-tooltip="Estimated hull damage your ship will take">
+                        <i class="fa-solid fa-arrow-left"></i> ~{{this.damageIn}} hull incoming
+                    </span>
+                </div>
             </div>
             <button class="shipcombat-tp-fire-btn" data-action="confirmRam" data-token-id="{{this.tokenId}}"
                     data-tooltip="{{localize "SHIPCOMBAT.Ram.ConfirmTooltip"}}">

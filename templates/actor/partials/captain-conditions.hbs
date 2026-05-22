@@ -1,10 +1,10 @@
 {{!-- Captain: Conditions Panel --}}
+{{#if captainCtx.hasAnyCondition}}
 <div class="sheet-list">
     <div class="list-header row-content">
         <div class="list-name">{{localize "SHIPCOMBAT.Captain.Conditions"}}</div>
     </div>
     <div class="list-content">
-        {{#if captainCtx.hasAnyCondition}}
         {{#each captainCtx.conditionsList}}
         {{#if hasCondition}}
         <div class="list-row shipcombat-crit-row {{tierClass}}" data-loc-id="{{locId}}" data-tooltip='{{conditionEffect}}'>
@@ -27,15 +27,6 @@
         </div>
         {{/if}}
         {{/each}}
-        {{else}}
-        <div class="list-row">
-            <div class="row-content">
-                <div class="list-name shipcombat-empty-label">
-                    <i class="fa-solid fa-circle-check"></i>
-                    {{localize "SHIPCOMBAT.Captain.NoConditions"}}
-                </div>
-            </div>
-        </div>
-        {{/if}}
     </div>
 </div>
+{{/if}}

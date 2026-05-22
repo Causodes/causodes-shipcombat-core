@@ -15,6 +15,7 @@
 import { MODULE_ID } from "../constants.js";
 import { isOrdnance } from "../actors/ordnance/ordnance-types.js";
 import { ShipCombatState } from "../state/ShipCombatState.js";
+import { SystemAdapter } from "../systems/SystemAdapter.js";
 
 const TIER_ALPHA = [0, 0, 1.00, 1.00, 1.00]; // tier 0 & 1 handled specially; tier 2+ full opacity
 
@@ -92,7 +93,7 @@ export function applyTokenVisibility(token) {
   // ── Friendly ordnance: always fully visible (Lock 4 equivalent) ──
   const actorType = token.document.actor?.type;
   if (isOrdnance(token.document.actor)) {
-    const parentTokenId = token.document.actor?.system?.parentShipTokenId;
+    const parentTokenId = SystemAdapter.current.getShipData(token.document.actor)?.parentShipTokenId;
     if (parentTokenId && parentTokenId === ownToken.id) {
       _forceVisible(token);
       return;
@@ -107,7 +108,7 @@ export function applyTokenVisibility(token) {
   const cx0 = ownToken.document.x + (ownToken.document.width  * gridSize) / 2;
   const cy0 = ownToken.document.y + (ownToken.document.height * gridSize) / 2;
 
-  const locks   = ship.system?.resources?.sensors?.locks ?? [];
+  const locks   = SystemAdapter.current.getShipData(ship)?.resources?.sensors?.locks ?? [];
   const sensor  = ShipCombatState.getSensorStats();
   const ghRange = sensor.autoScanRange ?? 0;
 
@@ -180,7 +181,7 @@ export function refreshTokenVisibility() {
   const cx0 = ownToken.document.x + (ownToken.document.width  * gridSize) / 2;
   const cy0 = ownToken.document.y + (ownToken.document.height * gridSize) / 2;
 
-  const locks   = ship.system?.resources?.sensors?.locks ?? [];
+  const locks   = SystemAdapter.current.getShipData(ship)?.resources?.sensors?.locks ?? [];
   const sensor  = ShipCombatState.getSensorStats();
   const ghRange = sensor.autoScanRange ?? 0;
 
@@ -196,7 +197,7 @@ export function refreshTokenVisibility() {
     // Friendly ordnance: always fully visible (Lock 4 equivalent)
     const actorType = token.document.actor?.type;
     if (isOrdnance(token.document.actor)) {
-      const parentTokenId = token.document.actor?.system?.parentShipTokenId;
+      const parentTokenId = SystemAdapter.current.getShipData(token.document.actor)?.parentShipTokenId;
       if (parentTokenId && parentTokenId === ownToken.id) {
         _forceVisible(token);
         continue;

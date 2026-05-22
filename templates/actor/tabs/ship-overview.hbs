@@ -76,7 +76,15 @@
                     <div class="shipcombat-crew-col-action {{#if turnDone}}shipcombat-yes{{else}}shipcombat-no{{/if}}">
                         {{#if turnDone}}{{localize "SHIPCOMBAT.Value.Yes"}}{{else}}{{localize "SHIPCOMBAT.Value.No"}}{{/if}}
                     </div>
-                    <div class="shipcombat-crew-col-skill shipcombat-muted">{{defaultSkillLabel}}</div>
+                    <div class="shipcombat-crew-col-skill">
+                        {{#if @root.isOwner}}
+                        <select class="shipcombat-skill-override-select" data-role-skill-override="{{id}}">
+                            {{#each skillOptions}}
+                            <option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+                            {{/each}}
+                        </select>
+                        {{else}}{{defaultSkillLabel}}{{/if}}
+                    </div>
                 </div>
                 {{else}}
                 <div class="shipcombat-crew-row shipcombat-crew-empty" data-role-id="{{id}}" data-role-drop="{{id}}">
@@ -98,7 +106,15 @@
                         </button>
                         {{else}}&mdash;{{/unless}}
                     </div>
-                    <div class="shipcombat-crew-col-skill shipcombat-muted">{{defaultSkillLabel}}</div>
+                    <div class="shipcombat-crew-col-skill">
+                        {{#if @root.isOwner}}
+                        <select class="shipcombat-skill-override-select" data-role-skill-override="{{id}}">
+                            {{#each skillOptions}}
+                            <option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+                            {{/each}}
+                        </select>
+                        {{else}}{{defaultSkillLabel}}{{/if}}
+                    </div>
                 </div>
                 {{/if}}
             </div>

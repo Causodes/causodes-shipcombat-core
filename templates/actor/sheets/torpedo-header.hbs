@@ -9,7 +9,7 @@
       </div>
       <div class="shipcombat-torpedo-bars">
         {{> "vessel-resource-bar"
-            label="Warheads Lost" fillClass="hull" pct=hullPct value=sys.hull.value max=sys.hull.max}}
+            label=hullBarLabel fillClass="hull" pct=hullPct value=hullDisplayValue max=sys.hull.max}}
         {{> "vessel-resource-bar"
             label="Fuel" fillClass="fuel" pct=fuelPct value=sys.fuel.value max=sys.fuel.max}}
       </div>

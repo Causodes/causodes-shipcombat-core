@@ -64,7 +64,7 @@ const UTILITY_ACTIONS = [
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 async function _resolveSensorsActor(sheet) {
-  const sys = sheet.actor.system;
+  const sys = SystemAdapter.current.getShipData(sheet.actor);
   const ref = sys.crewActors?.sensors;
   if (ref?.uuid) {
     try { return await fromUuid(ref.uuid); } catch { /* ignore */ }
@@ -105,6 +105,11 @@ function _getAuxPowerCapacity(shipActor) {
   return reactor?.system?.bankCapacity ?? 0;
 }
 
+function _getSensorApCostMultiplier(shipActor) {
+  const sensor = shipActor?.items?.find(i => i.type === `${MODULE_ID}.component` && i.system.slot === "sensor" && i.system.equipped !== false);
+  return sensor?.system?.apCostMultiplier ?? 1;
+}
+
 // ── Action handlers (static, `this` = sheet instance) ────────────────────────
 
 /**
@@ -113,15 +118,16 @@ function _getAuxPowerCapacity(shipActor) {
  * data-target-token-id identifies the blip target.
  */
 async function _onSensorAction(event, target) {
-  const sys      = this.actor.system;
+  const sys      = SystemAdapter.current.getShipData(this.actor);
   const actionId = target.dataset.actionId;
+  const apCostMultiplier = _getSensorApCostMultiplier(this.actor);
 
   // Try lock upgrades first
   const lockEntry = LOCK_ACTIONS.find(a => a.id === actionId);
   if (lockEntry) {
     const sensorPriorityActive = sys.resources?.sensors?.sensorPriorityActive ?? false;
-    const baseCost = (sensorPriorityActive && lockEntry.setsTier <= 2) ? 0 : lockEntry.cost;
-    const effectiveCost = _buoyDiscount(sys, baseCost);
+    const rawCost = (sensorPriorityActive && lockEntry.setsTier <= 2) ? 0 : lockEntry.cost;
+    const effectiveCost = _buoyDiscount(sys, Math.ceil(rawCost * apCostMultiplier));
     if (!_spendAP(sys, effectiveCost)) return;
     const targetTokenId = target.dataset.targetTokenId;
     if (!targetTokenId) return;
@@ -143,8 +149,8 @@ async function _onSensorAction(event, target) {
       const ownTokenId = this.actor?.getActiveTokens?.()?.[0]?.id ?? null;
       const td = canvas?.scene?.tokens.get(tokenId);
       if (!td?.actor) return;
-      const isAllied = ownTokenId && td.actor.system?.parentShipTokenId === ownTokenId;
-      if (!_spendAP(sys, _buoyDiscount(sys, utilEntry.cost))) return;
+      const isAllied = ownTokenId && SystemAdapter.current.getShipData(td.actor)?.parentShipTokenId === ownTokenId;
+      if (!_spendAP(sys, _buoyDiscount(sys, Math.ceil(utilEntry.cost * apCostMultiplier)))) return;
       emitToGM("updateResource", { roleId: "sensors", key: "actionUsed", value: true });
       if (isAllied) {
         emitToGM("torpedoPowerBoost", { tokenId });
@@ -154,7 +160,7 @@ async function _onSensorAction(event, target) {
       return;
     }
 
-    if (!_spendAP(sys, _buoyDiscount(sys, utilEntry.cost))) return;
+    if (!_spendAP(sys, _buoyDiscount(sys, Math.ceil(utilEntry.cost * apCostMultiplier)))) return;
     emitToGM("updateResource", { roleId: "sensors", key: "actionUsed", value: true });
     const targetTokenId = target.dataset.targetTokenId;
     if (targetTokenId && utilEntry.targeted) {
@@ -171,7 +177,7 @@ async function _onSensorAction(event, target) {
  * Uses AUGUR_CORE_ACTIONS from constants.js.
  */
 async function _onSensorCoreAction(event, target) {
-  const sys      = this.actor.system;
+  const sys      = SystemAdapter.current.getShipData(this.actor);
   const actionId = target.dataset.actionId;
 
   const hasCoreAvail = (sys.resources?.sensors?.coreCount ?? 0) > 0;
@@ -183,7 +189,8 @@ async function _onSensorCoreAction(event, target) {
   if (!entry) return;
 
   // Spend AP cost (with Telemetry Buoy discount if active)
-  if (!_spendAP(sys, _buoyDiscount(sys, entry.ap))) return;
+  const apCostMultiplier = _getSensorApCostMultiplier(this.actor);
+  if (!_spendAP(sys, _buoyDiscount(sys, Math.ceil(entry.ap * apCostMultiplier)))) return;
 
   // Combat Telemetry: upgrade ALL currently locked targets to tier 4
   if (actionId === "combatTelemetry") {
@@ -211,7 +218,7 @@ async function _onSensorCoreAction(event, target) {
  * The popup handles both the roll phase and the fire-correction selection.
  */
 async function _onOpenBDAPopup(event, target) {
-  const sys     = this.actor.system;
+  const sys     = SystemAdapter.current.getShipData(this.actor);
   const sensors = sys.resources?.sensors ?? {};
 
   // Corrections already ready (roll was done from chat card)  -  open corrections popup
@@ -266,9 +273,11 @@ export function buildSensorsContext(sys, opts = {}) {
   const apPct = apMax > 0 ? Math.min(100, Math.round((ap / apMax) * 100)) : 0;
 
   // Build lock-action list with affordability + tier prereq status
+  const apCostMultiplier = sensorStats.apCostMultiplier ?? 1;
   const lockActions = LOCK_ACTIONS.map(a => {
-    const baseCost = (sensorPriorityActive && a.setsTier <= 2) ? 0 : a.cost;
-    const effectiveCost = _buoyDiscount(sys, baseCost);
+    const rawCost = (sensorPriorityActive && a.setsTier <= 2) ? 0 : a.cost;
+    const scaledCost = Math.ceil(rawCost * apCostMultiplier);
+    const effectiveCost = _buoyDiscount(sys, scaledCost);
     return {
       ...a,
       cost:           effectiveCost,
@@ -290,7 +299,7 @@ export function buildSensorsContext(sys, opts = {}) {
 
   // Build utility-action list
   const utilityActions = UTILITY_ACTIONS.map(a => {
-    const effectiveCost = _buoyDiscount(sys, a.cost);
+    const effectiveCost = _buoyDiscount(sys, Math.ceil(a.cost * apCostMultiplier));
     return {
       ...a,
       cost:           effectiveCost,
@@ -301,7 +310,7 @@ export function buildSensorsContext(sys, opts = {}) {
   }).sort((a, b) => a.cost - b.cost);
 
   const coreActions = AUGUR_CORE_ACTIONS.map(a => {
-    const effectiveCost = _buoyDiscount(sys, a.ap);
+    const effectiveCost = _buoyDiscount(sys, Math.ceil(a.ap * apCostMultiplier));
     return {
       ...a,
       labelLocalized: game.i18n.localize(a.label),
@@ -357,6 +366,7 @@ export function buildSensorsContext(sys, opts = {}) {
     bdaAvailable,
     bdaCorrectionPending,
     bdaResultSL,
+    bdaSlBadge: SystemAdapter.current.formatBdaBadge(bdaResultSL),
     bdaTargetTokenId,
     fireCorrection,
     corrections,
@@ -394,7 +404,7 @@ function _buildNpcConditions(locks) {
     const actor    = tokenDoc?.actor;
     if (!actor) continue;
     if (actor.type !== `${MODULE_ID}.npcShip`) continue;
-    const rawConds = actor.system?.conditions ?? {};
+    const rawConds = SystemAdapter.current.getShipData(actor)?.conditions ?? {};
     const conditionsList = _NPC_CRIT_LOCS
       .map(locId => {
         const cond = rawConds[locId] ?? {};

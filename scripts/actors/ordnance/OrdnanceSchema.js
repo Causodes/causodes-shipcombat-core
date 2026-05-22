@@ -69,8 +69,12 @@ export const OrdnanceSchemaMixin = (BaseClass) => class extends BaseClass {
     });
 
     // ── Payload (shared fields — used by both torpedo and strike craft) ───
-    schema.payloadDamage = new fields.NumberField({ initial: 0, min: 0, integer: true });
+    schema.payloadDamage     = new fields.NumberField({ initial: 0, min: 0, integer: true });
+    schema.payloadDiceCount  = new fields.NumberField({ initial: null, nullable: true, min: 1, integer: true });
+    schema.payloadDiceSize   = new fields.StringField({ initial: null, nullable: true, blank: true });
+    schema.payloadDamageType = new fields.StringField({ initial: null, nullable: true, blank: true });
     schema.payloadRadius = new fields.NumberField({ initial: 0, min: 0, integer: true });
+    schema.armorClass    = new fields.NumberField({ initial: 10, nullable: true, integer: true });
 
     // ── Turn & parent tracking (shared) ──────────────────────────────────
     schema.turnComplete      = new fields.BooleanField({ initial: false });

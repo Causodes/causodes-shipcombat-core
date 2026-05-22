@@ -75,22 +75,23 @@
             <i class="fa-solid fa-explosion"></i>
             <strong>{{damageResults.totalDamage}}</strong> {{localize "SHIPCOMBAT.Fire.HullDamage"}}
         </div>
-        <div class="shipcombat-fire-damage-detail">
-            ({{damageResults.rawDamagePerHit}} − {{damageResults.effectiveArmour}} {{localize "SHIPCOMBAT.Fire.Armour"}})
-            {{#if damageResults.ap}}
-                <span class="shipcombat-fire-ap">[AP {{damageResults.ap}}]</span>
-            {{/if}}
-        </div>
+        {{#if damageResults.diceBreakdown}}
+        <details class="shipcombat-dice-breakdown">
+            <summary>
+                <i class="fa-solid fa-dice"></i>
+                {{damageResults.diceBreakdown.formula}} = {{damageResults.diceBreakdown.total}}
+            </summary>
+            <div class="shipcombat-dice-breakdown-pips">
+                {{#each damageResults.diceBreakdown.dice}}
+                <span class="shipcombat-die-pip">{{this}}</span>
+                {{/each}}
+            </div>
+        </details>
+        {{/if}}
         {{else}}
         <div class="shipcombat-fire-damage-header shipcombat-fire-armour-blocked">
             <i class="fa-solid fa-shield"></i>
             {{localize "SHIPCOMBAT.Fire.BlockedByArmour"}}
-        </div>
-        <div class="shipcombat-fire-damage-detail">
-            {{damageResults.rawDamagePerHit}} − {{damageResults.effectiveArmour}} {{localize "SHIPCOMBAT.Fire.Armour"}}
-            {{#if damageResults.ap}}
-                <span class="shipcombat-fire-ap">[AP {{damageResults.ap}}]</span>
-            {{/if}}
         </div>
         {{/if}}
         {{#if damageResults.rendTotal}}

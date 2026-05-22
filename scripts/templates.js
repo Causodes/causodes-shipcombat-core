@@ -80,6 +80,7 @@ export const CORE_PARTIAL_DEFAULTS = Object.freeze(Object.fromEntries([
   "pilot-claim-prompt",
   "pilot-captain-boost",
   "pilot-status-bar",
+  "pilot-helm-sl-alloc",
   "pilot-helm-control",
   "pilot-overcharged-actions",
   // Sensors
@@ -138,6 +139,9 @@ export const STATIC_TEMPLATE_PATHS = Object.freeze([
   `modules/${CORE_MODULE_ID}/templates/actor/sheets/ordnance-header.hbs`,
   `modules/${CORE_MODULE_ID}/templates/actor/sheets/ordnance-main.hbs`,
   `modules/${CORE_MODULE_ID}/templates/actor/sheets/ordnance-config.hbs`,
+  // V1 (AppV1 / legacy ActorSheet) wrapper templates
+  `modules/${CORE_MODULE_ID}/templates/actor/npc-ship-v1.hbs`,
+  `modules/${CORE_MODULE_ID}/templates/actor/ordnance-v1.hbs`,
   // Item templates
   `modules/${CORE_MODULE_ID}/templates/item/component-header.hbs`,
   `modules/${CORE_MODULE_ID}/templates/item/component-details.hbs`,
@@ -232,9 +236,23 @@ export class PartialRegistry {
 export async function loadAllTemplates(registry) {
   registry.finalize();
 
-  // Object form of loadTemplates registers partials under the supplied keys.
+  // Object form of loadTemplates registers partials under their short names
+  // (e.g. "ship-header").  AppV2 sheets reference partials by short name via
+  // {{> "ship-header"}} in tab templates, which works fine.
   const overridableMap = registry.entries();
   await loadTemplates(overridableMap);
+
+  // AppV1 sheets call {{> (lookup partTemplates partId)}} where partTemplates
+  // maps part IDs to full paths (e.g. "modules/.../partials/ship-header.hbs").
+  // Handlebars only knows those templates under their short names, so we also
+  // register the already-compiled functions under their full paths — no extra
+  // socket round-trips needed.
+  for (const [name, path] of Object.entries(overridableMap)) {
+    const compiled = Handlebars.partials[name];
+    if (compiled && !(path in Handlebars.partials)) {
+      Handlebars.registerPartial(path, compiled);
+    }
+  }
 
   // Static templates: array form — registered under their full paths.
   await loadTemplates([...STATIC_TEMPLATE_PATHS]);

@@ -1,0 +1,689 @@
+/* ── Engineer: Heat Bar ─────────────────────────────────────────────────── */
+
+/* Role status bar  -  docked at top, semi-transparent to let the sheet gradient show through */
+.shipcombat-role-status-bar {
+  position: sticky;
+  top: 0;
+  z-index: 30;  /* must exceed all section overlays (radar-blind, prow-locked, etc.) which are z-index 20 */
+  background: rgba(20, 44, 47, 0.92);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border-bottom: 1px solid var(--color-border-light, rgba(255,255,255,0.12));
+}
+
+/* Override the warhammer-lib list-header gradient inside docked bars */
+.shipcombat-role-status-bar .list-header {
+  background: transparent;
+}
+
+.shipcombat-role-status-bar .list-content {
+  padding: 0.35rem 0.5rem 0.5rem;
+}
+
+.shipcombat-role-status-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+/* ── Engineer: Dual resource bars ─────────────────────────────────────── */
+.shipcombat-resource-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.shipcombat-resource-bar-label {
+  flex: 0 0 7rem;
+  width: 7rem;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shipcombat-resource-bar-value {
+  flex: 0 0 auto;
+  font-size: 0.8rem;
+  font-weight: bold;
+  white-space: nowrap;
+  min-width: 3rem;
+  text-align: right;
+}
+
+.shipcombat-resource-bar-track {
+  flex: 1;
+  height: 0.6rem;
+  border-radius: 4px;
+  border: 1px solid var(--color-border-light);
+  overflow: hidden;
+  min-width: 4rem;
+  position: relative;
+}
+
+/* Heat bar: gradient fill */
+.shipcombat-resource-bar-track--heat {
+  background: linear-gradient(90deg, #27ae60 0%, #90c93c 20%, #f39c12 55%, #c0392b 100%);
+}
+
+/* Cover overlay hides the unfilled portion */
+.shipcombat-resource-bar-fill-cover {
+  position: absolute;
+  right: 0; top: 0; bottom: 0;
+  background: var(--color-dark-5, #262626);
+  border-radius: 0 4px 4px 0;
+  transition: width 0.2s ease;
+}
+
+/* Plasma bar: solid sky blue fill on dark track */
+.shipcombat-resource-bar-track--plasma {
+  background: var(--color-dark-5, #262626);
+}
+
+.shipcombat-resource-bar-fill {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  background: #7ec8e3;
+  border-radius: 4px 0 0 4px;
+  transition: width 0.2s ease;
+}
+
+.shipcombat-resource-bar-value--plasma {
+  color: #7ec8e3;
+}
+
+
+/* ── Engineer: Overclock Button ─────────────────────────────────────────── */
+
+.shipcombat-overclock-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border-radius: 3px;
+  cursor: pointer;
+  background: var(--color-dark-5, #262626);
+  border: 1px solid #e67e22;
+  color: #e67e22;
+  white-space: nowrap;
+}
+
+.shipcombat-overclock-btn:hover:not([disabled]) {
+  background: #e67e22;
+  color: #111;
+}
+
+.shipcombat-overclock-btn[disabled] {
+  opacity: 0.4;
+  cursor: not-allowed;
+  border-color: var(--color-border-light);
+  color: inherit;
+}
+
+/* ── Engineer: Unified core allocation table ────────────────────────────── */
+
+.shipcombat-core-alloc-table {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid var(--color-border-light, rgba(255,255,255,0.12));
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.shipcombat-core-alloc-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.5rem;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.shipcombat-core-alloc-row:last-child {
+  border-bottom: none;
+}
+
+.shipcombat-core-alloc-row--shield {
+  background: rgba(155, 89, 182, 0.08);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.shipcombat-core-alloc-row--aux {
+  background: rgba(52, 152, 219, 0.08);
+  border-bottom: 3px solid rgba(255,255,255,0.1) !important;
+  margin-bottom: 1px;
+}
+
+.shipcombat-core-alloc-name {
+  flex: 0 0 9rem;
+  width: 9rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shipcombat-core-alloc-detail {
+  flex: 1;
+  font-size: 0.75rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shipcombat-core-alloc-ctrl {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 5rem;
+}
+
+.shipcombat-core-alloc-count {
+  min-width: 1.5rem;
+  text-align: center;
+  font-weight: bold;
+  font-size: 0.95rem;
+}
+
+.shipcombat-core-flux-label {
+  font-size: 0.65rem;
+  white-space: nowrap;
+  padding-right: 0.3rem;
+  border-right: 1px solid rgba(255,255,255,0.15);
+  margin-right: 0.1rem;
+}
+
+.shipcombat-shield-commit-info {
+  padding: 0.15rem 0.5rem 0.3rem;
+  font-size: 0.72rem;
+  text-align: center;
+  background: rgba(155, 89, 182, 0.08);
+  border-bottom: 3px solid rgba(255,255,255,0.1);
+  margin-bottom: 1px;
+}
+
+/* ── Engineer: Core distribution rows (legacy) ─────────────────────────── */
+
+.shipcombat-core-role-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.15rem 0;
+}
+
+.shipcombat-core-role-name {
+  flex: 0 0 8rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.shipcombat-core-role-user {
+  flex: 1;
+  font-size: 0.8rem;
+  opacity: 0.7;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shipcombat-core-role-status {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+}
+
+.shipcombat-core-dist-row {
+  display: grid;
+  grid-template-columns: minmax(9rem, 2fr) minmax(6rem, 1.5fr) auto;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.shipcombat-core-dist-user {
+  font-size: 0.85rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shipcombat-core-dist-status {
+  text-align: center;
+}
+
+.shipcombat-oc-used-icon {
+  color: var(--color-warm-2, #f39c12);
+  font-size: 0.8rem;
+}
+
+.shipcombat-core-exhausted-label {
+  margin-left: 0.5rem;
+  font-size: 0.75rem;
+}
+
+/* Full-reset danger button */
+.shipcombat-action-danger {
+  background: rgba(100, 20, 20, 0.75);
+  color: #ff7070;
+  border-color: #e04040;
+}
+.shipcombat-action-danger:hover:not(:disabled) {
+  background: var(--color-warm-2, #e04040);
+  color: #fff;
+  border-color: #ff5050;
+}
+.shipcombat-action-danger:disabled {
+  background: rgba(60, 20, 20, 0.35);
+  color: rgba(255, 80, 80, 0.30);
+  border-color: rgba(200, 50, 50, 0.30);
+  cursor: not-allowed;
+}
+
+/* Emergency Vent  -  already fired this round */
+.shipcombat-action-vent-fired {
+  background: rgba(160, 30, 30, 0.85) !important;
+  border-color: #e04040 !important;
+  color: #fff !important;
+  text-shadow: 0 0 6px rgba(255, 80, 80, 0.9) !important;
+  opacity: 1 !important;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Mark Action Done button */
+.shipcombat-complete-turn-row {
+  display: flex;
+  justify-content: center;
+  padding: 0.75rem 0.5rem;
+}
+.shipcombat-mark-done-btn {
+  width: 100%;
+  text-align: center;
+  font-weight: bold;
+}
+.shipcombat-mark-done-btn.done {
+  opacity: 0.75;
+  border-style: dashed;
+}
+
+/* Section overlay system for Engineer action selection */
+@keyframes shipcombat-flicker {
+  0%   { opacity: 0.28; }
+  5%   { opacity: 0.70; }
+  10%  { opacity: 0.24; }
+  15%  { opacity: 0.91; }
+  20%  { opacity: 0.18; }
+  25%  { opacity: 0.84; }
+  30%  { opacity: 0.65; }
+  40%  { opacity: 0.27; }
+  50%  { opacity: 0.96; }
+  60%  { opacity: 0.20; }
+  70%  { opacity: 0.53; }
+  80%  { opacity: 0.71; }
+  90%  { opacity: 0.70; }
+  100% { opacity: 0.24; }
+}
+
+@keyframes shipcombat-scanlines {
+  0%   { background-position: 0 0; }
+  100% { background-position: 0 100%; }
+}
+
+.shipcombat-role-section {
+  position: relative;
+}
+
+/* Dim section content whenever the selection overlay is present */
+.shipcombat-role-section:has(.shipcombat-section-overlay) > :not(.shipcombat-section-overlay) {
+  opacity: 0.35;
+}
+
+.shipcombat-section-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  background: rgba(4, 30, 33, 0.42);
+}
+
+/* Allow pointer events only on the button itself */
+.shipcombat-section-overlay-btn {
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  font-weight: bold;
+  min-width: 55%;
+  text-align: center;
+  white-space: normal;
+  height: auto;
+  line-height: 1.3;
+  cursor: pointer;
+  border-radius: 4px;
+  background: rgba(4, 28, 32, 0.97);
+  border: 1px solid var(--impmal-lightblue, #065c63);
+  box-shadow: 0 0 12px rgba(6, 92, 99, 0.8), 0 0 4px rgba(6, 92, 99, 0.9), inset 0 0 10px rgba(6, 92, 99, 0.2);
+  color: #c8eaee;
+  text-shadow: 0 0 6px rgba(100, 220, 230, 0.8), 0 1px 0 rgba(0,0,0,0.8);
+  letter-spacing: 0.04em;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+
+/* Scan-line + flicker overlay on hover  -  matches impmal hololith aesthetic */
+.shipcombat-section-overlay-btn:hover:not([disabled]) {
+  background: rgba(var(--impmal-lightblue-rgb, 94, 184, 196), 0.18);
+  border-color: var(--impmal-lightblue, #5eb8c4);
+  text-shadow: 0 0 6px var(--impmal-lightblue, #5eb8c4), 0 0 12px var(--impmal-lightblue, #5eb8c4);
+}
+
+.shipcombat-section-overlay-btn:hover:not([disabled])::before {
+  content: " ";
+  display: block;
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.18) 50%),
+    linear-gradient(90deg,
+      rgba(255, 0, 0, 0.04),
+      rgba(0, 255, 0, 0.02),
+      rgba(0, 0, 255, 0.04));
+  background-size: 100% 2px, 3px 100%;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.shipcombat-section-overlay-btn:hover:not([disabled])::after {
+  content: " ";
+  display: block;
+  position: absolute;
+  inset: 0;
+  background: rgba(18, 16, 16, 0.08);
+  opacity: 0;
+  z-index: 2;
+  pointer-events: none;
+  animation: shipcombat-flicker 0.15s infinite;
+}
+
+.shipcombat-section-overlay--taken {
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 0)    0px,
+      rgba(0, 0, 0, 0)    2px,
+      rgba(0, 0, 0, 0.38) 2px,
+      rgba(0, 0, 0, 0.38) 3px
+    ),
+    linear-gradient(
+      rgba(130, 12, 12, 0.54),
+      rgba(80,  5,  5,  0.48)
+    );
+  border: 1px solid rgba(180, 18, 18, 0.45);
+  box-shadow: inset 0 0 16px rgba(140, 0, 0, 0.28);
+}
+
+.shipcombat-section-overlay--selected {
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 0)    0px,
+      rgba(0, 0, 0, 0)    2px,
+      rgba(0, 0, 0, 0.28) 2px,
+      rgba(0, 0, 0, 0.28) 3px
+    ),
+    linear-gradient(
+      rgba(12, 130, 40, 0.48),
+      rgba(5,  80,  22,  0.42)
+    );
+  border: 1px solid rgba(18, 180, 55, 0.45);
+  box-shadow: inset 0 0 16px rgba(0, 140, 40, 0.28);
+}
+
+.shipcombat-section-overlay--selected .shipcombat-overlay-lock-indicator {
+  color: rgba(170, 240, 187, 0.90);
+  text-shadow: 0 0 8px rgba(50, 200, 80, 0.55);
+}
+
+.shipcombat-section-overlay--selected .shipcombat-overlay-lock-indicator i {
+  color: rgba(100, 230, 130, 0.85);
+  text-shadow: 0 0 10px rgba(40, 200, 60, 0.65);
+}
+
+.shipcombat-section-overlay--taken .shipcombat-section-overlay-btn {
+  opacity: 0.30;
+  cursor: not-allowed;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Core Systems Critical overlay – red critical variant */
+.shipcombat-section-overlay--critical {
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 0)    0px,
+      rgba(0, 0, 0, 0)    2px,
+      rgba(0, 0, 0, 0.38) 2px,
+      rgba(0, 0, 0, 0.38) 3px
+    ),
+    linear-gradient(
+      rgba(130, 12, 12, 0.54),
+      rgba(80,  5,  5,  0.48)
+    );
+  border: 1px solid rgba(180, 18, 18, 0.45);
+  box-shadow: inset 0 0 16px rgba(140, 0, 0, 0.28);
+}
+
+.shipcombat-overlay-lock-indicator--critical {
+  color: rgba(220, 170, 170, 0.80);
+  text-shadow: 0 0 8px rgba(200, 50, 50, 0.55);
+}
+
+.shipcombat-overlay-lock-indicator--critical i {
+  color: rgba(220, 90, 90, 0.75);
+  text-shadow: 0 0 10px rgba(200, 40, 40, 0.65);
+}
+
+.shipcombat-overlay-crit-desc {
+  font-size: 0.7rem;
+  font-weight: 400;
+  opacity: 0.75;
+  letter-spacing: 0.02em;
+}
+
+/* Lock indicator used in the Pilot overcharge overlay (no button, just a label) */
+.shipcombat-overlay-lock-indicator,
+.shipcombat-vent-lock-notice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.5rem 1.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: rgba(220, 170, 170, 0.80);
+  text-align: center;
+  letter-spacing: 0.04em;
+  text-shadow: 0 0 8px rgba(200, 50, 50, 0.55);
+  pointer-events: none;
+  user-select: none;
+}
+
+.shipcombat-overlay-lock-indicator i,
+.shipcombat-vent-lock-notice i {
+  font-size: 1.1rem;
+  color: rgba(220, 90, 90, 0.75);
+  text-shadow: 0 0 10px rgba(200, 40, 40, 0.65);
+}
+
+/* Internal fire severity badge */
+.shipcombat-fire-severity {
+  color: #e04040;
+  font-weight: bold;
+  font-size: 1.1em;
+}
+
+/* ── Engineer: Uniform button widths ────────────────────────────────────── */
+
+.shipcombat-eng-btn {
+  width: 100%;
+  text-align: center;
+  white-space: normal;
+  height: auto;
+  min-height: 2rem;
+  line-height: 1.3;
+}
+
+/* ── Engineer: Core action row (Overclock + Dispatch side-by-side) ──────── */
+
+/* Bypass the warhammer row-content height:2rem / flex:0 0 100px constraints */
+.shipcombat-btn-list-row {
+  padding: 0.25rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+/* ── Engineer: Shell Commitment subsection ── */
+.shipcombat-shield-commit-section {
+  border-top: 1px solid rgba(255,255,255,0.06);
+  padding: 0.2rem 0 0.35rem;
+}
+
+.shipcombat-shield-commit-info {
+  padding: 0.1rem 0.75rem 0;
+  font-size: 0.75rem;
+  opacity: 0.8;
+}
+
+.shipcombat-shield-commit-count {
+  min-width: 1.5rem;
+  text-align: center;
+  font-weight: bold;
+}
+
+/* ── Engineer: Overlay hover (section highlight/dim) ─────────────────────── */
+/* Overlay hover: green highlight on hovered selection, red on the other two */
+.shipcombat-role-section.shipcombat-overlay-hover-confirm > .shipcombat-section-overlay {
+  background: rgba(20, 100, 20, 0.40) !important;
+  border-color: rgba(80, 180, 80, 0.50);
+  box-shadow: inset 0 0 16px rgba(40, 160, 40, 0.25);
+}
+.shipcombat-role-section.shipcombat-overlay-hover-confirm > .shipcombat-section-overlay .shipcombat-section-overlay-btn {
+  border-color: rgba(80, 180, 80, 0.65);
+  box-shadow: 0 0 12px rgba(40, 160, 40, 0.6), 0 0 4px rgba(40, 160, 40, 0.8);
+  color: #b5e8b5;
+  text-shadow: 0 0 6px rgba(80, 220, 80, 0.8);
+}
+
+.shipcombat-role-section.shipcombat-overlay-hover-deny > .shipcombat-section-overlay {
+  background: rgba(100, 15, 15, 0.50) !important;
+  border-color: rgba(180, 40, 40, 0.50);
+  box-shadow: inset 0 0 16px rgba(160, 20, 20, 0.3);
+}
+.shipcombat-role-section.shipcombat-overlay-hover-deny > .shipcombat-section-overlay .shipcombat-section-overlay-btn {
+  border-color: rgba(180, 60, 60, 0.55);
+  color: rgba(220, 150, 150, 0.7);
+  opacity: 0.5;
+}
+
+
+/* ── Engineer: Compact action row (Heat/Fire single-line) ──────────────── */
+
+.shipcombat-eng-action-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem;
+}
+
+.shipcombat-eng-action-desc {
+  flex: 1;
+  font-size: 0.7rem;
+  opacity: 0.75;
+  margin: 0;
+  line-height: 1.3;
+}
+
+.shipcombat-eng-action-ctrl {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ── Engineer: Confirm row (matches helmsman) ───────────────────────────── */
+.shipcombat-eng-confirm-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.25rem;
+}
+
+.shipcombat-eng-confirm {
+  flex: 0 0 auto;
+  padding: 0.4rem 1rem;
+  font-weight: bold;
+}
+
+.shipcombat-eng-note {
+  font-size: 0.75rem;
+  opacity: 0.6;
+  font-style: italic;
+}
+
+.shipcombat-core-action-row {
+  display: flex;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.shipcombat-core-action-row .shipcombat-eng-btn {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+
+/* ── Hull Repair Bar (Engineer) ── */
+.shipcombat-hull-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  min-width: 0;      /* allow shrinking when a parent is display:flex */
+  overflow: hidden;  /* clip if parent is narrower than our content */
+}
+.shipcombat-hull-value { font-weight: 600; white-space: nowrap; }
+.shipcombat-hull-bar-track {
+  flex: 0 0 60px; /* fixed 60px — avoids growing to overflow parent in flex context */
+  width: 60px;
+  height: 6px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.shipcombat-hull-bar-fill {
+  height: 100%;
+  background: #44ff88;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+

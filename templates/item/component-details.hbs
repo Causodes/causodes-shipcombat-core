@@ -42,7 +42,12 @@
         <div class="form-group">
             <label>{{localize "SHIPCOMBAT.Component.Damage"}}</label>
             <div class="form-fields">
-                <input type="number" name="system.damage" value="{{system.damage}}">
+                <input type="text" name="system.damage" value="{{system.damage}}" placeholder="1d6" style="flex: 1 1 6rem;">
+                <select name="system.damageType" style="flex: 1 1 8rem;">
+                    {{#each damageTypeChoices}}
+                    <option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+                    {{/each}}
+                </select>
             </div>
         </div>
 
@@ -118,6 +123,13 @@
                     <input type="number" name="system.zoneThresholds.{{key}}" value="{{value}}" min="0">
                 </div>
                 {{/each}}
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>{{localize "SHIPCOMBAT.Component.FluxToAPRate"}}</label>
+            <div class="form-fields">
+                <input type="number" name="system.fluxToAPRate" value="{{system.fluxToAPRate}}" min="1">
             </div>
         </div>
     </fieldset>
@@ -200,6 +212,13 @@
             <label>{{localize "SHIPCOMBAT.Component.MaxRange"}}</label>
             <div class="form-fields">
                 <input type="number" name="system.maxRange" value="{{system.maxRange}}" min="0">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>{{localize "SHIPCOMBAT.Component.APCostMultiplier"}}</label>
+            <div class="form-fields">
+                <input type="number" name="system.apCostMultiplier" value="{{system.apCostMultiplier}}" min="0" step="0.1">
             </div>
         </div>
     </fieldset>

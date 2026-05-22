@@ -1,0 +1,385 @@
+/* ── Torpedo Sheet ───────────────────────────────────────────────────────── */
+
+.shipcombat-torpedo-sheet {
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Header block  -  uses system .sheet-header; shrink portrait to match ship sheets */
+.shipcombat-torpedo-header-block .sheet-header img {
+  flex: 0 0 48px !important;
+  width: 48px !important;
+  height: 48px !important;
+}
+.shipcombat-torpedo-header-block .sheet-header {
+  gap: 0.3rem;
+}
+/* Center the name */
+.shipcombat-torpedo-header-block .details-row.name input {
+  text-align: center;
+  font-size: 0.95rem;
+  padding: 0.1rem 0.2rem;
+  height: auto;
+}
+/* Bars sit below the name inside header-details */
+.shipcombat-torpedo-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+/* Resource bars */
+.shipcombat-torpedo-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.shipcombat-torpedo-bar > label {
+  flex: 0 0 100px;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  opacity: 0.7;
+  text-align: right;
+  white-space: nowrap;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.shipcombat-torpedo-bar-track {
+  flex: 1;
+  height: 18px;
+  background: rgba(0,0,0,0.3);
+  border-radius: 3px;
+  position: relative;
+  overflow: hidden;
+}
+.shipcombat-torpedo-bar-fill {
+  position: absolute;
+  inset: 0;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+.shipcombat-torpedo-bar-fill.hull { background: rgba(200,60,60,0.5); }
+.shipcombat-torpedo-bar-fill.fuel { background: rgba(60,160,220,0.5); }
+.shipcombat-torpedo-bar-fill.ammo { background: rgba(220,180,40,0.5); }
+.shipcombat-torpedo-bar-text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  color: #fff;
+  gap: 2px;
+}
+.shipcombat-torpedo-inline {
+  width: 28px;
+  background: none;
+  border: none;
+  color: #fff;
+  text-align: center;
+  font-size: 0.7rem;
+  padding: 0;
+}
+
+/* Stat grid */
+.shipcombat-torpedo-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  text-align: center;
+}
+.shipcombat-torpedo-stat label {
+  display: block;
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+.shipcombat-torpedo-stat input {
+  width: 100%;
+  text-align: center;
+  background: rgba(0,0,0,0.2);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 3px;
+  color: #fff;
+  font-size: 0.85rem;
+  padding: 2px;
+}
+
+/* Traits */
+.shipcombat-torpedo-traits h4 {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  opacity: 0.6;
+  margin: 0;
+}
+.shipcombat-torpedo-trait-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  text-align: center;
+}
+.shipcombat-torpedo-trait label {
+  display: block;
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+.shipcombat-torpedo-trait input[type="number"] {
+  width: 100%;
+  text-align: center;
+  background: rgba(0,0,0,0.2);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 3px;
+  color: #fff;
+  font-size: 0.85rem;
+  padding: 2px;
+}
+.shipcombat-torpedo-trait input[type="checkbox"] {
+  margin: 4px auto 0;
+  display: block;
+}
+
+/* Trait tags */
+.shipcombat-torpedo-trait-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: center;
+}
+.shipcombat-torpedo-tag {
+  background: rgba(180,50,50,0.18);
+  border: 1px solid rgba(200,70,70,0.55);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #d44;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* ── Movement Controls ─────────────────────────────────────────────────── */
+.shipcombat-torpedo-movement {
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 4px;
+  padding: 6px;
+  background: rgba(0,0,0,0.15);
+}
+.shipcombat-torpedo-movement h4 {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  opacity: 0.6;
+  margin: 0 0 4px;
+}
+.shipcombat-movement-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.shipcombat-movement-ac {
+  font-size: 0.68rem;
+  font-weight: 600;
+  opacity: 0.85;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: #a8b8d0;
+}
+.shipcombat-torpedo-movement-info {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.65rem;
+  opacity: 0.6;
+  margin-bottom: 6px;
+}
+.shipcombat-torpedo-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.shipcombat-torpedo-slider-row label {
+  width: 72px;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  opacity: 0.6;
+  text-align: right;
+}
+.shipcombat-torpedo-slider-row input[type="range"] {
+  flex: 1;
+  height: 6px;
+}
+.shipcombat-torpedo-slider-row > span {
+  width: 52px;
+  font-size: 0.7rem;
+  flex-shrink: 0;
+}
+.shipcombat-torpedo-movement-buttons {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+}
+.shipcombat-torpedo-movement-buttons button {
+  flex: 1;
+  font-size: 0.7rem;
+  padding: 3px 6px;
+  cursor: pointer;
+}
+
+/* ── Min-move divider line inside the power bar ────────────────────────── */
+.shipcombat-power-minmove-line {
+  position: absolute;
+  left: var(--minmove, 0%);
+  top: 0;
+  width: 2px;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.85);
+  pointer-events: none;
+  z-index: 3;
+  transform: translateX(-1px);
+}
+
+/* ── Ship Power Bar (inside torpedo/SC movement) ───────────────────────── */
+.shipcombat-torpedo-ship-power {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+/* ── Compact Power Bar (torpedo / strike craft) ────────────────────────── */
+.shipcombat-torpedo-power-block {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.shipcombat-torpedo-power-block > label {
+  width: 72px;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  opacity: 0.6;
+  text-align: right;
+  flex-shrink: 0;
+}
+.shipcombat-torpedo-power-block .shipcombat-power-bar--compact {
+  height: 1rem;
+  flex: 1;
+  margin-inline: 5%;
+}
+.shipcombat-torpedo-power-block > input[type="range"] {
+  flex: 1;
+  height: 6px;
+  margin-inline: 5%;
+}
+.shipcombat-torpedo-power-block .shipcombat-power-range {
+  height: 1rem;
+}
+.shipcombat-torpedo-power-block .shipcombat-power-readout {
+  position: static; /* override the global absolute positioning from pilot.css */
+  width: 52px;
+  font-size: 0.7rem;
+  text-align: right;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+}
+
+/* Value + unit sub-spans for aligned readouts */
+.shipcombat-readout-cell {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  margin-right: -4px;
+}
+.shipcombat-readout-cell > span:first-child {
+  flex: 1;
+  text-align: right;
+}
+.shipcombat-runit {
+  width: 1.2em;
+  flex-shrink: 0;
+  text-align: left;
+}
+
+/* Compact bars inside the torpedo movement area */
+.shipcombat-torpedo-movement .shipcombat-power-bar--compact {
+  height: 1rem;
+}
+.shipcombat-torpedo-movement .shipcombat-power-range {
+  height: 1rem;
+}
+
+/* ── Detonate Button ───────────────────────────────────────────────────── */
+.shipcombat-torpedo-detonate {
+  text-align: center;
+}
+.shipcombat-detonate-btn {
+  width: 100%;
+  padding: 6px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  background: rgba(200,40,40,0.3);
+  border: 1px solid rgba(200,40,40,0.6);
+  color: #ff6666;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.shipcombat-detonate-btn:hover {
+  background: rgba(200,40,40,0.5);
+}
+.shipcombat-attack-btn {
+  width: 100%;
+  padding: 6px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  background: rgba(40,120,200,0.3);
+  border: 1px solid rgba(40,120,200,0.6);
+  color: #66aaff;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.shipcombat-attack-btn:hover {
+  background: rgba(40,120,200,0.5);
+}
+
+/* ── Turn Done ─────────────────────────────────────────────────────────── */
+.shipcombat-torpedo-turn {
+  text-align: center;
+}
+.shipcombat-torpedo-turn button {
+  width: 100%;
+  padding: 4px;
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+
+/* ── Launch-turn lockout overlay ──────────────────────────────────────── */
+.shipcombat-torpedo-lockout {
+  cursor: default;
+  font-size: 0.85rem;
+}
+.shipcombat-torpedo-lockout i {
+  font-size: 1.4rem;
+  animation: shipcombat-flicker 3s ease-in-out infinite;
+}
+
+/* ── Torpedo Damage Chat ───────────────────────────────────────────────── */
+.shipcombat-torpedo-damage h3 {
+  margin: 0 0 4px;
+  font-size: 0.9rem;
+  color: #e88;
+}
+.shipcombat-torpedo-damage p {
+  margin: 2px 0;
+  font-size: 0.8rem;
+}
+

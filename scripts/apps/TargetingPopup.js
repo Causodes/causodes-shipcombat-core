@@ -42,7 +42,7 @@ function _normAngle(a) {
  * @param {number} ty      Target centre Y
  * @returns {{ inArc: boolean, distance: number, angleDelta: number }}
  */
-function testArc(cx, cy, heading, weapon, tx, ty) {
+export function testArc(cx, cy, heading, weapon, tx, ty) {
   const sys     = weapon.system;
   const pos     = sys.weaponPosition ?? "prow";
   const bay     = sys.weaponBay ?? "port";
@@ -175,7 +175,7 @@ export class TargetingPopup extends foundry.applications.api.HandlebarsApplicati
     );
     const sensorEffects = sys.resources?.sensors?.effects ?? [];
     const rangeAmpActive = sensorEffects.some(e => e.actionId === "rangeAmplifier");
-    const baseAutoScanRange = (sensorComp?.system?.autoScanRange ?? 0) || (sensorComp?.system?.guaranteedHitRange ?? 0) || (sys.autoScanRange ?? 0);
+    const baseAutoScanRange = (sensorComp?.system?.autoScanRange ?? 0) || (sys.autoScanRange ?? 0);
     const bandExpanded = !!(sys.resources?.gunner?.sensorBandExpanded);
     const rawBandSize  = sensorComp?.system?.bandSize ?? sys.sensorBandSize ?? 0;
     const sensor = {
@@ -195,10 +195,15 @@ export class TargetingPopup extends foundry.applications.api.HandlebarsApplicati
     const captainStance   = sys.resources?.captain?.stance ?? "none";
     const stanceHitMod    = captainStance === "aggressive" ? step : captainStance === "defensive" ? -step : 0;
 
-    // Find all enemy tokens (anything that isn't our ship)
-    const candidates = canvas.tokens.placeables.filter(
-      t => t.document.actor?.id !== ship.id && t.visible
-    );
+    // Find valid target tokens: exclude own ship and own torpedoes / strike craft
+    const shipTokenId = token.id;
+    const candidates = canvas.tokens.placeables.filter(t => {
+      if (!t.visible) return false;
+      if (t.document.actor?.id === ship.id) return false;
+      // Exclude own ordnance that was launched by this ship
+      if (_isOrdActorType(t.document.actor) && t.document.actor.system?.parentShipTokenId === shipTokenId) return false;
+      return true;
+    });
 
     const targets = [];
     for (const candidate of candidates) {
@@ -330,6 +335,7 @@ export class TargetingPopup extends foundry.applications.api.HandlebarsApplicati
         hitQuadrant,
         hitQuadrantLabel: game.i18n.localize(`SHIPCOMBAT.Sector.${hitQuadrant.charAt(0).toUpperCase() + hitQuadrant.slice(1)}`),
         totalAccuracy,
+        accuracyLabel: adapter.formatAccuracyDisplay(totalAccuracy),
         isAutoHit:    false,
         targetArmour,
         showArmour,

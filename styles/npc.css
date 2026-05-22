@@ -1,0 +1,625 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   NPC Ship Sheet
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.shipcombat-npc-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.25rem 0.5rem;
+}
+
+.shipcombat-npc-attr-row {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  padding: 0.25rem 0;
+}
+.shipcombat-npc-attr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+}
+.shipcombat-npc-attr label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+.shipcombat-npc-attr input[type="number"] {
+  width: 3.5rem;
+  text-align: center;
+  font-weight: bold;
+}
+
+.shipcombat-npc-movement-row {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  padding: 0.25rem 0;
+}
+.shipcombat-npc-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+}
+.shipcombat-npc-stat label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+.shipcombat-npc-stat input[type="number"] {
+  width: 3rem;
+  text-align: center;
+}
+
+.shipcombat-npc-damage-row {
+  display: flex;
+  gap: 1.5rem;
+  justify-content: center;
+  padding: 0.25rem 0;
+}
+.shipcombat-npc-tracker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+.shipcombat-npc-tracker label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.shipcombat-npc-adj {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.shipcombat-npc-adj button {
+  width: 1.5rem;
+  height: 1.5rem;
+  line-height: 1.5rem;
+  text-align: center;
+  padding: 0;
+  font-size: 0.9rem;
+  border-radius: 3px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.05);
+  cursor: pointer;
+}
+.shipcombat-npc-adj .shipcombat-readonly-val {
+  min-width: 2rem;
+  text-align: center;
+  font-weight: bold;
+  font-size: 1.1rem;
+}
+
+.shipcombat-npc-action-btn {
+  padding: 0.2rem 0.6rem;
+  font-size: 0.75rem;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.06);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.shipcombat-npc-action-btn:hover:not(:disabled) {
+  background: rgba(255,255,255,0.12);
+}
+.shipcombat-npc-action-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.shipcombat-npc-danger-btn {
+  border-color: rgba(255,80,80,0.3);
+  color: #ff8888;
+}
+.shipcombat-npc-danger-btn:hover:not(:disabled) {
+  background: rgba(255,80,80,0.15);
+}
+
+.shipcombat-npc-shield-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+  padding: 0.25rem;
+}
+.shipcombat-npc-shield-sector {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.shipcombat-npc-shield-label {
+  min-width: 4.5rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+.shipcombat-npc-shield-max {
+  font-size: 0.8rem;
+  opacity: 0.6;
+}
+
+.shipcombat-npc-ammo-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.15rem 0.25rem;
+}
+.shipcombat-npc-ammo-label {
+  width: 7rem;
+  font-size: 0.8rem;
+}
+.shipcombat-npc-ammo-max {
+  font-size: 0.8rem;
+  opacity: 0.6;
+}
+.shipcombat-npc-ammo-max-input {
+  width: 2.5rem;
+  text-align: center;
+}
+
+.shipcombat-npc-controls {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  padding: 0.5rem 0;
+}
+
+.shipcombat-max-input {
+  width: 3rem;
+  text-align: center;
+  margin-left: 0.25rem;
+}
+
+/* Focused Scan button in sensor resource bar */
+.shipcombat-focused-scan-btn {
+  background: rgba(126, 200, 227, 0.12);
+  border-color: rgba(126, 200, 227, 0.3);
+  color: #7ec8e3;
+}
+.shipcombat-focused-scan-btn:hover {
+  background: rgba(126, 200, 227, 0.22);
+}
+
+/* ── NPC Header compact layout ────────────────────────────────────────────── */
+
+/* Attribute block  -  sits alongside defence table in .shipcombat-compact-stats */
+.shipcombat-npc-attrs-block {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+.shipcombat-npc-attr-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.shipcombat-npc-attr-lbl {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  opacity: 0.7;
+  min-width: 3.5rem;
+}
+.shipcombat-npc-attr-cell input[type="number"] {
+  width: 3rem;
+  text-align: center;
+  font-weight: bold;
+}
+
+/* NPC defence table: 4 columns (loc + armour + shield + max) */
+.shipcombat-npc-ship .shipcombat-defence-thead,
+.shipcombat-npc-ship .shipcombat-defence-row {
+  grid-template-columns: 4rem 2.5rem 2.5rem 2.5rem;
+}
+.shipcombat-npc-def-readonly {
+  font-weight: bold;
+}
+
+/* NPC vitals  -  editable inputs in the compact vitals column */
+.shipcombat-npc-vital-input {
+  width: 3rem;
+  text-align: center;
+}
+.shipcombat-adj-compact {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+.shipcombat-adj-compact button {
+  width: 1.2rem;
+  height: 1.2rem;
+  line-height: 1.2rem;
+  text-align: center;
+  padding: 0;
+  font-size: 0.8rem;
+  border-radius: 3px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.05);
+  cursor: pointer;
+}
+.shipcombat-adj-compact .shipcombat-readonly-val {
+  min-width: 1.5rem;
+  text-align: center;
+  font-weight: bold;
+}
+
+/* ── NPC Gunner tab ───────────────────────────────────────────────────────── */
+
+.shipcombat-npc-ammo-label-input {
+  width: 6rem;
+  font-size: 0.8rem;
+}
+.shipcombat-adj-inline {
+  display: inline-flex;
+}
+
+/* ── NPC horizontal attributes row ────────────────────────────────────────── */
+.shipcombat-npc-attrs-row-h {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+.shipcombat-npc-attr-cell-h {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+}
+.shipcombat-npc-attr-cell-h .shipcombat-npc-attr-lbl {
+  font-size: 0.55rem;
+}
+.shipcombat-npc-attr-cell-h input[type="number"] {
+  width: 2.8rem;
+  text-align: center;
+  font-weight: bold;
+}
+
+/* NPC defence table narrow (armour only, 2 columns) */
+.shipcombat-npc-def-narrow {
+  grid-template-columns: 4rem 2.5rem !important;
+}
+
+/* ── NPC action buttons grid (like NPC character sheet) ───────────────────── */
+.shipcombat-npc-actions-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding: 0.35rem 0.5rem;
+}
+.shipcombat-npc-action-pill {
+  padding: 0.25rem 0.6rem;
+  font-size: 0.8rem;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.06);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.shipcombat-npc-action-pill:hover:not(:disabled) {
+  background: rgba(255,255,255,0.12);
+}
+.shipcombat-npc-action-pill:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* NPC shield max editable input */
+.shipcombat-npc-shield-max-input {
+  width: 2rem;
+  text-align: center;
+}
+
+/* NPC resource input in gunner status bar */
+.shipcombat-npc-resource-input {
+  width: 2rem;
+  text-align: center;
+  font-weight: bold;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  padding: 0;
+  height: 1.3em;
+  line-height: 1;
+  font-size: inherit;
+  color: inherit;
+  vertical-align: middle;
+}
+.shipcombat-npc-resource-input:hover,
+.shipcombat-npc-resource-input:focus {
+  border-color: rgba(255,255,255,0.3);
+  background: rgba(0,0,0,0.2);
+}
+
+/* ── NPC Header 2-row layout ──────────────────────────────────────────────── */
+
+/* Row 1: portrait + name + attrs inline in .sheet-header  -  superseded by .shipcombat-ship-header rules */
+.shipcombat-npc-ship .sheet-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Row 2: vitals strip  -  horizontal bar of key stats */
+.shipcombat-npc-vitals-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  padding: 0.25rem 0.4rem;
+  align-items: center;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+.shipcombat-npc-vstat {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.8rem;
+}
+.shipcombat-npc-vstat-lbl {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  opacity: 0.7;
+  white-space: nowrap;
+}
+.shipcombat-npc-vstat-input {
+  width: 2.5rem;
+  text-align: center;
+  font-weight: bold;
+}
+
+/* ── NPC Flux counter (shield allocation header) ──────────────────────────── */
+.shipcombat-npc-flux-counter {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-left: auto;
+  font-size: 0.8rem;
+}
+.shipcombat-npc-flux-label {
+  text-transform: uppercase;
+  font-size: 0.6rem;
+  opacity: 0.7;
+}
+.shipcombat-npc-flux-val {
+  font-weight: bold;
+  min-width: 1.5rem;
+  text-align: center;
+}
+.shipcombat-npc-flux-negative {
+  color: #ff4040;
+}
+
+/* ── NPC Armour input (body section) ──────────────────────────────────────── */
+.shipcombat-npc-armour-input {
+  width: 2.5rem;
+  text-align: center;
+  font-weight: bold;
+}
+
+/* NPC danger button  -  red tint for destructive actions */
+.shipcombat-npc-danger-btn {
+  border-color: rgba(255,80,80,0.3) !important;
+  color: #ff6666;
+}
+.shipcombat-npc-danger-btn:hover:not(:disabled) {
+  background: rgba(255,80,80,0.12) !important;
+}
+
+/* ── NPC Ordnance Tab ─────────────────────────────────────────────────────── */
+.shipcombat-ord-drop-hint {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.75rem;
+  color: rgba(255,255,255,0.35);
+  font-style: italic;
+  font-size: 0.75rem;
+}
+
+/* Ordnance loadout chip – stretches to fill available row width */
+.shipcombat-ord-chip {
+  flex: 1;
+  max-width: none;
+}
+
+.shipcombat-ord-type-badge {
+  margin-left: auto;
+  opacity: 0.5;
+  font-size: 0.75rem;
+}
+.shipcombat-deployed-row .row-content {
+  gap: 0.5rem;
+}
+
+/* ── NPC Ordnance launch row (count input + launch button) ──────────────────── */
+.shipcombat-npc-launch-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.5rem;
+  border-top: 1px solid rgba(255,255,255,0.07);
+}
+.shipcombat-npc-launch-label {
+  font-size: 0.7rem;
+  opacity: 0.6;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+.shipcombat-npc-launch-count {
+  width: 2.6rem;
+  text-align: center;
+  font-weight: bold;
+  padding: 0.2rem 0.1rem;
+  font-size: 0.85rem;
+}
+.shipcombat-npc-launch-row .shipcombat-battery-fire-btn {
+  margin-left: auto;
+}
+
+
+/* ── NPC Header armour sector table ──────────────────────────────────────── */
+/* Replaces old shipcombat-armour-table + shipcombat-stat-table combination which had
+   width:100% inputs that broke the compound-val flex layout.               */
+.shipcombat-npc-armour-sector-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: center;
+  margin: 0 0 0.4rem;
+  background: none;
+  border: 0;
+}
+.shipcombat-npc-armour-sector-table tr {
+  background: none;
+  border-bottom: 1px solid rgba(255,255,255,0.12);
+}
+.shipcombat-npc-armour-sector-table tr:last-of-type {
+  border-bottom: 0;
+}
+.shipcombat-npc-armour-sector-table td {
+  border-right: 1px solid rgba(255,255,255,0.12);
+  padding: 0;
+  height: 1.6rem;
+  vertical-align: middle;
+}
+.shipcombat-npc-armour-sector-table td:last-of-type {
+  border-right: 0;
+}
+.shipcombat-npc-armour-sector-table tr:first-of-type td {
+  font-size: 0.65rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  height: 1.2rem;
+  vertical-align: middle;
+  cursor: default;
+}
+.shipcombat-npc-arm-row-label {
+  font-size: 0.65rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+  padding: 0 0.3rem;
+  white-space: nowrap;
+  text-align: left;
+  cursor: default;
+}
+/* Compound val cell: inline flex so inputs + | sit on one line */
+.shipcombat-npc-armour-compound {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  width: 100%;
+}
+.shipcombat-npc-arm-input {
+  width: 2.1rem;
+  height: 1.3rem;
+  border: 0;
+  background: none;
+  text-align: center;
+  padding: 0;
+  box-shadow: none;
+  font-size: 0.85rem;
+}
+.shipcombat-npc-arm-input:focus {
+  box-shadow: none;
+  background: rgba(255,255,255,0.05);
+}
+.shipcombat-npc-arm-max {
+  opacity: 0.55;
+}
+
+/* ── NPC Resource maxes configuration row (gunner tab) ───────────────────── */
+.shipcombat-npc-resource-maxes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.3rem 0.6rem;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  font-size: 0.75rem;
+  color: rgba(255,255,255,0.45);
+}
+.shipcombat-npc-resource-maxes label {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: rgba(255,255,255,0.45);
+}
+.shipcombat-npc-max-label {
+  font-style: italic;
+  opacity: 0.6;
+  margin-right: 0.3rem;
+}
+
+/* ── Shield hint panel: divider + flux max config ─────────────────────────── */
+.shipcombat-hint-divider {
+  border: none;
+  border-top: 1px solid rgba(255,255,255,0.1);
+  margin: 0.25rem 0;
+}
+.shipcombat-npc-flux-config-input {
+  width: 2rem;
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: bold;
+  background: transparent;
+  border: 1px solid rgba(0,255,136,0.25);
+  border-radius: 2px;
+  color: #00ff88;
+  padding: 0;
+  height: 1.3em;
+  line-height: 1;
+}
+.shipcombat-npc-flux-config-input:hover,
+.shipcombat-npc-flux-config-input:focus {
+  border-color: rgba(0,255,136,0.55);
+  background: rgba(0,0,0,0.2);
+}
+
+/* ── Armour header: compact inputs (legacy selectors kept for safety) ──── */
+.shipcombat-npc-armour-cur,
+.shipcombat-npc-armour-max {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+/* ── NPC macro cannon tier pips: reset button default styles ───────────── */
+.shipcombat-npc-ship .shipcombat-macro-tier-picker .shipcombat-macro-tier-pip {
+  appearance: none;
+  -webkit-appearance: none;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: 1;
+  /* allow shipcombat-macro-tier-pip CSS to take full effect on <button> elements */
+}
+
+/* ── NPC header: Impmal dark-teal borders (matching #065c63 = --impmal-lightblue) ── */
+.shipcombat-npc-ship .shipcombat-stat-table tr {
+  border-bottom-color: #065c63;
+}
+.shipcombat-npc-ship .shipcombat-stat-table td {
+  border-right-color: #065c63;
+}
+.shipcombat-npc-ship .shipcombat-npc-armour-sector-table tr {
+  border-bottom-color: #065c63;
+}
+.shipcombat-npc-ship .shipcombat-npc-armour-sector-table td {
+  border-right-color: #065c63;
+}
+/* Attr boxes (Hull Damage / Internal Fire): teal outer border */
+.shipcombat-npc-ship .shipcombat-ship-attr-box {
+  border-color: #065c63;
+}
+/* Attr label row (title): dark teal background like Impmal section headers */
+.shipcombat-npc-ship .shipcombat-ship-attr-label {
+  background: #065c63;
+  border-bottom-color: rgba(0, 255, 136, 0.15);
+  color: rgba(255, 255, 255, 0.9);
+}

@@ -423,9 +423,13 @@ export class HelmPreview {
     const d  = Math.sqrt(dx * dx + dy * dy);
     if (d < 1) return null;  // trivially on top
 
-    // Half the total heading change, normalised to (−π, π]
+    // Half the total heading change, normalised to (−π, π].
+    // Use a while-loop instead of % because JS % returns negative results for
+    // negative operands, which corrupts the normalization when atan2(dy,dx) < h0−π
+    // (e.g. west-facing ship, target to the north / starboard).
     let halfPhi = Math.atan2(dy, dx) - h0;
-    halfPhi = ((halfPhi + Math.PI) % (2 * Math.PI)) - Math.PI;  // → (−π, π]
+    while (halfPhi >  Math.PI) halfPhi -= 2 * Math.PI;
+    while (halfPhi <= -Math.PI) halfPhi += 2 * Math.PI;
     const phi = 2 * halfPhi;   // total heading change, ∈ (−2π, 2π]
 
     // Required arc length: d = arcLength · 2sin(φ/2)/φ  →  arcLength = d·φ/(2·sin(φ/2))
@@ -455,6 +459,60 @@ export class HelmPreview {
     const thrustPct = Math.max(0, arcLength / totalMaxDist * 100);
 
     return { bearingDeg, thrustPct };
+  }
+
+  /**
+   * Determine whether the ship can ram a target in non-Realistic mode.
+   *
+   * Uses a point-in-polygon test against the same zone polygon drawn by
+   * showRamZone(), so the popup target list always exactly matches the visual.
+   * If the target centre falls inside the zone, arc parameters compatible with
+   * projectPosition() are returned so the ship lands on the target centre.
+   *
+   * @param {object} shipBasis       – { cx0, cy0, h0, gridSize } from _tokenBasis()
+   * @param {number} targetCx        – target centre x (canvas pixels)
+   * @param {number} targetCy        – target centre y (canvas pixels)
+   * @param {number} effSpeed        – effective speed stat (VU)
+   * @param {number} maxBearingDeg   – max bearing magnitude (mano × 15°)
+   * @param {number} powerRemaining  – uncommitted power budget (0–powerMax %)
+   * @param {number} powerMax        – full power-bar max (usually 100)
+   * @returns {{ bearingDeg: number, thrustPct: number } | null}
+   */
+  static canRam(shipBasis, targetCx, targetCy, effSpeed, maxBearingDeg, powerRemaining, powerMax, minMoveGridUnits = 0) {
+    const { cx0, cy0, h0, gridSize } = shipBasis;
+    const maxDist       = (effSpeed + minMoveGridUnits) * gridSize;
+    const maxArcPx      = (powerRemaining / 100) * maxDist;
+    const maxBearingRad = maxBearingDeg * (Math.PI / 180);
+
+    if (maxArcPx < 1 || maxBearingRad <= 0) return null;
+
+    const dx = targetCx - cx0;
+    const dy = targetCy - cy0;
+    const d  = Math.sqrt(dx * dx + dy * dy);
+
+    // 1. Chord distance must be within the available arc length.
+    if (d < 1 || d > maxArcPx) return null;
+
+    // 2. Compute arc params: dRad = 2·angleDelta, chord = 2R·sin(angleDelta)
+    //    → R = d / (2·sin(angleDelta)), bearingRad = maxDist/R
+    //    While-loop normalisation is correct for all headings.
+    let angleDelta = Math.atan2(dy, dx) - h0;
+    while (angleDelta >  Math.PI) angleDelta -= 2 * Math.PI;
+    while (angleDelta < -Math.PI) angleDelta += 2 * Math.PI;
+
+    const sinH       = Math.sin(angleDelta);
+    const bearingRad = (Math.abs(sinH) < 1e-9) ? 0 : (2 * maxDist * sinH / d);
+    const arcLen     = (Math.abs(sinH) < 1e-9) ? d : (angleDelta * d / sinH);
+
+    // 3. Bearing must not exceed the ship's manoeuvring limit.
+    if (Math.abs(bearingRad) > maxBearingRad) return null;
+
+    // 4. Arc length must not exceed available thrust.
+    if (arcLen > maxArcPx) return null;
+    return {
+      bearingDeg: bearingRad * (180 / Math.PI),
+      thrustPct:  (arcLen / maxDist) * 100,
+    };
   }
 
   /**
@@ -618,8 +676,10 @@ export class HelmPreview {
     // Required thrust bearing relative to current heading
     const thrustAngle = Math.atan2(Ty, Tx);
     let bearingRad    = thrustAngle - h0;
-    // Normalise to (−π, π]
-    bearingRad = ((bearingRad + Math.PI) % (2 * Math.PI)) - Math.PI;
+    // Normalise to (−π, π] — while-loop avoids JS % returning negative results
+    // for negative operands (same bug as canReach before its fix).
+    while (bearingRad >  Math.PI) bearingRad -= 2 * Math.PI;
+    while (bearingRad <= -Math.PI) bearingRad += 2 * Math.PI;
     const bearingDeg = bearingRad * (180 / Math.PI);
     if (Math.abs(bearingDeg) > maxBearingDeg + 1e-6) return null;
 
@@ -645,11 +705,15 @@ export class HelmPreview {
     const candA = attackAngle + Math.PI / 2;
     const candB = attackAngle - Math.PI / 2;
     const normDiff = (a, b) => {
-      const d = ((a - b + Math.PI) % (2 * Math.PI)) - Math.PI;
+      let d = a - b;
+      while (d >  Math.PI) d -= 2 * Math.PI;
+      while (d <= -Math.PI) d += 2 * Math.PI;
       return Math.abs(d);
     };
     const targetHeading = normDiff(candA, h0) <= normDiff(candB, h0) ? candA : candB;
-    let delta = ((targetHeading - h0 + Math.PI) % (2 * Math.PI)) - Math.PI;
+    let delta = targetHeading - h0;
+    while (delta >  Math.PI) delta -= 2 * Math.PI;
+    while (delta <= -Math.PI) delta += 2 * Math.PI;
     const maxRad = maxBearingDeg * (Math.PI / 180);
     delta = Math.max(-maxRad, Math.min(maxRad, delta));
     return (h0 + delta) * (180 / Math.PI) + 90;

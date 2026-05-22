@@ -1,3 +1,4 @@
+import { SystemAdapter } from "../systems/SystemAdapter.js";
 /**
  * engineer-state.js – Power cores, heat, fire, shields, core bank, hull repair
  * extracted from ShipCombatState.
@@ -115,7 +116,7 @@ export function hasPowerCore(roleId) {
 export async function emergencyVent() {
   const heat = this.getData().resources?.engineer?.heat ?? 0;
   if (heat <= 0) return;
-  const currentFire = this.ship?.system?.internalFire ?? 0;
+  const currentFire = SystemAdapter.current.getShipData(this.ship)?.internalFire ?? 0;
   await this.update({
     "resources.engineer.heat": 0,
     internalFire: currentFire + heat,
@@ -124,7 +125,7 @@ export async function emergencyVent() {
 }
 
 export async function reduceInternalFire(amount) {
-  const current = this.ship?.system?.internalFire ?? 0;
+  const current = SystemAdapter.current.getShipData(this.ship)?.internalFire ?? 0;
   await this.update({ internalFire: Math.max(0, current - amount) });
 }
 
@@ -135,7 +136,7 @@ export async function setInternalFire(value) {
 // ── Auxiliary Power spending ──────────────────────────────────────────────
 
 export async function spendBankedCores(count) {
-  const current = this.ship?.system?.resources?.engineer?.auxiliaryPower ?? 0;
+  const current = SystemAdapter.current.getShipData(this.ship)?.resources?.engineer?.auxiliaryPower ?? 0;
   const spent   = Math.min(count, current);
   if (spent <= 0) return 0;
   await this.update({ "resources.engineer.auxiliaryPower": current - spent });
@@ -212,7 +213,7 @@ export async function adjustShieldZone(sector, value) {
 // ── Hull Repair ────────────────────────────────────────────────────────────
 
 export async function repairHull(plasmaSpent, sl) {
-  const sys = this.ship?.system;
+  const sys = SystemAdapter.current.getShipData(this.ship);
   if (!sys) return;
 
   const internalFire = sys.internalFire ?? 0;
@@ -225,16 +226,22 @@ export async function repairHull(plasmaSpent, sl) {
   const reactor    = ShipCombatState.getReactorStats(this.ship);
   const heatMax    = reactor.heatCapacity;
   const heatRoom   = Math.max(0, heatMax - heat);
-  // Repair is capped to available heat budget (1 heat per HP) and existing damage
+  // Repair is capped to available heat budget (1 heat per HP) and remaining damage headroom.
   const repairAttempted = Math.max(0, plasmaSpent + sl);
   const hullCurrent = sys.hull?.value ?? 0;
-  const repairAmount = Math.min(repairAttempted, heatRoom, hullCurrent);
+  const hullMax     = sys.hull?.max ?? 50;
+  const isHPMode    = SystemAdapter.current.hullDisplayMode === "hpRemaining";
+  // HP mode: cap by remaining headroom to max; wounds mode: cap by damage taken.
+  const repairRoom  = isHPMode ? Math.max(0, hullMax - hullCurrent) : hullCurrent;
+  const repairAmount = Math.min(repairAttempted, heatRoom, repairRoom);
   if (repairAmount <= 0) {
     ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.HullRepairNoRoom"));
     return;
   }
   const heatCost = repairAmount;
-  const newHull  = Math.max(0, hullCurrent - repairAmount);
+  const newHull  = isHPMode
+    ? Math.min(hullMax, hullCurrent + repairAmount)
+    : Math.max(0, hullCurrent - repairAmount);
 
   await this.update({
     "resources.engineer.heat": heat + heatCost,
@@ -247,7 +254,7 @@ export async function repairHull(plasmaSpent, sl) {
 
 /** Convert 1 voidshield flux (shieldPool.current) into 1 Auxiliary Power. */
 export async function fluxToCharge() {
-  const sys = this.ship?.system;
+  const sys = SystemAdapter.current.getShipData(this.ship);
   if (!sys) return;
   const pool = sys.shieldPool?.current ?? 0;
   if (pool <= 0) {
@@ -256,8 +263,9 @@ export async function fluxToCharge() {
   }
   const ap = sys.resources?.engineer?.auxiliaryPower ?? 0;
   const apCap = this.getReactorStats().auxPowerCapacity;
+  const fluxToAPRate = this.getShieldStats().fluxToAPRate ?? 1;
   // AP Shutdown (Core Systems High): AP cannot increase
-  const newAP = this.getData?.()?.conditions?.coreSystems?.tier === "high" ? ap : Math.min(apCap, ap + 1);
+  const newAP = this.getData?.()?.conditions?.coreSystems?.tier === "high" ? ap : Math.min(apCap, ap + fluxToAPRate);
   await this.update({
     "shieldPool.current": pool - 1,
     "resources.engineer.auxiliaryPower": newAP,

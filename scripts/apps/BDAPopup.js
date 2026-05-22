@@ -137,9 +137,7 @@ export async function launchBDAFromChat(ship, message) {
 
 // ── Corrections-only popup ─────────────────────────────────────────────────────
 
-export class BDAPopup extends foundry.applications.api.HandlebarsApplicationMixin(
-  foundry.applications.api.ApplicationV2
-) {
+export class BDAPopup extends foundry.appv1.api.Application {
   ship          = null;
   targetTokenId    = null;
   /** SL result from the BDA roll */
@@ -164,19 +162,20 @@ export class BDAPopup extends foundry.applications.api.HandlebarsApplicationMixi
     this.originalLockTier = options.originalLockTier ?? 4;
   }
 
-  static DEFAULT_OPTIONS = {
-    id: "shipcombat-bda-popup",
-    classes: ["shipcombat-bda-popup"],
-    window: { title: "SHIPCOMBAT.BDA.Title", resizable: false },
-    position: { width: 420, height: "auto" },
-  };
+  static get defaultOptions() {
+    return foundry.utils.mergeObject(super.defaultOptions, {
+      id:        "shipcombat-bda-popup",
+      classes:   ["shipcombat-bda-popup"],
+      title:     game.i18n.localize("SHIPCOMBAT.BDA.Title"),
+      template:  `modules/${CORE_MODULE_ID}/templates/apps/bda-popup.hbs`,
+      width:     420,
+      height:    "auto",
+      resizable: false,
+    });
+  }
 
-  static PARTS = {
-    body: { template: `modules/${CORE_MODULE_ID}/templates/apps/bda-popup.hbs` },
-  };
-
-  async _prepareContext(options) {
-    const context = await super._prepareContext(options);
+  async getData(options) {
+    const context = await super.getData(options);
     const corrections = BDA_CORRECTIONS.map(c => ({
       ...c,
       labelLocalized: game.i18n.localize(c.label),
@@ -190,9 +189,10 @@ export class BDAPopup extends foundry.applications.api.HandlebarsApplicationMixi
     };
   }
 
-  _onRender(context, options) {
-    super._onRender?.(context, options);
-    this.element.querySelectorAll("[data-action='selectCorrection']").forEach(btn => {
+  activateListeners($html) {
+    super.activateListeners($html);
+    const html = $html[0];
+    html.querySelectorAll("[data-action='selectCorrection']").forEach(btn => {
       btn.addEventListener("click", async ev => {
         ev.preventDefault();
         await this._doSelectCorrection(btn.dataset.correctionId);
@@ -201,7 +201,7 @@ export class BDAPopup extends foundry.applications.api.HandlebarsApplicationMixi
   }
 
   async _doSelectCorrection(correctionId) {
-    const sys           = this.ship.system;
+    const sys           = SystemAdapter.current.getShipData(this.ship);
     const targetTokenId = this.targetTokenId ?? sys.resources?.sensors?.bdaTargetTokenId ?? null;
     const sl            = this.sl;
 
@@ -212,7 +212,7 @@ export class BDAPopup extends foundry.applications.api.HandlebarsApplicationMixi
       // Grant 20% of max AP and drop the lock on the target to Lock 0
       const reactor = this.ship?.items?.find(i => i.type === `${MODULE_ID}.component` && i.system?.slot === "reactor");
       const maxAP = reactor?.system?.bankCapacity ?? 0;
-      const currentAP = this.ship?.system?.resources?.engineer?.auxiliaryPower ?? 0;
+      const currentAP = SystemAdapter.current.getShipData(this.ship)?.resources?.engineer?.auxiliaryPower ?? 0;
       const grant = Math.floor(maxAP * 0.2);
       emitToGM("updateResource", { roleId: "engineer", key: "auxiliaryPower", value: Math.min(maxAP, currentAP + grant) });
       if (targetTokenId) emitToGM("removeLock", { targetTokenId });

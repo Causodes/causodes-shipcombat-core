@@ -1,6 +1,7 @@
 import { MODULE_ID } from "../constants.js";
 import { ShipCombatState } from "../state/ShipCombatState.js";
 import { THEME, pixi } from "../theme.js";
+import { SystemAdapter } from "../systems/SystemAdapter.js";
 
 /**
  * Returns true if the current user should see numeric shield labels on
@@ -74,12 +75,12 @@ export class ShieldArcOverlay {
     const zoneThresholds = ShipCombatState.getShieldStats().zoneThresholds;
     const showShields = _canSeeShieldValues(ship);
     for (const token of ownTokens) {
-      this._drawForToken(token, ship.system, zoneThresholds, showShields, 4);
+      this._drawForToken(token, SystemAdapter.current.getShipData(ship), zoneThresholds, showShields, 4);
     }
 
     // Draw enemy ship overlays (shields revealed at Lock 2+)
     for (const { token, actor, tier } of enemyTokens) {
-      const enemySys = actor.system ?? {};
+      const enemySys = SystemAdapter.current.getShipData(actor) ?? {};
       const enemyZT  = this._getZoneThresholds(actor);
       this._drawForToken(token, enemySys, enemyZT, true, tier);
     }
@@ -91,7 +92,7 @@ export class ShieldArcOverlay {
    */
   static _getLockedEnemyTokens(ship) {
     if (!canvas?.tokens) return [];
-    const locks   = ship.system?.resources?.sensors?.locks ?? [];
+    const locks   = SystemAdapter.current.getShipData(ship)?.resources?.sensors?.locks ?? [];
     const sensor  = ShipCombatState.getSensorStats();
     const ghRange = sensor.autoScanRange ?? 0;
 
@@ -106,7 +107,7 @@ export class ShieldArcOverlay {
       const actorId = token.document.actor?.id;
       if (!actorId || actorId === ship.id) continue;
       const actor = token.document.actor;
-      if (!actor?.system?.shields) continue; // Only draw on actors that have shield data
+      if (!SystemAdapter.current.getShipData(actor)?.shields) continue; // Only draw on actors that have shield data
 
       // Compute effective lock tier
       const explicitLock = locks.find(l => l.targetTokenId === token.id);
@@ -133,7 +134,7 @@ export class ShieldArcOverlay {
     );
     if (!shieldComp) {
       // Fall back to default thresholds based on shield values
-      const shields = actor.system?.shields ?? {};
+      const shields = SystemAdapter.current.getShipData(actor)?.shields ?? {};
       const fallbackZT = Math.max(
         shields.bow ?? 0, shields.stern ?? 0,
         shields.port ?? 0, shields.starboard ?? 0, 8
@@ -166,16 +167,16 @@ export class ShieldArcOverlay {
       // Own ship  -  always redraw with full labels
       const zoneThresholds = ShipCombatState.getShieldStats().zoneThresholds;
       const showShields = _canSeeShieldValues(ship);
-      this._drawForToken(token, ship.system, zoneThresholds, showShields, 4);
+      this._drawForToken(token, SystemAdapter.current.getShipData(ship), zoneThresholds, showShields, 4);
       // Update enemy overlay visibility using the live (dragged) own-ship position.
       this._updateEnemyOverlayVisibility(token);
     } else if (this._overlays.has(token.id)) {
       // Enemy token  -  only redraw if we have an existing overlay (Lock >= 2)
       const actor = token.document.actor;
-      if (!actor?.system?.shields) return;
+      if (!SystemAdapter.current.getShipData(actor)?.shields) return;
       const enemyZT = this._getZoneThresholds(actor);
       // Compute effective lock tier for this specific enemy
-      const locks   = ship.system?.resources?.sensors?.locks ?? [];
+      const locks   = SystemAdapter.current.getShipData(ship)?.resources?.sensors?.locks ?? [];
       const sensor  = ShipCombatState.getSensorStats();
       const ghRange = sensor.autoScanRange ?? 0;
       const ownToken = ship.getActiveTokens?.()?.[0];
@@ -198,7 +199,7 @@ export class ShieldArcOverlay {
         this._destroyToken(token.id);
         return;
       }
-      this._drawForToken(token, actor.system, enemyZT, true, tier);
+      this._drawForToken(token, SystemAdapter.current.getShipData(actor), enemyZT, true, tier);
     }
   }
 
@@ -212,7 +213,7 @@ export class ShieldArcOverlay {
   static _updateEnemyOverlayVisibility(ownToken) {
     const ship = ShipCombatState.ship;
     if (!ship) return;
-    const locks   = ship.system?.resources?.sensors?.locks ?? [];
+    const locks   = SystemAdapter.current.getShipData(ship)?.resources?.sensors?.locks ?? [];
     const sensor  = ShipCombatState.getSensorStats();
     const ghRange = sensor.autoScanRange ?? 0;
     const gridSize = canvas.grid.size;
@@ -269,18 +270,19 @@ export class ShieldArcOverlay {
 
       const texts = {};
       for (const arcId of ["bow", "port", "stern", "starboard"]) {
-        // Light labels inside the band with a dark shadow for readability
+        // Light labels inside the band with a crisp stroke outline for readability
         const t = new PIXI.Text("", {
-          fontFamily:         "Arial, sans-serif",
-          fontSize:           11,
-          fontWeight:         "bold",
-          fill:               0xffffff,
-          dropShadow:         true,
-          dropShadowColor:    0x000000,
-          dropShadowDistance: 0,
-          dropShadowBlur:     5,
-          align:              "center",
+          fontFamily:      "Arial, sans-serif",
+          fontSize:        11,
+          fontWeight:      "bold",
+          fill:            0xffffff,
+          stroke:          0x003300,
+          strokeThickness: 3,
+          align:           "center",
         });
+        // Render the text texture at a high pixel density so it stays sharp
+        // when the user zooms in — the world-unit size is unchanged.
+        t.resolution = Math.max(4, Math.ceil((window.devicePixelRatio ?? 1) * 4));
         t.anchor.set(0.5, 0.5);
         container.addChild(t);
         texts[arcId] = t;
@@ -363,7 +365,6 @@ export class ShieldArcOverlay {
       if (tier >= 3) {
         txt.text       = String(val);
         txt.style.fill = 0xffffff;
-        txt.style.dropShadowColor = 0x000000;
         txt.visible = true;
       } else {
         txt.text    = "";

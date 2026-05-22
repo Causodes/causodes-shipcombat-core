@@ -104,12 +104,12 @@
             </button>
             {{#if captainCtx.canDraw}}
             <span class="shipcombat-draw-row">
-                <input type="number" class="shipcombat-draw-count-input" min="1" max="{{captainCtx.drawCount}}"
-                       value="{{captainCtx.drawCount}}" data-max-draw="{{captainCtx.drawCount}}">
                 <button type="button" data-action="captainDraw"
                         data-tooltip="{{localize 'SHIPCOMBAT.Captain.DrawCard'}} ({{localize 'SHIPCOMBAT.Captain.DrawMax'}}: {{captainCtx.drawCount}})">
                     <i class="fa-solid fa-hand"></i> {{localize "SHIPCOMBAT.Captain.DrawCard"}}
                 </button>
+                <input type="number" class="shipcombat-draw-count-input" min="1" max="{{captainCtx.drawCount}}"
+                       value="{{captainCtx.drawCount}}" data-max-draw="{{captainCtx.drawCount}}">
             </span>
             {{/if}}
         </div>

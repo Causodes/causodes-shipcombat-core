@@ -160,6 +160,16 @@ export const ShipComponentSheetMixin = (BaseClass) => {
           selected: value === sys.availability,
         }));
 
+      const damageTypeChoices = isWeapon
+        ? [
+            { value: "", label: "—", selected: !sys.damageType },
+            ...SystemAdapter.current.getDamageTypeChoices().map(c => ({
+              ...c,
+              selected: c.value === sys.damageType,
+            })),
+          ]
+        : [];
+
       const traitsDisplayHtml = _weaponTraitsDisplayHtml(
         isTorpedo ? sys.torpedoTraits : isStrikeCraft ? sys.craftTraits : sys.traits
       );
@@ -176,6 +186,7 @@ export const ShipComponentSheetMixin = (BaseClass) => {
         sys,
         slotChoices,
         availabilityChoices,
+        damageTypeChoices,
         isWeapon,
         isShields,
         isArmour,
@@ -263,4 +274,302 @@ export const ShipComponentSheetMixin = (BaseClass) => {
   }
 
   return ShipComponentSheetBase;
+};
+
+// ── AppV1 variant ────────────────────────────────────────────────────────────
+
+/**
+ * AppV1 Application version of the ship-component item sheet.
+ *
+ * Provides the same context data as ShipComponentSheetMixin._prepareContext()
+ * plus the AppV2-compatible keys (`source`, `fields`, `enriched`) consumed by
+ * the shared partial templates (component-description.hbs, component-details.hbs).
+ *
+ * Usage (in a system companion module):
+ *   import { ShipComponentSheetV1Mixin } from ".../ShipComponentSheetMixin.js";
+ *   export class ShipComponentSheet extends ShipComponentSheetV1Mixin(foundry.appv1.sheets.ItemSheet) {}
+ */
+
+/**
+ * AppV1 dialog for editing weapon / ordnance traits.
+ * Replaces the DialogV2-based _onEditWeaponTraits static action so the editor
+ * window has its own persistent chrome (no transparent-background issue in
+ * systems that style AppV1 windows only).
+ *
+ * @private – used only by ShipComponentSheetV1Mixin
+ */
+class _WeaponTraitsEditorV1 extends foundry.appv1.api.Application {
+  /** @param {Item} item – The component item whose traits are being edited. */
+  constructor(item) {
+    super();
+    this._item = item;
+  }
+
+  static get defaultOptions() {
+    return foundry.utils.mergeObject(super.defaultOptions, {
+      id:       "shipcombat-weapon-traits-editor",
+      title:    game.i18n.localize("SHIPCOMBAT.Component.Traits"),
+      template: `modules/${CORE_MODULE_ID}/templates/item/weapon-traits-editor.hbs`,
+      width:    380,
+      height:   "auto",
+    });
+  }
+
+  async getData(options = {}) {
+    const context = await super.getData(options);
+    const sys = this._item.system;
+    const slot = sys.slot;
+
+    let traitDefs, traits;
+    if (slot === "torpedo") {
+      traitDefs = ORDNANCE_TRAITS;
+      traits    = sys.torpedoTraits ?? {};
+    } else if (slot === "strikeCraft") {
+      traitDefs = ORDNANCE_TRAITS;
+      traits    = sys.craftTraits ?? {};
+    } else {
+      traitDefs = WEAPON_TRAITS;
+      traits    = sys.traits ?? {};
+    }
+
+    const rows = traitDefs.map(def => {
+      const name    = game.i18n.localize(`SHIPCOMBAT.Trait.${def.key.charAt(0).toUpperCase() + def.key.slice(1)}`);
+      const enabled = def.hasValue
+        ? (def.enabledKey ? (traits[def.enabledKey] === true) : (traits[def.key] > 0))
+        : (traits[def.key] === true);
+      const val = def.hasValue ? (traits[def.key] ?? 0) : 0;
+      return { def, name, enabled, val };
+    });
+
+    return { ...context, rows, slot };
+  }
+
+  activateListeners($html) {
+    super.activateListeners($html);
+    $html.find("[data-action='saveTraits']").on("click", this._onSave.bind(this));
+  }
+
+  async _onSave(event) {
+    event.preventDefault();
+    const sys  = this._item.system;
+    const slot = sys.slot;
+
+    let traitPath, traitDefs;
+    if (slot === "torpedo") {
+      traitPath = "system.torpedoTraits";
+      traitDefs = ORDNANCE_TRAITS;
+    } else if (slot === "strikeCraft") {
+      traitPath = "system.craftTraits";
+      traitDefs = ORDNANCE_TRAITS;
+    } else {
+      traitPath = "system.traits";
+      traitDefs = WEAPON_TRAITS;
+    }
+
+    const form   = this.element.find("form")[0];
+    const result = new FormDataExtended(form).object;
+
+    const updates = {};
+    for (const def of traitDefs) {
+      if (def.hasValue) {
+        updates[`${traitPath}.${def.key}`] = Number(result[`${def.key}-value`] ?? 0);
+        if (def.enabledKey) {
+          updates[`${traitPath}.${def.enabledKey}`] = result[def.enabledKey] === true || result[def.enabledKey] === "on";
+        }
+      } else {
+        updates[`${traitPath}.${def.key}`] = result[def.key] === true || result[def.key] === "on";
+      }
+    }
+    await this._item.update(updates);
+    this.close();
+  }
+}
+
+export const ShipComponentSheetV1Mixin = (BaseClass) => {
+  class ShipComponentSheetV1Base extends BaseClass {
+
+    static get defaultOptions() {
+      return foundry.utils.mergeObject(super.defaultOptions, {
+        // classes intentionally empty — concrete class provides system-specific classes
+        classes:        [],
+        width:          480,
+        height:         500,
+        template:       `modules/${CORE_MODULE_ID}/templates/item/component-sheet-v1.hbs`,
+        tabs:           [{ navSelector: ".component-sheet-tabs", contentSelector: ".component-sheet-body", initial: "description" }],
+        scrollY:        [".tab.active"],
+        submitOnChange: true,
+        closeOnSubmit:  false,
+      });
+    }
+
+    async getData(options = {}) {
+      const base = await super.getData(options);
+      const item = this.item;
+      const sys  = item.system;
+
+      // AppV2-compatible bindings expected by the shared partial templates
+      const fields = sys.schema?.fields ?? {};
+      const source = item._source ?? item.toObject();
+      const enriched = {
+        system: {
+          notes: {
+            player: await TextEditor.enrichHTML(sys.notes?.player ?? ""),
+            gm:     await TextEditor.enrichHTML(sys.notes?.gm     ?? ""),
+          },
+        },
+      };
+
+      const slotChoices = Object.entries(
+        sys.schema.fields.slot.choices
+      ).map(([value, labelKey]) => ({
+        value,
+        label: game.i18n.localize(labelKey),
+        selected: value === sys.slot,
+      }));
+
+      const slot         = sys.slot;
+      const isWeapon     = slot === "weapon";
+      const isShields    = slot === "shields";
+      const isArmour     = slot === "armour";
+      const isEngine     = slot === "engine";
+      const isSensor     = slot === "sensor";
+      const isReactor    = slot === "reactor";
+      const isTorpedo    = slot === "torpedo";
+      const isStrikeCraft = slot === "strikeCraft";
+      const isWeaponsBay = slot === "weaponsBay";
+
+      const weaponPositionChoices = Object.entries(
+        sys.schema.fields.weaponPosition.choices
+      ).map(([value, labelKey]) => ({
+        value,
+        label: game.i18n.localize(labelKey),
+        selected: value === sys.weaponPosition,
+      }));
+
+      const resourceTypeChoices = Object.entries(
+        sys.schema.fields.resourceType.choices
+      ).map(([value, labelKey]) => ({
+        value,
+        label: game.i18n.localize(labelKey),
+        selected: value === sys.resourceType,
+      }));
+
+      const weaponBayChoices = Object.entries(
+        sys.schema.fields.weaponBay.choices
+      ).map(([value, labelKey]) => ({
+        value,
+        label: game.i18n.localize(labelKey),
+        selected: value === sys.weaponBay,
+      }));
+
+      const weaponCategoryChoices = Object.entries(
+        sys.schema.fields.weaponCategory.choices
+      ).map(([value, labelKey]) => ({
+        value,
+        label: game.i18n.localize(labelKey),
+        selected: value === (sys.weaponCategory ?? ""),
+      }));
+
+      const isFlankWeapon = sys.weaponPosition === "flank";
+
+      const zoneLabel = (key) => game.i18n.localize(`SHIPCOMBAT.Zone.${key.charAt(0).toUpperCase() + key.slice(1)}`);
+
+      const shieldZones = ZONE_KEYS.map(key => ({
+        key,
+        label: zoneLabel(key),
+        value: sys.zoneThresholds?.[key] ?? 8,
+      }));
+
+      const armourZones = ZONE_KEYS.map(key => ({
+        key,
+        label: zoneLabel(key),
+        value: sys.armourValues[key],
+      }));
+
+      const availConfig = SystemAdapter.current.getAvailabilityOptions();
+      const availabilityChoices = Object.entries(availConfig)
+        .filter(([k]) => k !== "")
+        .map(([value, labelKey]) => ({
+          value,
+          label: game.i18n.localize(labelKey),
+          selected: value === sys.availability,
+        }));
+
+      const damageTypeChoices = isWeapon
+        ? [
+            { value: "", label: "—", selected: !sys.damageType },
+            ...SystemAdapter.current.getDamageTypeChoices().map(c => ({
+              ...c,
+              selected: c.value === sys.damageType,
+            })),
+          ]
+        : [];
+
+      const traitsDisplayHtml = _weaponTraitsDisplayHtml(
+        isTorpedo ? sys.torpedoTraits : isStrikeCraft ? sys.craftTraits : sys.traits
+      );
+
+      const craftTypeChoices = Object.entries(
+        sys.schema.fields.craftType.choices
+      ).map(([value, labelKey]) => ({
+        value,
+        label: game.i18n.localize(labelKey),
+        selected: value === sys.craftType,
+      }));
+
+      return {
+        ...base,
+        item,
+        source,
+        fields,
+        enriched,
+        sys,
+        system: sys,
+        cssClass:  this.isEditable ? "editable" : "locked",
+        editable:  this.isEditable,
+        limited:   item.limited,
+        owner:     item.isOwner,
+        user:      { isGM: game.user.isGM },
+        tabsById: {
+          description: { id: "description", cssClass: "" },
+          details:     { id: "details",     cssClass: "" },
+        },
+        slotChoices,
+        availabilityChoices,
+        damageTypeChoices,
+        isWeapon,
+        isShields,
+        isArmour,
+        isEngine,
+        isSensor,
+        isReactor,
+        isTorpedo,
+        isStrikeCraft,
+        isWeaponsBay,
+        weaponPositionChoices,
+        resourceTypeChoices,
+        weaponBayChoices,
+        weaponCategoryChoices,
+        isFlankWeapon,
+        traitsDisplayHtml,
+        shieldZones,
+        armourZones,
+        craftTypeChoices,
+        isOwner: item.isOwner,
+      };
+    }
+
+    activateListeners($html) {
+      super.activateListeners($html);
+      if (!this.isEditable) return;
+      $html.on("click", "[data-action='editWeaponTraits']", () => this._onEditWeaponTraits());
+    }
+
+    /** Open the weapon-traits editor.  Override in subclasses to substitute a system-specific dialog. */
+    _onEditWeaponTraits() {
+      new _WeaponTraitsEditorV1(this.item).render(true);
+    }
+  }
+
+  return ShipComponentSheetV1Base;
 };

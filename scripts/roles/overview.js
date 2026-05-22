@@ -2,6 +2,7 @@
  * Overview page actions – end combat, advance round, full reset, hull adjustment.
  */
 import { emitToGM } from "../socket.js";
+import { SystemAdapter } from "../systems/SystemAdapter.js";
 
 async function _onEndShipTurn() { emitToGM("endShipTurn", {}); }
 
@@ -25,7 +26,7 @@ async function _onFullReset() {
 
 async function _onAdjustHull(event, target) {
   const delta   = Number(target.dataset.delta ?? 0);
-  const sys     = this.actor.system;
+  const sys     = SystemAdapter.current.getShipData(this.actor);
   const current = sys.hull?.value ?? 0;
   const max     = sys.hull?.max   ?? 0;
   const next    = Math.max(0, Math.min(max, current + delta));

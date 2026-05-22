@@ -13,7 +13,7 @@
                 <i class="fa-solid fa-lock fa-lg"></i>
                 <span>{{localize "SHIPCOMBAT.Engineer.RequiresBankedCore"}}</span>
             </div>
-        {{else if (shipcombatEq engineerCtx.hull 0)}}
+        {{else if engineerCtx.hullFull}}
             <div class="shipcombat-overlay-lock-indicator">
                 <i class="fa-solid fa-check fa-lg"></i>
                 <span>{{localize "SHIPCOMBAT.Engineer.HullFull"}}</span>
@@ -34,7 +34,7 @@
     <div class="list-header row-content">
         <div class="list-name">{{localize "SHIPCOMBAT.Engineer.HullRepair"}}</div>
         <div class="shipcombat-hull-status">
-            <span class="shipcombat-hull-value">{{engineerCtx.hull}} / {{engineerCtx.hullMax}}</span>
+            <span class="shipcombat-hull-value">{{engineerCtx.hullDisplayValue}} / {{engineerCtx.hullMax}}</span>
             <div class="shipcombat-hull-bar-track">
                 <div class="shipcombat-hull-bar-fill" style="width: {{engineerCtx.hullPct}}%"></div>
             </div>

@@ -95,12 +95,20 @@ export class RamTargetPopup extends foundry.applications.api.HandlebarsApplicati
 
     const shipBasis = this.shipBasis ?? HelmPreview._tokenBasis(token);
 
-    // Gather all non-friendly visible tokens
-    const candidates = canvas.tokens.placeables.filter(t =>
-      t !== token &&
-      t.document.actor?.id !== ship.id &&
-      !t.document.hidden,
+    // Gather candidates — all visible tokens that are not the ramming ship's
+    // specific token.  Comparing by token ID (not actor ID) correctly handles
+    // test scenarios where both the player ship and an NPC test token are linked
+    // to the same actor prototype.
+    const candidates = canvas.tokens.placeables.filter(
+      t => t.id !== token.id && t.visible,
     );
+
+    // Pre-compute ramming ship stats for damage preview (matches pilotRam formula)
+    const RAM_COEFF      = 2;
+    const rammingSys       = this.ship?.system;
+    const rammingBowArmour = Math.max(1, rammingSys?.armour?.bow ?? 0);
+    const rammingHullMax   = rammingSys?.hull?.max ?? 50;
+    const rammingDmgBase   = rammingBowArmour + 0.25 * rammingHullMax;
 
     const targets = [];
     for (const candidate of candidates) {
@@ -118,7 +126,7 @@ export class RamTargetPopup extends foundry.applications.api.HandlebarsApplicati
             this.velocityX, this.velocityY,
             this.carryPct,
           )
-        : HelmPreview.canReach(
+        : HelmPreview.canRam(
             shipBasis, tx, ty,
             this.effSpeed, this.maxBearingDeg,
             this.powerRemaining, this.powerMax,
@@ -126,7 +134,6 @@ export class RamTargetPopup extends foundry.applications.api.HandlebarsApplicati
           );
       if (!reach) continue;
 
-      // Lock-tier gate (same logic as TargetingPopup)
       const distSquares = Math.sqrt(
         Math.pow((tx - cx) / gridSize, 2) +
         Math.pow((ty - cy) / gridSize, 2),
@@ -143,6 +150,21 @@ export class RamTargetPopup extends foundry.applications.api.HandlebarsApplicati
       // Thrust fraction for estimated damage preview — ram consumes ALL remaining power
       const thrustFraction = Math.min(1, this.powerRemaining / (this.powerMax || 100));
 
+      // ── Damage preview (mirrors pilotRam formulas exactly) ─────────────────
+      const tgtHeadingRad  = (candidate.document.rotation ?? 0) * (Math.PI / 180);
+      let   impactAngle    = attackAngle - tgtHeadingRad + Math.PI;
+      impactAngle = ((impactAngle % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+      if (impactAngle > Math.PI) impactAngle -= 2 * Math.PI;
+      const angleModRammed   = 0.5 + 0.5 * Math.abs(Math.sin(impactAngle));
+      // Outgoing: hull damage our ship deals to the target
+      const damageOut = Math.max(1, Math.round(rammingDmgBase * thrustFraction * angleModRammed * RAM_COEFF));
+      // Incoming: hull damage the target deals back to us (soaked by our bow armour)
+      const targetSys            = candidate.document.actor?.system;
+      const targetArmourInSector = Math.max(1, targetSys?.armour?.[hitSector] ?? 0);
+      const targetHullMax        = targetSys?.hull?.max ?? 50;
+      const targetDmgBase        = targetArmourInSector + 0.25 * targetHullMax;
+      const damageIn             = Math.round(Math.max(0, Math.round(targetDmgBase * thrustFraction * RAM_COEFF) - rammingBowArmour) / 5) * 5;
+
       targets.push({
         tokenId:      candidate.id,
         name:         lockTier >= 2 ? (candidate.document.name ?? "Unknown") : game.i18n.localize("SHIPCOMBAT.Targeting.UnknownContact"),
@@ -158,6 +180,8 @@ export class RamTargetPopup extends foundry.applications.api.HandlebarsApplicati
         targetX:  tx,
         targetY:  ty,
         attackAngle,
+        damageOut,
+        damageIn,
       });
     }
 

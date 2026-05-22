@@ -26,6 +26,9 @@
             {{#if accuracy}}
                 <span class="shipcombat-fire-tn-inline">vs {{accuracy}}</span>
             {{/if}}
+            {{#if hitModDisplay}}
+                <span class="shipcombat-fire-hitmod">{{hitModDisplay}}</span>
+            {{/if}}
         </div>
     </div>
     {{/if}}
@@ -35,10 +38,10 @@
     <div class="shipcombat-fire-salvo-rolls">
         {{#each salvoRolls}}
         {{#if this.batchBreak}}<span class="shipcombat-salvo-batch-sep"></span>{{/if}}
-        <span class="shipcombat-salvo-die shipcombat-salvo-reveal {{#if this.hit}}shipcombat-fire-success{{else}}shipcombat-fire-failure{{/if}} {{#if this.isJam}}shipcombat-salvo-jam{{/if}}"
+        <span class="shipcombat-salvo-die shipcombat-salvo-reveal {{#if this.hit}}shipcombat-fire-success{{else}}shipcombat-fire-failure{{/if}} {{this.critClass}} {{#if this.isJam}}shipcombat-salvo-jam{{/if}}"
               style="{{{this.dieStyle}}}"
-              title="{{this.roll}} vs {{this.target}}">
-            {{this.roll}}
+              title="{{this.displayRoll}} vs {{this.displayTarget}}">
+            {{this.displayRoll}}
         </span>
         {{/each}}
     </div>
@@ -68,29 +71,22 @@
     {{!-- ═══ Damage Resolution ═══ --}}
     {{#if hasDamageResults}}
     <div class="shipcombat-fire-damage shipcombat-summary-reveal" style="animation-delay:{{summaryDelay}}ms">
-        {{#if damageResults.totalDamage}}
         <div class="shipcombat-fire-damage-header">
             <i class="fa-solid fa-explosion"></i>
             <strong>{{damageResults.totalDamage}}</strong> {{localize "SHIPCOMBAT.Fire.HullDamage"}}
         </div>
-        <div class="shipcombat-fire-damage-detail">
-            {{damageResults.damagePerHit}} {{localize "SHIPCOMBAT.Fire.PerHit"}}
-            ({{damageResults.rawDamagePerHit}} − {{damageResults.effectiveArmour}} {{localize "SHIPCOMBAT.Fire.Armour"}})
-            {{#if damageResults.ap}}
-                <span class="shipcombat-fire-ap">[AP {{damageResults.ap}}]</span>
-            {{/if}}
-        </div>
-        {{else}}
-        <div class="shipcombat-fire-damage-header shipcombat-fire-armour-blocked">
-            <i class="fa-solid fa-shield"></i>
-            {{localize "SHIPCOMBAT.Fire.BlockedByArmour"}}
-        </div>
-        <div class="shipcombat-fire-damage-detail">
-            {{damageResults.rawDamagePerHit}} − {{damageResults.effectiveArmour}} {{localize "SHIPCOMBAT.Fire.Armour"}}
-            {{#if damageResults.ap}}
-                <span class="shipcombat-fire-ap">[AP {{damageResults.ap}}]</span>
-            {{/if}}
-        </div>
+        {{#if damageResults.hasDamageRolls}}
+        <details class="shipcombat-dice-breakdown">
+            <summary>
+                <i class="fa-solid fa-dice"></i>
+                {{#if damageResults.isSalvo}}{{#if damageResults.damageFlatBonus}}({{damageResults.damageDiceLabel}} + {{damageResults.damageFlatBonus}}) ×{{damageResults.hitsThroughShield}}{{else}}{{damageResults.damageDiceLabel}} ×{{damageResults.hitsThroughShield}}{{/if}}{{else}}{{damageResults.damageDiceLabel}}{{#if damageResults.damageFlatBonus}} +{{damageResults.damageFlatBonus}}{{/if}}{{/if}} = {{damageResults.totalDamage}}
+            </summary>
+            <div class="shipcombat-dice-breakdown-pips">
+                {{#each damageResults.damageRolls}}
+                <span class="shipcombat-die-pip{{#if this.isCrit}} shipcombat-salvo-crit{{/if}}">{{this.value}}</span>
+                {{/each}}
+            </div>
+        </details>
         {{/if}}
         {{#if damageResults.rendTotal}}
         <div class="shipcombat-fire-rend">
@@ -110,22 +106,24 @@
     </div>
     {{/if}}
 
-    {{!-- ═══ Critical Hit ═══ --}}
-    {{#if critResult.hasCrit}}
-    <div class="shipcombat-fire-crit shipcombat-summary-reveal" style="animation-delay:{{summaryDelay}}ms">
+    {{!-- ═══ Critical Hit(s) ═══ --}}
+    {{#each critResults}}
+    {{#if this.hasCrit}}
+    <div class="shipcombat-fire-crit shipcombat-summary-reveal" style="animation-delay:{{../summaryDelay}}ms">
         <div class="shipcombat-fire-crit-header">
             <i class="fa-solid fa-skull"></i>
             <strong>{{localize "SHIPCOMBAT.Crit.Hit"}}</strong>
-            <span class="shipcombat-crit-tier-badge shipcombat-crit-tier--{{critResult.finalTier}}">{{critResult.tierLabel}}</span>
+            <span class="shipcombat-crit-tier-badge shipcombat-crit-tier--{{this.finalTier}}">{{this.tierLabel}}</span>
         </div>
         <div class="shipcombat-fire-crit-detail">
-            <span class="shipcombat-crit-location-label">{{critResult.locLabel}}</span>
+            <span class="shipcombat-crit-location-label">{{this.locLabel}}</span>
             <span class="shipcombat-crit-sep">  -  </span>
-            <span class="shipcombat-crit-condition-label">{{critResult.condLabel}}</span>
+            <span class="shipcombat-crit-condition-label">{{this.condLabel}}</span>
         </div>
-        {{#if critResult.detail}}
-        <div class="shipcombat-fire-crit-note">{{critResult.detail}}</div>
+        {{#if this.detail}}
+        <div class="shipcombat-fire-crit-note">{{this.detail}}</div>
         {{/if}}
     </div>
     {{/if}}
+    {{/each}}
 </div>

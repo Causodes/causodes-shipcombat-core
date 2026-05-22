@@ -8,27 +8,31 @@
             <span class="shipcombat-tp-weapon-name">{{weaponName}}</span>
             <span class="shipcombat-tp-mode-name">{{fireModeLabel}}</span>
         </div>
-        <div class="shipcombat-tp-header-stats">
-            {{#if fireModeDetails.salvoSize}}
-            <span class="shipcombat-tp-stat">
-                <i class="fa-solid fa-crosshairs"></i>
-                {{fireModeDetails.salvoSize}} {{localize "SHIPCOMBAT.Targeting.Salvo"}}
-            </span>
-            {{/if}}
-            {{#if fireModeDetails.cost}}
-            <span class="shipcombat-tp-stat shipcombat-tp-stat--cost">
-                <i class="fa-solid fa-cubes-stacked"></i>
-                {{fireModeDetails.cost}} {{fireModeDetails.resourceLabel}}
-            </span>
-            {{/if}}
-            {{#if fireModeDetails.dmgBonus}}
-            <span class="shipcombat-tp-stat shipcombat-tp-stat--bonus">
-                <i class="fa-solid fa-plus"></i>
-                {{fireModeDetails.dmgBonus}} {{localize "SHIPCOMBAT.Label.Damage"}}
-            </span>
-            {{/if}}
-        </div>
     </div>
+
+    {{!-- Attack detail chips (wrapping row between title and overcharge) --}}
+    {{#if (or fireModeDetails.salvoSize fireModeDetails.cost fireModeDetails.dmgBonus)}}
+    <div class="shipcombat-tp-chips">
+        {{#if fireModeDetails.salvoSize}}
+        <span class="shipcombat-tp-stat">
+            <i class="fa-solid fa-crosshairs"></i>
+            {{fireModeDetails.salvoSize}} {{localize "SHIPCOMBAT.Targeting.Salvo"}}
+        </span>
+        {{/if}}
+        {{#if fireModeDetails.cost}}
+        <span class="shipcombat-tp-stat shipcombat-tp-stat--cost">
+            <i class="fa-solid fa-cubes-stacked"></i>
+            {{fireModeDetails.cost}} {{fireModeDetails.resourceLabel}}
+        </span>
+        {{/if}}
+        {{#if fireModeDetails.dmgBonus}}
+        <span class="shipcombat-tp-stat shipcombat-tp-stat--bonus">
+            <i class="fa-solid fa-plus"></i>
+            {{fireModeDetails.dmgBonus}} {{localize "SHIPCOMBAT.Label.Damage"}}
+        </span>
+        {{/if}}
+    </div>
+    {{/if}}
 
     {{!-- Overcharge toggle (plasma cannons with the Overcharge trait only) --}}
     {{#if hasOvercharge}}
@@ -93,7 +97,8 @@
             <div class="shipcombat-tp-target-stats">
                 <div class="shipcombat-tp-acc {{#if (shipcombatEq this.zone 1)}}shipcombat-tp-acc--boosted{{/if}} {{#if this.rangingFireBonus}}shipcombat-tp-acc--ranged{{/if}}"
                      data-tooltip="{{this.accuracyTooltip}}">
-                    {{this.totalAccuracy}}%
+                    {{this.accuracyLabel}}
+                    {{#if this.isWithinOptimal}}<span class="shipcombat-tp-optimal-badge">+{{this.optimalRangeBonus}} (Base)</span><span class="shipcombat-tp-optimal-badge">+{{this.optimalRangeBonus}} (Optimal Range)</span>{{/if}}
                     {{#if this.rangingFireBonus}}<i class="fa-solid fa-crosshairs-simple shipcombat-ranging-active"></i>{{/if}}
                 </div>
                 {{#if this.showArmour}}

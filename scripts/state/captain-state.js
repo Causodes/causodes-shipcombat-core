@@ -17,6 +17,7 @@
  */
 
 import { MODULE_ID, CAPTAIN_CARDS, CAPTAIN_CORE_ACTIONS, buildCaptainDeck } from "../constants.js";
+import { SystemAdapter } from "../systems/SystemAdapter.js";
 
 const HAND_CAP   = 6;
 const DRAWS_PER_ROUND = 3;
@@ -91,14 +92,14 @@ export async function triageCondition({ locId }) {
   if (idx <= 0) {
     // Clearing the condition entirely (stepping below Low)
     // Note: {} is a no-op in Foundry's mergeObject; must explicitly null the tier
-    updates[`system.conditions.${locId}`] = { tier: null };
+    updates[SystemAdapter.current.systemPath(`conditions.${locId}`)] = { tier: null };
   } else {
-    updates[`system.conditions.${locId}`] = { ...existing, tier: TIER_ORDER[idx - 1] };
+    updates[SystemAdapter.current.systemPath(`conditions.${locId}`)] = { ...existing, tier: TIER_ORDER[idx - 1] };
   }
 
   // Consume triage and AP
-  updates["system.resources.captain.triageCount"] = triageCount - 1;
-  updates["system.resources.engineer.auxiliaryPower"] = currentAP - TRIAGE_AP_COST;
+  updates[SystemAdapter.current.systemPath("resources.captain.triageCount")] = triageCount - 1;
+  updates[SystemAdapter.current.systemPath("resources.engineer.auxiliaryPower")] = currentAP - TRIAGE_AP_COST;
 
   await this.ship.update(updates);
 
@@ -111,7 +112,7 @@ export async function triageCondition({ locId }) {
   await ChatMessage.create({
     flavor: `${triageName}  -  ${locLabel}`,
     content: `<p>${game.i18n.format("SHIPCOMBAT.Captain.TriageResult", { location: locLabel, tier: newTier })}</p>`,
-    speaker: { alias: this.ship?.system?.roleTitles?.captain || game.i18n.localize("SHIPCOMBAT.Role.Captain") },
+    speaker: { alias: SystemAdapter.current.getShipData(this.ship)?.roleTitles?.captain || game.i18n.localize("SHIPCOMBAT.Role.Captain") },
     whisper: ChatMessage.getWhisperRecipients("GM"),
   });
 }
@@ -184,7 +185,7 @@ export async function playCard({ cardId, sector }) {
     case "armamentOrder":    updates["resources.ordnance.coreCount"] = (sys.resources?.ordnance?.coreCount ?? 0) + 1; break;
     // Gunner hit bonus
     case "inspiredTargeting":
-      updates["resources.gunner.captainHitBonus"] = (sys.resources?.gunner?.captainHitBonus ?? 0) + 20;
+      updates["resources.gunner.captainHitBonus"] = (sys.resources?.gunner?.captainHitBonus ?? 0) + SystemAdapter.current.getHitBonusStep();
       break;
     // Pilot maneuverability doubled
     case "hardOver":
@@ -270,7 +271,7 @@ export async function playCard({ cardId, sector }) {
   <div class="shipcombat-captain-card-name"><i class="${cardIcon}"></i> ${cardLabel}</div>
   <div class="shipcombat-captain-card-desc">${descText}</div>${stanceLine}
 </div>`,
-    speaker: { alias: this.ship?.system?.roleTitles?.captain || game.i18n.localize("SHIPCOMBAT.Role.Captain") },
+    speaker: { alias: SystemAdapter.current.getShipData(this.ship)?.roleTitles?.captain || game.i18n.localize("SHIPCOMBAT.Role.Captain") },
   });
 }
 
@@ -384,9 +385,9 @@ export async function captainPayloadActivate({ payloadId } = {}) {
     const idx = TIER_ORDER.indexOf(existing.tier);
     const updates = {};
     if (idx <= 0) {
-      updates[`system.conditions.${locId}`] = { tier: null };
+      updates[SystemAdapter.current.systemPath(`conditions.${locId}`)] = { tier: null };
     } else {
-      updates[`system.conditions.${locId}`] = { ...existing, tier: TIER_ORDER[idx - 1] };
+      updates[SystemAdapter.current.systemPath(`conditions.${locId}`)] = { ...existing, tier: TIER_ORDER[idx - 1] };
     }
     await this.ship.update(updates);
     const locLabel = game.i18n.localize(`SHIPCOMBAT.Crit.Location.${locId}`);
@@ -396,7 +397,7 @@ export async function captainPayloadActivate({ payloadId } = {}) {
     await ChatMessage.create({
       flavor:  `${game.i18n.localize("SHIPCOMBAT.Payload.FireSuppression")}  -  ${locLabel}`,
       content: `<p>${game.i18n.format("SHIPCOMBAT.Captain.TriageResult", { location: locLabel, tier: newTier })}</p>`,
-      speaker: { alias: this.ship?.system?.roleTitles?.captain || game.i18n.localize("SHIPCOMBAT.Role.Captain") },
+      speaker: { alias: SystemAdapter.current.getShipData(this.ship)?.roleTitles?.captain || game.i18n.localize("SHIPCOMBAT.Role.Captain") },
     });
     return;
   }
@@ -420,11 +421,11 @@ export async function captainCoreAction({ actionId, tokenId, cardId, newPile } =
   if (actionId === "emergencyProtocols") {
     const conditions = sys.conditions ?? {};
     for (const [locId, cond] of Object.entries(conditions)) {
-      if (cond.tier === "low") updates[`system.conditions.${locId}`] = { tier: null };
+      if (cond.tier === "low") updates[SystemAdapter.current.systemPath(`conditions.${locId}`)] = { tier: null };
     }
     const discard = [...(captain.discardPile ?? []), ...(captain.hand ?? [])];
-    updates["system.resources.captain.hand"]         = [];
-    updates["system.resources.captain.discardPile"]  = discard;
+    updates[SystemAdapter.current.systemPath("resources.captain.hand")]         = [];
+    updates[SystemAdapter.current.systemPath("resources.captain.discardPile")]  = discard;
   }
 
   // ── Iron Command: step High/Medium conditions down 1 tier; Low stays; discard hand ──
@@ -434,17 +435,17 @@ export async function captainCoreAction({ actionId, tokenId, cardId, newPile } =
       if (!cond.tier || cond.tier === "low") continue; // Low stays unchanged
       const idx = TIER_ORDER.indexOf(cond.tier);
       // High (idx 2) → Medium (idx 1), Medium (idx 1) → Low (idx 0)
-      updates[`system.conditions.${locId}`] = { ...cond, tier: TIER_ORDER[idx - 1] };
+      updates[SystemAdapter.current.systemPath(`conditions.${locId}`)] = { ...cond, tier: TIER_ORDER[idx - 1] };
     }
     const discard = [...(captain.discardPile ?? []), ...(captain.hand ?? [])];
-    updates["system.resources.captain.hand"]         = [];
-    updates["system.resources.captain.discardPile"]  = discard;
+    updates[SystemAdapter.current.systemPath("resources.captain.hand")]         = [];
+    updates[SystemAdapter.current.systemPath("resources.captain.discardPile")]  = discard;
   }
 
   // ── Battle Clarity: mark priority target; +10 acc, pierce 2 shields ──
   else if (actionId === "battleClarity") {
     if (!tokenId) return;
-    updates["system.resources.captain.priorityTargetId"] = tokenId;
+    updates[SystemAdapter.current.systemPath("resources.captain.priorityTargetId")] = tokenId;
   }
 
   // ── Emergency Salvage: retrieve one card from discard to hand ──
@@ -456,32 +457,32 @@ export async function captainCoreAction({ actionId, tokenId, cardId, newPile } =
     if (idx === -1) return;
     discard.splice(idx, 1);
     hand.push(cardId);
-    updates["system.resources.captain.hand"]        = hand;
-    updates["system.resources.captain.discardPile"] = discard;
+    updates[SystemAdapter.current.systemPath("resources.captain.hand")]        = hand;
+    updates[SystemAdapter.current.systemPath("resources.captain.discardPile")] = discard;
   }
 
   // ── Command Override: promote pendingStance immediately ──
   else if (actionId === "commandOverride") {
     const pending = captain.pendingStance;
     if (!pending) return;
-    updates["system.resources.captain.stance"]        = pending;
-    updates["system.resources.captain.pendingStance"] = "";
+    updates[SystemAdapter.current.systemPath("resources.captain.stance")]        = pending;
+    updates[SystemAdapter.current.systemPath("resources.captain.pendingStance")] = "";
   }
 
   // ── Dead Reckoning: reorder top 12 draw pile cards; block mulligan ──
   else if (actionId === "deadReckoning") {
     if (!newPile) return;
-    updates["system.resources.captain.drawPile"]    = newPile;
-    updates["system.resources.captain.mulliganUsed"] = true; // block mulligan this round
+    updates[SystemAdapter.current.systemPath("resources.captain.drawPile")]    = newPile;
+    updates[SystemAdapter.current.systemPath("resources.captain.mulliganUsed")] = true; // block mulligan this round
   }
 
   else return; // unknown actionId
 
   // Consume one core (card-granted coreCount first, then Engineer-assigned core)
   if ((captain.coreCount ?? 0) > 0) {
-    updates["system.resources.captain.coreCount"] = captain.coreCount - 1;
+    updates[SystemAdapter.current.systemPath("resources.captain.coreCount")] = captain.coreCount - 1;
   } else {
-    updates["system.assignedCores.captain"] = "spent";
+    updates[SystemAdapter.current.systemPath("assignedCores.captain")] = "spent";
   }
 
   await this.ship.update(updates);
@@ -491,6 +492,6 @@ export async function captainCoreAction({ actionId, tokenId, cardId, newPile } =
   await ChatMessage.create({
     flavor:  game.i18n.localize(actionDef?.label ?? actionId),
     content: `<p>${game.i18n.localize(actionDef?.desc ?? "")}</p>`,
-    speaker: { alias: this.ship?.system?.roleTitles?.captain || game.i18n.localize("SHIPCOMBAT.Role.Captain") },
+    speaker: { alias: SystemAdapter.current.getShipData(this.ship)?.roleTitles?.captain || game.i18n.localize("SHIPCOMBAT.Role.Captain") },
   });
 }

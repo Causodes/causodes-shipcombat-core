@@ -1,0 +1,847 @@
+/* ── Compact stats row (defence table + vitals side by side) ──────────── */
+.shipcombat-compact-stats {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.1rem 0.3rem 0.15rem;
+  flex-wrap: wrap;
+}
+
+/* ── Compressed header: shrink portrait + name row ───────────────────── */
+.shipcombat-header .sheet-header img {
+  flex: 0 0 48px !important;
+  width: 48px !important;
+  height: 48px !important;
+}
+.shipcombat-header .sheet-header {
+  gap: 0.3rem;
+}
+.shipcombat-header .header-details .details-row.name input {
+  font-size: 0.95rem;
+  padding: 0.1rem 0.2rem;
+  height: auto;
+}
+
+/* ── Defence Table (unified Armour + Shields) ────────────────────────────── */
+.shipcombat-defence-table {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.shipcombat-defence-thead,
+.shipcombat-defence-row {
+  display: grid;
+  grid-template-columns: 4rem 2.5rem 2.5rem;
+  gap: 0 0.15rem;
+  align-items: center;
+  padding: 0.01rem 0;
+}
+
+.shipcombat-defence-thead {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+  padding-bottom: 0.05rem;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  margin-bottom: 0.02rem;
+}
+
+.shipcombat-defence-val-col {
+  text-align: center;
+  font-size: 0.78rem;
+}
+
+.shipcombat-defence-loc-col {
+  font-weight: 600;
+  font-size: 0.78rem;
+}
+
+.shipcombat-defence-row input[type="number"] {
+  width: 100%;
+  text-align: center;
+}
+
+.shipcombat-header .details-row.flexrow {
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.shipcombat-crew-grid,
+.shipcombat-section-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr));
+  gap: 0.75rem;
+  align-items: start;
+}
+
+.shipcombat-section-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.shipcombat-slot-input,
+input[data-slot-count] {
+  width: 2ch !important;
+  min-width: 2ch !important;
+  max-width: 2ch !important;
+  height: 1.2em !important;
+  line-height: 1.2 !important;
+  text-align: center;
+  flex-shrink: 0;
+  padding: 1px 3px !important;
+  margin: 0 !important;
+  border: none !important;
+  border-radius: 3px !important;
+  background: rgba(0,0,0,0.35) !important;
+  box-shadow: none !important;
+  font-size: inherit;
+  font-family: inherit;
+  color: inherit;
+  box-sizing: content-box !important;
+  -moz-appearance: textfield;
+}
+.shipcombat-slot-input::-webkit-inner-spin-button,
+.shipcombat-slot-input::-webkit-outer-spin-button,
+input[data-slot-count]::-webkit-inner-spin-button,
+input[data-slot-count]::-webkit-outer-spin-button {
+  display: none;
+}
+.shipcombat-slot-input:hover,
+input[data-slot-count]:hover {
+  background: rgba(0,0,0,0.5) !important;
+  outline: none !important;
+}
+.shipcombat-slot-input:focus,
+input[data-slot-count]:focus {
+  background: rgba(0,0,0,0.6) !important;
+  outline: 1px solid var(--color-border-light) !important;
+  outline-offset: 0;
+}
+
+.shipcombat-slot-fraction {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  white-space: nowrap;
+  font-size: 0.75rem;
+  font-family: inherit;
+  opacity: 0.85;
+}
+
+/* ── Crew Size select ────────────────────────────────────────────────────── */
+.shipcombat-crewsize-select {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  background: rgba(0,0,0,0.35);
+  border: none;
+  border-radius: 3px;
+  padding: 1px 4px;
+  height: 1.4em;
+  line-height: 1.4;
+  width: 3rem;
+  cursor: pointer;
+}
+
+.shipcombat-crewsize-select:focus {
+  outline: 1px solid var(--color-border-light);
+  outline-offset: 0;
+}
+
+.shipcombat-inline-field {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* ── Ship Configuration grid ────────────────────────────────────────────── */
+.shipcombat-ship-config-grid {
+  display: flex;
+  flex-direction: row;
+  gap: 1.5rem;
+  padding: 0.4rem 0.5rem;
+  align-items: flex-start;
+}
+
+.shipcombat-ship-config-left {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  flex: 0 0 auto;
+}
+
+.shipcombat-ship-config-right {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  padding-top: 0.1rem;
+  padding-left: 1rem;
+}
+
+.shipcombat-config-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.shipcombat-config-label {
+  flex: 0 0 9rem;
+  font-weight: 600;
+  font-size: 0.85em;
+  opacity: 0.85;
+  white-space: nowrap;
+}
+
+.shipcombat-config-label--wide {
+  flex: 0 0 13rem;
+}
+
+.shipcombat-config-value {
+  font-size: 0.85em;
+}
+
+.shipcombat-config-select {
+  font-family: inherit;
+  font-size: 0.82em;
+  color: inherit;
+  background: rgba(0,0,0,0.35);
+  border: none;
+  border-radius: 3px;
+  padding: 1px 4px;
+  height: 1.4em;
+  line-height: 1.4;
+  cursor: pointer;
+  min-width: 6rem;
+  max-width: 12rem;
+}
+
+.shipcombat-config-select:hover:not(:disabled) {
+  background: rgba(255,255,255,0.15);
+}
+
+.shipcombat-config-select:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Launch-side rows: center the pill group beneath a small label */
+.shipcombat-config-row--launch {
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.shipcombat-config-label--launch {
+  font-weight: 600;
+  font-size: 0.8em;
+  opacity: 0.7;
+  white-space: nowrap;
+  text-align: center;
+}
+
+/* Separator between basic config rows and launch-side toggles */
+.shipcombat-config-sep {
+  border: none;
+  border-top: 1px solid rgba(255,255,255,0.1);
+  margin: 0.1rem 0;
+}
+
+/* ── Ordnance launch-side toggle pills ───────────────────────────────────── */
+.shipcombat-launch-sides {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  align-items: center;
+}
+
+.shipcombat-launch-side-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 0.78em;
+  font-weight: 600;
+  cursor: pointer;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.3);
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  user-select: none;
+  white-space: nowrap;
+}
+
+/* Hide the native checkbox — the label IS the control */
+.shipcombat-launch-side-toggle input[type=checkbox] {
+  display: none;
+}
+
+/* Active (checked) state */
+.shipcombat-launch-side-toggle:has(input:checked) {
+  background: rgba(74,158,255,0.15);
+  border-color: rgba(74,158,255,0.45);
+  color: #6fb5ff;
+}
+
+/* Hover (only when not disabled) */
+.shipcombat-launch-side-toggle:not(:has(input:disabled)):hover {
+  border-color: rgba(255,255,255,0.22);
+  color: rgba(255,255,255,0.65);
+}
+
+/* Disabled state */
+.shipcombat-launch-side-toggle:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.shipcombat-crewsize-select {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  background: rgba(0,0,0,0.35);
+  border: none;
+  border-radius: 3px;
+  padding: 1px 4px;
+  height: 1.4em;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+/* ── Weapon Battery 2×2 slot grid ───────────────────────────────────────── */
+.shipcombat-weapon-slot-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem;
+  padding: 0.4rem 0.5rem;
+}
+
+.shipcombat-weapon-slot-cell {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(0,0,0,0.12);
+  border-radius: 3px;
+  padding: 0.25rem 0.5rem;
+  gap: 0.5rem;
+}
+
+.shipcombat-weapon-slot-label {
+  font-size: 0.8rem;
+  opacity: 0.8;
+}
+
+.shipcombat-weapon-slot-input {
+  width: 2.5ch !important;
+  min-width: 2.5ch !important;
+  max-width: 2.5ch !important;
+}
+
+.shipcombat-weapon-slot-val {
+  font-size: 0.9rem;
+  opacity: 0.85;
+}
+
+.list-header .shipcombat-section-controls {
+  flex: 0 0 auto !important;
+  overflow: visible;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.shipcombat-weapon-battery-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.shipcombat-weapon-battery-header .list-name {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  overflow: visible;
+}
+
+.shipcombat-core-pips {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.shipcombat-core-pip {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid var(--color-border-light);
+  background: var(--color-dark-6, #1a1a1a);
+}
+
+.shipcombat-core-pip--available {
+  background: #5b5b5b;
+  border-color: transparent;
+}
+
+.shipcombat-core-pip--staged {
+  background: #e67e22;
+  border-color: transparent;
+}
+
+.shipcombat-core-pip--assigned {
+  background: #e04040;
+  border-color: transparent;
+}
+
+.shipcombat-core-pip--shield {
+  background: #00ff88;
+  border-color: transparent;
+}
+
+.shipcombat-core-pip--shield-staged {
+  background: #00ff88;
+  border-color: transparent;
+}
+
+/* ── Rend-damaged armour indicator ───────────────────────────────────────── */
+.shipcombat-armour--rend { color: #e05252; }
+
+.shipcombat-core-pip--shield-committed {
+  background: #e04040;
+  border-color: transparent;
+}
+
+.shipcombat-core-pip--aux-staged {
+  background: #7ec8e3;
+  border-color: transparent;
+}
+
+.shipcombat-core-pip--aux-committed {
+  background: #e04040;
+  border-color: transparent;
+}
+
+.shipcombat-core-btn--staged {
+  color: #e67e22;
+}
+
+.shipcombat-core-btn--assigned {
+  color: #27ae60;
+  cursor: default;
+}
+
+.shipcombat-resource-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.shipcombat-resource-val {
+  font-size: 1.1rem;
+  font-weight: bold;
+  min-width: 2ch;
+  text-align: center;
+}
+
+.shipcombat-adj {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  font-size: 0.9rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.shipcombat-log-time {
+  opacity: 0.6;
+  margin-right: 4px;
+  font-size: 0.75rem;
+}
+
+.shipcombat-muted {
+  opacity: 0.55;
+  font-size: 0.8rem;
+  font-style: italic;
+}
+
+.shipcombat-inv-group {
+  margin-bottom: 2px;
+}
+
+.shipcombat-inv-group-header {
+  padding: 3px 8px 2px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.6;
+  background: rgba(0,0,0,0.08);
+  border-bottom: 1px solid rgba(0,0,0,0.1);
+}
+
+
+/* ── Readonly stat value in header ──────────────────────────────────────── */
+.shipcombat-readonly-val {
+  display: block;
+  text-align: center;
+  font-size: 0.95rem;
+  padding: 2px 0;
+}
+
+.shipcombat-inline-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.shipcombat-inline-value input {
+  width: 4.2rem;
+  text-align: center;
+}
+
+/* ── Hull Integrity Bar ──────────────────────────────────────────────────── */
+/* ── Compact vitals (hull + fire) ───────────────────────────────────────── */
+.shipcombat-compact-vitals {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.15rem;
+  align-self: center;
+}
+
+.shipcombat-vital-row {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.shipcombat-vital-label {
+  font-size: 0.65rem;
+  opacity: 0.7;
+  flex: 0 0 5.5rem;
+  text-align: right;
+}
+
+.shipcombat-hull-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  font-size: 0.85rem;
+  font-weight: bold;
+}
+
+.shipcombat-hull-bar input[type="number"] {
+  width: 2.5rem;
+  text-align: center;
+  font-size: 0.85rem;
+  font-weight: bold;
+}
+
+.shipcombat-hull-sep {
+  opacity: 0.5;
+}
+
+.shipcombat-hull-max {
+  opacity: 0.65;
+}
+
+
+/* ── Ship Header: Shield Pool attribute box ─────────────────────────────── */
+.shipcombat-shieldpool-box .shipcombat-shieldpool-display {
+  display: flex;
+  align-items: baseline;
+  gap: 0.2rem;
+  font-size: 1.2rem;
+  font-weight: bold;
+}
+
+.shipcombat-shieldpool-val.shipcombat-shieldpool-active,
+.shipcombat-shieldpool-active {
+  color: #00ff88;
+  text-shadow: 0 0 6px rgba(0,255,136,0.55);
+}
+
+.shipcombat-eng-btn-desc {
+  margin: 0;
+  padding: 0 0.25rem 0.2rem;
+  font-size: 0.72rem;
+  color: var(--color-text-dark-secondary, #888);
+  white-space: normal;
+  line-height: 1.3;
+}
+
+
+/* ── Header: Internal Fire display ───────────────────────────────────────── */
+
+.shipcombat-fire-display {
+  display: flex;
+  align-items: center;
+  font-size: 0.95rem;
+  font-weight: bold;
+}
+
+.shipcombat-fire-input {
+  width: 2.5rem;
+  text-align: center;
+  font-size: 0.95rem;
+  font-weight: bold;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  padding: 0 0.25rem;
+}
+
+.shipcombat-fire-input:hover,
+.shipcombat-fire-input:focus {
+  border-color: var(--color-border-light);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.shipcombat-fire-active-input {
+  color: #e04040;
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   SHIP HEADER  -  full portrait + identity details + stat table + attr boxes
+   Applies to both NPC and player ship sheets via .shipcombat-ship-header class
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Restore full-size portrait (overrides the 48px compression) */
+.shipcombat-ship-header .sheet-header img.profile {
+  flex: 0 0 64px !important;
+  width: 64px !important;
+  height: 64px !important;
+  object-fit: contain;
+}
+.shipcombat-ship-header .sheet-header .header-details {
+  flex: 1;
+  align-self: flex-start;
+}
+
+/* Details row  -  classification / model / faction / role */
+.shipcombat-ship-header .header-details .details-row:not(.name) .detail-group {
+  min-width: 0;
+  flex: 1;
+}
+.shipcombat-ship-header .header-details .details-row:not(.name) .input-group select,
+.shipcombat-ship-header .header-details .details-row:not(.name) .input-group input {
+  width: 100%;
+}
+
+/* ── Stat table: PIL TEC GUN SPD MAN VFX ──────────────────────────────────── */
+.shipcombat-stat-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: center;
+  margin: 0;
+  background: none;
+  border: 0;
+}
+.shipcombat-stat-table tr {
+  background: none;
+  border-bottom: 1px solid rgba(255,255,255,0.12);
+}
+.shipcombat-stat-table tr:last-of-type {
+  border-bottom: 0;
+}
+.shipcombat-stat-table td {
+  border-right: 1px solid rgba(255,255,255,0.12);
+  padding: 0;
+  height: 1.6rem;
+}
+.shipcombat-stat-table td:last-of-type {
+  border-right: 0;
+}
+.shipcombat-stat-table tr:first-of-type td {
+  font-size: 0.65rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  height: 1.2rem;
+  vertical-align: middle;
+  cursor: default;
+}
+.shipcombat-stat-table input[type="number"] {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: none;
+  text-align: center;
+  padding: 0;
+  box-shadow: none;
+}
+.shipcombat-stat-table input[type="number"]:focus {
+  box-shadow: none;
+  background: rgba(255,255,255,0.05);
+}
+.shipcombat-stat-table .shipcombat-stat-row-label {
+  font-size: 0.65rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+  cursor: default;
+  padding: 0 0.3rem;
+  white-space: nowrap;
+}
+.shipcombat-stat-table .shipcombat-readonly-val {
+  display: block;
+  text-align: center;
+  font-size: 0.85rem;
+  line-height: 1.6rem;
+}
+
+/* ── Attr boxes (Hull Damage / Internal Fire) ─────────────────────────────── */
+.shipcombat-ship-attr-row {
+  display: flex;
+  gap: 0;
+  width: 100%;
+}
+.shipcombat-ship-attr-box {
+  flex: 1;
+  border: 1px solid rgba(255,255,255,0.15);
+  border-right: none;
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  grid-template-rows: 1.2rem 1.3rem;
+}
+.shipcombat-ship-attr-box:last-of-type {
+  border-right: 1px solid rgba(255,255,255,0.15);
+}
+.shipcombat-ship-attr-label {
+  grid-column: 1 / span 12;
+  border-bottom: 1px solid rgba(255,255,255,0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: rgba(255,255,255,0.04);
+  white-space: nowrap;
+  padding: 0 0.2rem;
+}
+.shipcombat-ship-attr-fields {
+  grid-column: 1 / span 12;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+}
+.shipcombat-ship-attr-fields input[type="number"] {
+  flex: 1;
+  height: 1.3rem;
+  text-align: center;
+  border: 0;
+  background: none;
+  min-width: 0;
+}
+.shipcombat-ship-attr-fields .shipcombat-hull-sep {
+  opacity: 0.5;
+  flex: 0 0 auto;
+}
+
+/* Internal Fire active (value > 0)  -  red text */
+.shipcombat-fire-active .shipcombat-ship-attr-fields input[type="number"],
+.shipcombat-fire-active .shipcombat-ship-attr-fields .shipcombat-readonly-val {
+  color: #ff4444;
+}
+.shipcombat-fire-active .shipcombat-ship-attr-label {
+  color: #ff4444;
+}
+
+/* ── Compound ARM/SHD value separator ─────────────────────────────────────── */
+.shipcombat-compound-val {
+  white-space: nowrap;
+}
+.shipcombat-as-sep {
+  opacity: 0.4;
+  margin: 0 1px;
+}
+
+/* ── Patron drop zone ─────────────────────────────────────────────────────── */
+.shipcombat-patron-drop {
+  display: flex;
+  align-items: center;
+  min-height: 1.4rem;
+  border: 1px dashed rgba(255,255,255,0.15);
+  border-radius: 3px;
+  padding: 0 4px;
+  gap: 4px;
+}
+.shipcombat-patron-link {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  cursor: pointer;
+}
+.shipcombat-patron-link:hover span {
+  text-decoration: underline;
+}
+.shipcombat-patron-icon {
+  width: 16px;
+  height: 16px;
+  border-radius: 2px;
+  object-fit: cover;
+  flex: 0 0 16px;
+}
+.shipcombat-patron-link span {
+  font-size: 0.75rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.shipcombat-patron-placeholder {
+  font-size: 0.7rem;
+  opacity: 0.4;
+  font-style: italic;
+}
+.shipcombat-patron-remove {
+  margin-left: auto;
+  cursor: pointer;
+  opacity: 0.5;
+  font-size: 0.65rem;
+}
+.shipcombat-patron-remove:hover {
+  opacity: 1;
+  color: #ff6666;
+}
+
+/* ── Flux-to-charge button (inside shield header) ─────────────────────────── */
+.shipcombat-npc-flux-charge-btn {
+  background: none;
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 3px;
+  padding: 0.1rem 0.4rem;
+  cursor: pointer;
+  font-size: 0.75rem;
+  color: #e8b96a;
+  line-height: 1;
+}
+.shipcombat-npc-flux-charge-btn:hover {
+  background: rgba(232,185,106,0.12);
+}
+
+
+/* ── Player ship: Impmal teal (#065c63) borders for stat/attr tables ── */
+.shipcombat-ship .shipcombat-stat-table tr { border-bottom-color: #065c63; }
+.shipcombat-ship .shipcombat-stat-table td { border-right-color: #065c63; }
+.shipcombat-ship .shipcombat-ship-attr-box { border-color: #065c63; }
+.shipcombat-ship .shipcombat-ship-attr-label { background: #065c63; border-bottom-color: rgba(0,255,136,0.15); color: rgba(255,255,255,0.9); }

@@ -18,19 +18,6 @@
 {{#if isTorpedo}}
 {{!-- ═══════════════════════════ TORPEDO CONFIG ════════════════════════════ --}}
 
-    {{!-- Warhead Count --}}
-    <div class="shipcombat-torpedo-bar">
-        <label>Warheads</label>
-        <div class="shipcombat-torpedo-bar-track">
-            <div class="shipcombat-torpedo-bar-fill hull" style="width: {{hullPct}}%"></div>
-            <span class="shipcombat-torpedo-bar-text">
-                <input type="number" name="system.hull.value" value="{{sys.hull.value}}" class="shipcombat-torpedo-inline" />
-                /
-                <input type="number" name="system.hull.max" value="{{sys.hull.max}}" class="shipcombat-torpedo-inline" />
-            </span>
-        </div>
-    </div>
-
     {{!-- Fuel --}}
     <div class="shipcombat-torpedo-bar">
         <label>Fuel</label>
@@ -54,33 +41,53 @@
             <label>MAN</label>
             <input type="number" name="system.movement.maneuverability" value="{{sys.movement.maneuverability}}" />
         </div>
+        {{#unless useDiceBreakdown}}
         <div class="shipcombat-torpedo-stat">
-            <label>DMG</label>
-            <input type="number" name="system.payloadDamage" value="{{sys.payloadDamage}}" />
+            <label>COUNT</label>
+            <input type="number" name="system.payloadDiceCount" value="{{sys.payloadDiceCount}}" placeholder="—" />
         </div>
+        <div class="shipcombat-torpedo-stat">
+            <label>SIZE</label>
+            <input type="text" name="system.payloadDiceSize" value="{{sys.payloadDiceSize}}" placeholder="—" />
+        </div>
+        <div class="shipcombat-torpedo-stat">
+            <label>TYPE</label>
+            <input type="text" name="system.payloadDamageType" value="{{sys.payloadDamageType}}" placeholder="—" />
+        </div>
+        {{/unless}}
         <div class="shipcombat-torpedo-stat">
             <label>RADIUS</label>
             <input type="number" name="system.payloadRadius" value="{{sys.payloadRadius}}" />
         </div>
+        {{#if showArmorClass}}
+        <div class="shipcombat-torpedo-stat">
+            <label data-tooltip="Armor Class — used as the attack target for incoming fire" data-tooltip-direction="UP">AC</label>
+            <input type="number" name="system.armorClass" value="{{sys.armorClass}}" />
+        </div>
+        {{/if}}
     </div>
+    {{#if useDiceBreakdown}}
+    {{!-- SF2e structured damage (count · die size · damage type) --}}
+    <div class="shipcombat-torpedo-traits shipcombat-torpedo-traits--damage">
+        <h4>{{localize "SHIPCOMBAT.Label.Damage"}}</h4>
+        <div class="shipcombat-payload-dmg-trio">
+            <input type="number" name="system.payloadDiceCount" value="{{sys.payloadDiceCount}}" min="1" placeholder="—" />
+            <select name="system.payloadDiceSize">
+                <option value="">—</option>
+                {{#each diceOptions}}<option value="{{this.value}}" {{#if (eq this.value @root.sys.payloadDiceSize)}}selected{{/if}}>{{this.label}}</option>{{/each}}
+            </select>
+            <select name="system.payloadDamageType">
+                <option value="">—</option>
+                {{#each damageTypeChoices}}<option value="{{this.value}}" {{#if (eq this.value @root.sys.payloadDamageType)}}selected{{/if}}>{{this.label}}</option>{{/each}}
+            </select>
+        </div>
+    </div>
+    {{/if}}
 
     {{> "vessel-weapon-traits" title="Warhead Traits"}}
 
 {{else if isStrikeCraft}}
 {{!-- ══════════════════════════ STRIKE CRAFT CONFIG ════════════════════════ --}}
-
-    {{!-- Flight (hull) --}}
-    <div class="shipcombat-torpedo-bar">
-        <label>Flight</label>
-        <div class="shipcombat-torpedo-bar-track">
-            <div class="shipcombat-torpedo-bar-fill hull" style="width: {{hullPct}}%"></div>
-            <span class="shipcombat-torpedo-bar-text">
-                <input type="number" name="system.hull.value" value="{{sys.hull.value}}" class="shipcombat-torpedo-inline" />
-                /
-                <input type="number" name="system.hull.max" value="{{sys.hull.max}}" class="shipcombat-torpedo-inline" />
-            </span>
-        </div>
-    </div>
 
     {{!-- Fuel --}}
     <div class="shipcombat-torpedo-bar">
@@ -134,16 +141,49 @@
             <label data-tooltip="{{localize 'SHIPCOMBAT.Component.Rating'}}" data-tooltip-direction="UP">RTG</label>
             <input type="number" name="system.sensorRating" value="{{sys.sensorRating}}" />
         </div>
+        {{#if showArmorClass}}
+        <div class="shipcombat-torpedo-stat">
+            <label data-tooltip="Armor Class — used as the attack target for incoming fire" data-tooltip-direction="UP">AC</label>
+            <input type="number" name="system.armorClass" value="{{sys.armorClass}}" />
+        </div>
+        {{/if}}
     </div>
 
     {{!-- Payload --}}
+    {{#if useDiceBreakdown}}
+    {{!-- SF2e structured damage (count · die size · damage type) --}}
+    <div class="shipcombat-torpedo-traits shipcombat-torpedo-traits--damage">
+        <h4>{{localize "SHIPCOMBAT.Label.Damage"}}</h4>
+        <div class="shipcombat-payload-dmg-trio">
+            <input type="number" name="system.payloadDiceCount" value="{{sys.payloadDiceCount}}" min="1" placeholder="—" />
+            <select name="system.payloadDiceSize">
+                <option value="">—</option>
+                {{#each diceOptions}}<option value="{{this.value}}" {{#if (eq this.value @root.sys.payloadDiceSize)}}selected{{/if}}>{{this.label}}</option>{{/each}}
+            </select>
+            <select name="system.payloadDamageType">
+                <option value="">—</option>
+                {{#each damageTypeChoices}}<option value="{{this.value}}" {{#if (eq this.value @root.sys.payloadDamageType)}}selected{{/if}}>{{this.label}}</option>{{/each}}
+            </select>
+        </div>
+    </div>
+    {{/if}}
     <div class="shipcombat-torpedo-traits">
         <h4>Payload</h4>
         <div class="shipcombat-torpedo-trait-grid">
+            {{#unless useDiceBreakdown}}
             <div class="shipcombat-torpedo-trait">
-                <label>DMG</label>
-                <input type="number" name="system.payloadDamage" value="{{sys.payloadDamage}}" />
+                <label>COUNT</label>
+                <input type="number" name="system.payloadDiceCount" value="{{sys.payloadDiceCount}}" placeholder="—" />
             </div>
+            <div class="shipcombat-torpedo-trait">
+                <label>SIZE</label>
+                <input type="text" name="system.payloadDiceSize" value="{{sys.payloadDiceSize}}" placeholder="—" />
+            </div>
+            <div class="shipcombat-torpedo-trait">
+                <label>TYPE</label>
+                <input type="text" name="system.payloadDamageType" value="{{sys.payloadDamageType}}" placeholder="—" />
+            </div>
+            {{/unless}}
             <div class="shipcombat-torpedo-trait">
                 <label>ANGLE</label>
                 <input type="number" name="system.payloadAngle" value="{{sys.payloadAngle}}" />

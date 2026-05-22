@@ -192,11 +192,11 @@ async function _handleAction(action, payload = {}) {
     case "pilotFlipAndBurn":
       await ShipCombatState.pilotFlipAndBurn(payload.userId, payload.halfSpeedUnits, payload.newX, payload.newY, payload.newRotation, payload.waypoints);
       if (payload.waypoints?.length) {
-        const ship2 = ShipCombatState.ship;
-        const token2 = ship2?.getActiveTokens()?.[0];
-        if (token2) {
+        const ship = ShipCombatState.ship;
+        const token = ship?.getActiveTokens()?.[0];
+        if (token) {
           emitToAll("animateTokenPath", {
-            tokenUuid:     token2.document.uuid,
+            tokenUuid:     token.document.uuid,
             waypoints:     payload.waypoints,
             finalX:        payload.newX,
             finalY:        payload.newY,
@@ -423,7 +423,7 @@ async function _handleAnimateTokenPath({ tokenUuid, waypoints, finalX, finalY, f
     promises.push(
       canvasToken.animate(
         { x: wp.x, y: wp.y, rotation: wp.rotation },
-        { chain: i > 0 }
+        { duration: 50, chain: i > 0 }
       )
     );
   }

@@ -10,8 +10,10 @@
                     {{#unless canAfford}}disabled{{/unless}}
                     data-tooltip="{{tooltip}}">
                 <i class="{{icon}}"></i>
-                <span>{{labelLocalized}}</span>
-                <small>{{effectiveCrew}} crew / {{effectiveDuration}}T</small>
+                <div class="shipcombat-ordnance-action-btn-text">
+                    <span>{{labelLocalized}}</span>
+                    <small>{{effectiveCrew}} {{#if @root.crewScaleSmallCraft}}load{{else}}crew{{/if}} / {{effectiveDuration}}T</small>
+                </div>
             </button>
             {{/each}}
         </div>

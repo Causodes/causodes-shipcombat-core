@@ -32,6 +32,14 @@ import { registerLangSubstitution } from "./scripts/lang.js";
 import { BDAPopup, launchBDAFromChat } from "./scripts/apps/BDAPopup.js";
 import { registerAnimations } from "./scripts/animations.js";
 import { PartialRegistry, CORE_PARTIAL_DEFAULTS, loadAllTemplates } from "./scripts/templates.js";
+import { TargetingPopupV1 }
+  from "./scripts/apps/TargetingPopupV1.js";
+import { RamTargetPopupV1 }
+  from "./scripts/apps/RamTargetPopupV1.js";
+import { BattleClarityPopupV1 }
+  from "./scripts/apps/BattleClarityPopupV1.js";
+import { StrikeCraftAttackPopupV1, RecoverCraftPopupV1 }
+  from "./scripts/apps/StrikeCraftPopupsV1.js";
 
 // ── Public configuration API ────────────────────────────────────────────────
 // A system module MUST call ShipCombat.configure() before Foundry fires "init".
@@ -40,6 +48,18 @@ import { PartialRegistry, CORE_PARTIAL_DEFAULTS, loadAllTemplates } from "./scri
 
 let _configured = false;
 const _partialRegistry = new PartialRegistry(CORE_PARTIAL_DEFAULTS);
+const _popupRegistry = {};
+
+// V1 popup defaults — selected automatically when the active adapter sets
+// `useApplicationV1 = true` (e.g. SF2e).  Adapters no longer need to call
+// `registerPopupOverride` for these; explicit registrations still take priority.
+const _POPUP_V1_DEFAULTS = {
+  targeting:         TargetingPopupV1,
+  ramTarget:         RamTargetPopupV1,
+  battleClarity:     BattleClarityPopupV1,
+  strikeCraftAttack: StrikeCraftAttackPopupV1,
+  recoverCraft:      RecoverCraftPopupV1,
+};
 
 globalThis.ShipCombat = {
   /**
@@ -69,6 +89,34 @@ globalThis.ShipCombat = {
    */
   registerPartialOverride(name, path) {
     _partialRegistry.register(name, path);
+  },
+
+  /**
+   * Register a system-specific popup class to replace a core default popup.
+   *
+   * Must be called during the companion module's "init" hook (i.e. before
+   * the first popup is opened). The replacement class must honour the same
+   * constructor signature and external API (show(), close(), etc.) as the
+   * default class.
+   *
+   * @param {string}   key        – Registry key (e.g. "targeting", "ramTarget").
+   * @param {Function} PopupClass – Constructor to use in place of the default.
+   */
+  registerPopupOverride(key, PopupClass) {
+    _popupRegistry[key] = PopupClass;
+  },
+
+  /**
+   * @internal – Used by core scripts to resolve the active popup class for a
+   *   given registry key, falling back to the supplied default.
+   * @param {string}   key          – Registry key.
+   * @param {Function} DefaultClass – Core default popup constructor.
+   * @returns {Function}
+   */
+  _popupClass(key, DefaultClass) {
+    if (_popupRegistry[key]) return _popupRegistry[key];
+    if (SystemAdapter._current?.useApplicationV1) return _POPUP_V1_DEFAULTS[key] ?? DefaultClass;
+    return DefaultClass;
   },
 };
 
@@ -117,24 +165,18 @@ Hooks.once("init", async () => {
   // Allow fractional initiative so skill/100 tiebreakers are preserved
   CONFIG.Combat.initiative.decimals = 2;
 
-  // Model/sheet registration is handled by the system companion module.
-
   registerSettings();
 
-  // Templates are compiled in the "setup" hook (after every module's "init"),
-  // which gives the companion module a chance to register overrides via
-  // ShipCombat.registerPartialOverride().
+  // Templates are compiled in "setup" so companion "init" overrides via
+  // ShipCombat.registerPartialOverride() are already registered.
 
   // ── Token visibility override ──────────────────────────────────────────
-  // Foundry V13 resets token.visible = this.isVisible inside
-  // _refreshVisibility() on every render cycle, so hook-based overrides are
-  // immediately undone.  Patch the prototype so our own-ship and sensor-tier
-  // logic runs *after* the base method and survives the render pipeline.
+  // Prototype patch so own-ship and sensor-tier logic runs after the base
+  // _refreshVisibility() call (hook-based overrides are immediately undone).
   const TokenCls = CONFIG.Token.objectClass;
   const _origRefreshVisibility = TokenCls.prototype._refreshVisibility;
   TokenCls.prototype._refreshVisibility = function () {
     _origRefreshVisibility.call(this);
-    // Defer to the module's per-token handler (imported from TokenVisibility.js)
     applyTokenVisibility(this);
   };
 
@@ -151,6 +193,35 @@ Hooks.once("init", async () => {
     }
     return _origCanControl.call(this, user, event);
   };
+
+  // ── Block combat-tracker initiative roll for player ships without a captain ──
+  // When the GM clicks the roll-initiative button in the combat tracker it calls
+  // Combat.prototype.rollInitiative directly, bypassing the captain check on the
+  // ship sheet.  Wrap the method here so the guard runs regardless of origin.
+  const _origRollInitiative = Combat.prototype.rollInitiative;
+  Combat.prototype.rollInitiative = async function (ids, options) {
+    const combatantIds = Array.isArray(ids) ? ids : [ids];
+    for (const id of combatantIds) {
+      const combatant = this.combatants.get(id);
+      const actor = combatant?.actor;
+      if (!actor || actor.type !== `${MODULE_ID}.ship`) continue;
+      // Mirror the captain-lookup logic from _onRollInitiative in captain.js
+      const sys = SystemAdapter.current.getShipData(actor);
+      let hasCaptain = false;
+      if (sys.crewActors?.captain?.uuid) {
+        try { hasCaptain = !!(await fromUuid(sys.crewActors.captain.uuid)); } catch { /* ignore */ }
+      }
+      if (!hasCaptain) {
+        const entry = Object.entries(sys.roles ?? {}).find(([, r]) => r === "captain");
+        if (entry) hasCaptain = !!(game.users.get(entry[0])?.character);
+      }
+      if (!hasCaptain) {
+        ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoCaptainAssigned"));
+        return this;
+      }
+    }
+    return _origRollInitiative.call(this, ids, options);
+  };
 });
 
 // ── setup: compile templates ─────────────────────────────────────────────
@@ -166,7 +237,7 @@ Hooks.once("setup", async () => {
 Hooks.on("preCreateItem", (item, data) => {
   if (item.type !== `${MODULE_ID}.component`) return;
   if (!data.img || data.img === foundry.documents.BaseItem.DEFAULT_ICON) {
-    item.updateSource({ img: "modules/impmal-core/assets/icons/weapons/explosive.webp" });
+    item.updateSource({ img: "icons/svg/levels.svg" });
   }
 });
 
@@ -184,9 +255,8 @@ Hooks.once("ready", () => {
 });
 
 // ── Orphaned embeddedEdit actor cleanup ───────────────────────────────────
-// If Foundry (or the browser) is closed while a temp "Edit" actor sheet is
-// still open, the patched sheet.close() never runs and the actor is never
-// deleted.  On the next ready we purge any survivors so they don't pile up.
+// Purge temp Edit actors left behind when the browser was closed mid-session
+// (sheet.close() normally deletes them, but only runs when the sheet is closed).
 Hooks.once("ready", async () => {
   if (!game.user.isGM) return;
   const orphans = game.actors.filter(a => a.getFlag(MODULE_ID, "embeddedEdit"));
@@ -196,10 +266,8 @@ Hooks.once("ready", async () => {
 });
 
 // ── shipOrdnance migration ────────────────────────────────────────────
-// Converts legacy torpedo and strikeCraft world actors (and any embedded
-// ordnanceActors template data stored on ships) to the unified
-// shipOrdnance type.  Runs once; records a version flag so it never
-// repeats.  GM-only.
+// Converts legacy torpedo/strikeCraft actors and embedded ordnanceActors
+// template data to the unified shipOrdnance type.  Runs once; GM-only.
 const MIGRATION_VERSION = "1.0.0-shipOrdnance";
 Hooks.once("ready", async () => {
   if (!game.user.isGM) return;
@@ -307,15 +375,29 @@ Hooks.on("preCreateActor", (actor, data) => {
       return false;
     }
     actor.updateSource({
-      "prototypeToken.disposition": CONST.TOKEN_DISPOSITIONS.NEUTRAL,
-      "prototypeToken.lockRotation": false,
-      "prototypeToken.actorLink": true,
+      "prototypeToken.disposition":   CONST.TOKEN_DISPOSITIONS.NEUTRAL,
+      "prototypeToken.lockRotation":  false,
+      "prototypeToken.actorLink":     true,
+      "prototypeToken.texture.src":   actor.img,
     });
     // When created manually (not from Ordnance Master), set sane hull defaults
     if (!data.flags?.[MODULE_ID]?.fromOrdnanceMaster) {
       actor.updateSource({ "system.hull": { value: 0, max: 1 } });
     }
   }
+});
+
+// ── Ordnance hull auto-sync: keep hull.max = payloadCount and initialise hull.value ──
+// When the SALVO / flight-size field changes in the config tab, propagate the
+// new count to hull.max and reset hull.value to the correct "full" value for
+// the active hull display mode (HP mode = full = max; Wounds mode = full = 0).
+Hooks.on("preUpdateActor", (actor, changes) => {
+  if (!isOrdnance(actor)) return;
+  const payloadCount = foundry.utils.getProperty(changes, "system.payloadCount");
+  if (payloadCount == null) return;
+  const isHP = SystemAdapter.current.hullDisplayMode === "hpRemaining";
+  foundry.utils.setProperty(changes, "system.hull.max",   payloadCount);
+  foundry.utils.setProperty(changes, "system.hull.value", isHP ? payloadCount : 0);
 });
 
 // ── Shield Arc Overlay ───────────────────────────────────────────────────────
@@ -500,6 +582,7 @@ Hooks.on("updateCombat", async (combat, changes) => {
           const autoMinMovePct = Math.round(minMove / (minMove + speed) * 100);
           const projected = HelmPreview.projectPosition(token, bearing, autoMinMovePct, speed, minMove);
           if (projected) {
+            const driftWaypoints = HelmPreview.projectWaypoints(token, bearing, autoMinMovePct, speed, minMove);
             await ShipCombatState.confirmMovement({
               fuelUsed:         autoMinMovePct,
               driftUsed:        0,
@@ -508,7 +591,19 @@ Hooks.on("updateCombat", async (combat, changes) => {
               newY:             projected.y,
               newRotation:      projected.rotation,
               gridSquaresMoved: minMove,
+              waypoints:        driftWaypoints,
             });
+            const canvasTok = token.object ?? token;
+            for (let i = 0; i < driftWaypoints.length; i++) {
+              await canvasTok.animate(
+                { x: driftWaypoints[i].x, y: driftWaypoints[i].y, rotation: driftWaypoints[i].rotation },
+                { duration: 50, chain: i > 0 },
+              );
+            }
+            await token.document.update(
+              { x: projected.x, y: projected.y, rotation: projected.rotation },
+              { animate: false },
+            );
           }
         }
       }
@@ -517,6 +612,49 @@ Hooks.on("updateCombat", async (combat, changes) => {
     // the parent ship's turn so it happens simultaneously with the ship's own
     // turn-end auto-drift — not at the start of the following turn.
     await ShipCombatState.processOrdnanceLifecycle();
+  }
+
+  // ── NPC ship's turn ENDED: auto-drift at minimum speed if no thrust used ──
+  if (prevCombatantId && canvas?.scene) {
+    const prevCombatant = combat.combatants.get(prevCombatantId);
+    if (prevCombatant?.actor?.type === `${MODULE_ID}.npcShip`) {
+      const npcActor      = prevCombatant.actor;
+      const npcSys        = npcActor.system;
+      const npcFuelBurned = npcSys.resources?.pilot?.fuelBurned ?? 0;
+      const npcToken      = npcActor.getActiveTokens()?.[0];
+      const isRealistic   = game.settings.get(MODULE_ID, "movementMode") === "realistic";
+
+      if (npcToken && npcFuelBurned === 0 && !isRealistic) {
+        const npcSpeed        = (npcSys.movement?.speed ?? 6) + (npcSys.resources?.pilot?.allocSpeed ?? 0);
+        const npcPrevTurnMove = npcSys.resources?.pilot?.prevTurnMove ?? 0;
+        const npcMinMove      = Math.ceil(npcPrevTurnMove / 2);
+        const npcBearing      = npcSys.resources?.pilot?.bearing ?? 0;
+
+        if (npcMinMove > 0) {
+          const npcThrustPct = Math.round(npcMinMove / (npcMinMove + npcSpeed) * 100);
+          const npcProjected = HelmPreview.projectPosition(npcToken, npcBearing, npcThrustPct, npcSpeed, npcMinMove);
+          if (npcProjected) {
+            const npcWaypoints = HelmPreview.projectWaypoints(npcToken, npcBearing, npcThrustPct, npcSpeed, npcMinMove);
+            await npcActor.update({
+              [SystemAdapter.current.systemPath("resources.pilot.fuelBurned")]:   npcThrustPct,
+              [SystemAdapter.current.systemPath("resources.pilot.prevTurnMove")]: Math.round(npcThrustPct / 100 * (npcSpeed + npcMinMove)),
+              [SystemAdapter.current.systemPath("resources.pilot.bearing")]:      0,
+            });
+            const npcCanvasTok = npcToken.object ?? npcToken;
+            for (let i = 0; i < npcWaypoints.length; i++) {
+              await npcCanvasTok.animate(
+                { x: npcWaypoints[i].x, y: npcWaypoints[i].y, rotation: npcWaypoints[i].rotation },
+                { duration: 50, chain: i > 0 },
+              );
+            }
+            await npcToken.document.update(
+              { x: npcProjected.x, y: npcProjected.y, rotation: npcProjected.rotation },
+              { animate: false },
+            );
+          }
+        }
+      }
+    }
   }
 
   // ── Ship's turn STARTED: apply effects and reset all allocations ───────────
@@ -533,7 +671,10 @@ Hooks.on("updateCombat", async (combat, changes) => {
       const dmgMap = { low: 1, medium: 2, high: 3 };
       const hullVal = ship.system.hull?.value ?? 0;
       const hullMax = ship.system.hull?.max   ?? 40;
-      condUp["hull.value"] = Math.min(hullMax, hullVal + (dmgMap[condHullTier] ?? 0));
+      const hullBreachDmg = dmgMap[condHullTier] ?? 0;
+      condUp["hull.value"] = SystemAdapter.current.hullDisplayMode === "hpRemaining"
+        ? Math.max(0, hullVal - hullBreachDmg)
+        : Math.min(hullMax, hullVal + hullBreachDmg);
       if (condHullTier === "high") {
         condUp.internalFire = fireBefore + 5;
       }
@@ -549,7 +690,9 @@ Hooks.on("updateCombat", async (combat, changes) => {
     if (fireBefore > 0) {
       const curDamage = ship.system.hull?.value ?? 0;
       const maxDamage = ship.system.hull?.max   ?? 40;
-      const newDamage = Math.min(maxDamage, curDamage + fireBefore);
+      const newDamage = SystemAdapter.current.hullDisplayMode === "hpRemaining"
+        ? Math.max(0, curDamage - fireBefore)
+        : Math.min(maxDamage, curDamage + fireBefore);
       await ShipCombatState.update({ "hull.value": newDamage });
     }
 
@@ -579,7 +722,10 @@ Hooks.on("updateCombat", async (combat, changes) => {
         const dmgMap = { low: 1, medium: 2, high: 3 };
         const hullVal = npcSys.hull?.value ?? 0;
         const hullMax = npcSys.hull?.max   ?? 50;
-        npcUpd["system.hull.value"] = Math.min(hullMax, hullVal + (dmgMap[hullTier] ?? 0));
+        const npcBreachDmg = dmgMap[hullTier] ?? 0;
+        npcUpd["system.hull.value"] = SystemAdapter.current.hullDisplayMode === "hpRemaining"
+          ? Math.max(0, hullVal - npcBreachDmg)
+          : Math.min(hullMax, hullVal + npcBreachDmg);
         // Critical Breach (High): also +5 internal fire per round
         if (hullTier === "high") {
           npcUpd["system.internalFire"] = (npcSys.internalFire ?? 0) + 5;
@@ -597,8 +743,27 @@ Hooks.on("updateCombat", async (combat, changes) => {
       if (fire > 0) {
         const hullVal = npcUpd["system.hull.value"] ?? (npcSys.hull?.value ?? 0);
         const hullMax = npcSys.hull?.max ?? 50;
-        npcUpd["system.hull.value"] = Math.min(hullMax, hullVal + fire);
+        npcUpd["system.hull.value"] = SystemAdapter.current.hullDisplayMode === "hpRemaining"
+          ? Math.max(0, hullVal - fire)
+          : Math.min(hullMax, hullVal + fire);
       }
+
+      // Compute prevTurnMove before zeroing — mirrors resetHelmState for the player ship.
+      // Reading fuelBurned BEFORE it is zeroed gives us the last-turn total so that
+      // minMove stays stable for the whole turn, even with piecemeal commits.
+      const npcFuelThisTurn  = npcSys.resources?.pilot?.fuelBurned  ?? 0;
+      const npcPrevTurnMove  = npcSys.resources?.pilot?.prevTurnMove ?? 0;
+      const npcBaseSpeed     = npcSys.movement?.speed ?? 0;
+      const npcAllocSpeed    = npcSys.resources?.pilot?.allocSpeed   ?? 0;
+      const npcEffSpeed      = npcBaseSpeed + npcAllocSpeed;
+      const npcMinMove       = Math.ceil(npcPrevTurnMove / 2);
+      npcUpd[SystemAdapter.current.systemPath("resources.pilot.prevTurnMove")] = npcFuelThisTurn > 0
+        ? Math.round((npcFuelThisTurn / 100) * (npcEffSpeed + npcMinMove))
+        : npcPrevTurnMove;
+
+      // Reset helm state for the new turn (mirrors resetHelmState for the player ship)
+      npcUpd[SystemAdapter.current.systemPath("resources.pilot.fuelBurned")] = 0;
+      npcUpd[SystemAdapter.current.systemPath("resources.pilot.bearing")]    = 0;
 
       if (Object.keys(npcUpd).length > 0) {
         await npcActor.update(npcUpd);
@@ -633,6 +798,20 @@ Hooks.on("renderChatMessage", (message, html) => {
 
     await launchBDAFromChat(ship, message);
   });
+});
+
+// ── AutoAnimations v7 compatibility ─────────────────────────────────────────
+// AA's ImpMal (and some other system) handlers create a synthetic item
+// { name: msg.system.context?.skill } for every chat message they don't
+// recognise. When `skill` is undefined (i.e. our custom ship-combat messages),
+// the item is { name: undefined }. AA's rinseName(undefined) returns undefined
+// instead of a string, and allMenuSearch then crashes calling
+// undefined.includes(...).  Clearing nameless, id-less items here causes
+// handleItem() to return early without touching the autorec search.
+Hooks.on("aa.getRequiredData", (data) => {
+  if (data.item && !data.item.id && !data.item.name) {
+    data.item = null;
+  }
 });
 
 // ── Public API ────────────────────────────────────────────────────────────

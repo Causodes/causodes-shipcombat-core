@@ -61,7 +61,7 @@ export class ShipCombatState {
   // ── Read ──────────────────────────────────────────────────────────────────
 
   static getData() {
-    return this.ship?.system ?? foundry.utils.deepClone(DEFAULT_COMBAT_STATE);
+    return SystemAdapter.current.getShipData(this.ship) ?? foundry.utils.deepClone(DEFAULT_COMBAT_STATE);
   }
 
   // ── Write (GM only) ───────────────────────────────────────────────────────
@@ -250,10 +250,11 @@ export class ShipCombatState {
     updates["resources.gunner.sensorBandExpanded"] = false;
     updates["resources.gunner.chooseCritLocation"] = false;
     updates["resources.gunner.critLocationChoice"]  = null;
+    updates["resources.gunner.firedWeaponIds"]      = [];
 
     // Shield overallocation decay
     for (const sector of ["bow", "stern", "port", "starboard"]) {
-      const zt = shieldCfg.zoneThresholds?.[sector] ?? 8;
+      const zt = shieldCfg.zoneThresholds?.[sector] ?? 0;
       const sv = data.shields?.[sector] ?? 0;
       if (sv > zt) updates[`shields.${sector}`] = zt;
     }
@@ -349,7 +350,6 @@ export class ShipCombatState {
     updates["resources.ordnance.manpower"] = Math.min(manpowerMax, prevMan + manpoolReturn);
 
     // ── Ordnance Master commitment completion side effects ──
-    let ammoReloaded = false;
     for (const actionId of completedActions) {
       if (actionId === "damageControl") {
         const fire = data.internalFire ?? 0;
@@ -358,16 +358,22 @@ export class ShipCombatState {
         }
       }
       if (actionId === "hullRepairParty") {
-        const hullDmg = this.ship?.system?.hull?.value ?? 0;
-        if (hullDmg > 0) {
+        const hullSys     = SystemAdapter.current.getShipData(this.ship)?.hull;
+        const hullCurrent = hullSys?.value ?? 0;
+        const hullMax     = hullSys?.max   ?? 0;
+        const isHPMode    = SystemAdapter.current.hullDisplayMode === "hpRemaining";
+        const isDamaged   = isHPMode ? hullCurrent < hullMax : hullCurrent > 0;
+        if (isDamaged) {
           const repairAmt = 2;
-          updates["hull.value"] = Math.max(0, (updates["hull.value"] ?? hullDmg) - repairAmt);
+          const current   = updates["hull.value"] ?? hullCurrent;
+          updates["hull.value"] = isHPMode
+            ? Math.min(hullMax, current + repairAmt)
+            : Math.max(0, current - repairAmt);
         }
       }
-      if (actionId === "loadAmmo" && !ammoReloaded) {
-        ammoReloaded = true;
+      if (actionId === "loadAmmo") {
         const gunAmmo = data.resources?.gunner?.ammo ?? 0;
-        const ammoCap = this.getOrdnanceBayStats().ammoCapacity ?? 20;
+        const ammoCap = this.getOrdnanceBayStats().ammoCapacity ?? 0;
         const reloadAmt = Math.ceil(ammoCap * 0.2);
         updates["resources.gunner.ammo"] = Math.min(ammoCap, (updates["resources.gunner.ammo"] ?? gunAmmo) + reloadAmt);
       }
@@ -485,7 +491,7 @@ export class ShipCombatState {
     if (overcapCount > 0) {
       await ChatMessage.create({
         content: `<p>${game.i18n.format("SHIPCOMBAT.Captain.InspireDiscard", { count: overcapCount })}</p>`,
-        speaker: { alias: this.ship?.system?.roleTitles?.captain || game.i18n.localize("SHIPCOMBAT.Role.Captain") },
+        speaker: { alias: SystemAdapter.current.getShipData(this.ship)?.roleTitles?.captain || game.i18n.localize("SHIPCOMBAT.Role.Captain") },
         whisper: ChatMessage.getWhisperRecipients("GM"),
       });
     }
@@ -578,16 +584,16 @@ export class ShipCombatState {
       if (!isOrdnance(td.actor)) continue;
 
       // Capture turnComplete before resetting (needed for launch-turn detection)
-      const wasTurnComplete = td.actor?.system?.turnComplete ?? false;
+      const wasTurnComplete = SystemAdapter.current.getShipData(td.actor)?.turnComplete ?? false;
 
       // Reset turn-complete flag for next round
       if (wasTurnComplete) {
-        await td.actor.update({ "system.turnComplete": false });
+        await td.actor.update({ [SystemAdapter.current.systemPath("turnComplete")]: false });
       }
 
       // ── Torpedo fuel & movement lifecycle ──
       if (isTorpedo(td.actor)) {
-        const tSys = td.actor.system;
+        const tSys = SystemAdapter.current.getShipData(td.actor);
         const fuel = tSys.fuel?.value ?? 0;
         // powerBoostActive doubles this torpedo's power maximum for the turn; no speed change
         const speed = tSys.movement?.speed ?? 0;
@@ -602,12 +608,12 @@ export class ShipCombatState {
                            && (tSys.helm?.prevTurnMove ?? 0) === 0;
 
         const tUpdates = {
-          "system.helm.bearing":       0,
-          "system.helm.thrustPct":     0,
-          "system.helm.prevTurnMove":  0,
-          "system.helm.momentumUsed":  0,
-          "system.powerBoostActive":   false,
-          "system.designated":         false,
+          [SystemAdapter.current.systemPath("helm.bearing")]:       0,
+          [SystemAdapter.current.systemPath("helm.thrustPct")]:     0,
+          [SystemAdapter.current.systemPath("helm.prevTurnMove")]:  0,
+          [SystemAdapter.current.systemPath("helm.momentumUsed")]:  0,
+          [SystemAdapter.current.systemPath("powerBoostActive")]:   false,
+          [SystemAdapter.current.systemPath("designated")]:         false,
         };
 
         // Helper: drift torpedo token along its velocity vector by a fraction
@@ -633,10 +639,10 @@ export class ShipCombatState {
           if (deltaSq <= 0) return;
           const token = td.object;
           if (!token) return;
-          const thrustArg = deltaSq * 100 / speed;
-          const projected = HelmPreview.projectPosition(token, bearingDeg, thrustArg, speed, 0);
+          const thrustArg = deltaSq * 100 / (minMove + speed);
+          const projected = HelmPreview.projectPosition(token, bearingDeg, thrustArg, speed, minMove);
           if (!projected) return;
-          const waypoints = HelmPreview.projectWaypoints(token, bearingDeg, thrustArg, speed, 0);
+          const waypoints = HelmPreview.projectWaypoints(token, bearingDeg, thrustArg, speed, minMove);
           if (waypoints?.length > 1) {
             for (let wi = 0; wi < waypoints.length; wi++) {
               const wp = waypoints[wi];
@@ -707,7 +713,7 @@ export class ShipCombatState {
 
       // ── Strike craft movement lifecycle ──
       if (isStrikeCraft(td.actor)) {
-        const cSys = td.actor.system;
+        const cSys = SystemAdapter.current.getShipData(td.actor);
         const speed = cSys.movement?.speed ?? 0;
         const minMove = Math.ceil(speed / 2);
         const minMovePct    = Math.round(minMove / (minMove + speed) * 100);
@@ -715,10 +721,10 @@ export class ShipCombatState {
         const storedBearing = cSys.helm?.bearing ?? 0;
 
         const cUpdates = {
-          "system.helm.bearing":      0,
-          "system.helm.thrustPct":    0,
-          "system.helm.prevTurnMove": 0,
-          "system.helm.momentumUsed": 0,
+          [SystemAdapter.current.systemPath("helm.bearing")]:      0,
+          [SystemAdapter.current.systemPath("helm.thrustPct")]:    0,
+          [SystemAdapter.current.systemPath("helm.prevTurnMove")]: 0,
+          [SystemAdapter.current.systemPath("helm.momentumUsed")]: 0,
         };
 
         if (isRealistic) {
@@ -747,10 +753,10 @@ export class ShipCombatState {
           if (deltaSq > 0) {
             const token = td.object;
             if (token) {
-              const thrustArg = deltaSq * 100 / speed;
-              const projected = HelmPreview.projectPosition(token, storedBearing, thrustArg, speed, 0);
+              const thrustArg = deltaSq * 100 / (minMove + speed);
+              const projected = HelmPreview.projectPosition(token, storedBearing, thrustArg, speed, minMove);
               if (projected) {
-                const waypoints = HelmPreview.projectWaypoints(token, storedBearing, thrustArg, speed, 0);
+                const waypoints = HelmPreview.projectWaypoints(token, storedBearing, thrustArg, speed, minMove);
                 if (waypoints?.length > 1) {
                   for (let wi = 0; wi < waypoints.length; wi++) {
                     const wp = waypoints[wi];
@@ -773,7 +779,7 @@ export class ShipCombatState {
         const fuel = cSys.fuel?.value ?? 0;
         if (fuel > 0) {
           const newFuel = Math.max(0, fuel - 1);
-          await td.actor.update({ "system.fuel.value": newFuel });
+          await td.actor.update({ [SystemAdapter.current.systemPath("fuel.value")]: newFuel });
           if (newFuel <= 0) tokensToDelete.push(td.id);
         } else {
           // Already at 0 — delete immediately
@@ -794,8 +800,22 @@ export class ShipCombatState {
   }
 
   static async resetHelmState() {
-    const data = this.getData();
+    const data        = this.getData();
     const prevResetId = data.resources?.pilot?.helmResetId ?? 0;
+
+    // Compute prevTurnMove from the fuel and drift consumed this turn so it
+    // correctly reflects what the ship actually moved.  Reading these values
+    // BEFORE zeroing them gives us the last-turn total that every caller
+    // needs for the stable minMove calculation throughout the new turn.
+    const fuelBurned  = data.resources?.pilot?.fuelBurned  ?? 0;
+    const driftBurned = data.resources?.pilot?.driftBurned ?? 0;
+    const allocSpeed  = data.resources?.pilot?.allocSpeed  ?? 0;
+    const baseSpeed   = data.movement?.speed ?? 0;
+    const effSpeed    = baseSpeed + allocSpeed;
+    const prevTurnMove = fuelBurned > 0
+      ? (fuelBurned / 100) * effSpeed + driftBurned
+      : (data.resources?.pilot?.prevTurnMove ?? 0);
+
     return this.update({
       "resources.pilot.fuelBurned":        0,
       "resources.pilot.driftBurned":       0,
@@ -810,6 +830,7 @@ export class ShipCombatState {
       "resources.pilot.ramAllocLocked":     false,
       "resources.pilot.bearingUsed":        0,
       "resources.pilot.momentumUsed":       0,
+      "resources.pilot.prevTurnMove":       prevTurnMove,
     });
   }
 
@@ -829,21 +850,21 @@ export class ShipCombatState {
       "resources.pilot.pilotingMessageId": "",
       "resources.pilot.helmResetId":        prevResetId + 1,
       "resources.pilot.bearing":            0,
-      "resources.pilot.prevTurnMove":       this.ship?.system?.movement?.speed ?? 0,
+      "resources.pilot.prevTurnMove":       SystemAdapter.current.getShipData(this.ship)?.movement?.speed ?? 0,
       "resources.pilot.bearingUsed":        0,
       "resources.pilot.momentumUsed":       0,
       "resources.pilot.velocityX":          (() => {
         const token = this.ship?.getActiveTokens?.()?.[0];
         const rot   = token?.document?.rotation ?? 0;
         const h0    = (rot - 90) * (Math.PI / 180);
-        const spd   = this.ship?.system?.movement?.speed ?? 6;
+        const spd   = SystemAdapter.current.getShipData(this.ship)?.movement?.speed ?? 6;
         return Math.cos(h0) * (spd / 2);
       })(),
       "resources.pilot.velocityY":          (() => {
         const token = this.ship?.getActiveTokens?.()?.[0];
         const rot   = token?.document?.rotation ?? 0;
         const h0    = (rot - 90) * (Math.PI / 180);
-        const spd   = this.ship?.system?.movement?.speed ?? 6;
+        const spd   = SystemAdapter.current.getShipData(this.ship)?.movement?.speed ?? 6;
         return Math.sin(h0) * (spd / 2);
       })(),
       "resources.engineer.actionChoices":  [],
@@ -887,7 +908,7 @@ export class ShipCombatState {
       ventPending: false,
     };
     for (const sector of ["bow", "stern", "port", "starboard"]) {
-      updates[`shields.${sector}`] = shieldCfg.zoneThresholds?.[sector] ?? 8;
+      updates[`shields.${sector}`] = shieldCfg.zoneThresholds?.[sector] ?? 0;
     }
     for (const sector of ["bow", "stern", "port", "starboard"]) {
       updates[`armourRend.${sector}`] = 0;
@@ -916,6 +937,7 @@ export class ShipCombatState {
     updates["resources.gunner.allocPenetration"]  = 0;
     updates["resources.gunner.allocFirepower"]    = 0;
     updates["resources.gunner.slLocked"]          = false;
+    updates["resources.gunner.firedWeaponIds"]    = [];
     updates["resources.gunner.ordnanceRolled"]    = false;
     updates["resources.gunner.arcOverlayActive"]  = false;
     updates["resources.gunner.sensorBandExpanded"] = false;
@@ -996,11 +1018,11 @@ export class ShipCombatState {
       for (const td of canvas.scene.tokens) {
         if (td.actor?.type !== `${MODULE_ID}.npcShip`) continue;
         const npcUpdate = {
-          "system.conditions.hull":           { ...npcCondClear },
-          "system.conditions.engines":        { ...npcCondClear },
-          "system.conditions.manoeuvring":    { ...npcCondClear },
-          "system.conditions.coreSystems":    { ...npcCondClear },
-          "system.conditions.weaponsSensors": { ...npcCondClear },
+          [SystemAdapter.current.systemPath("conditions.hull")]:           { ...npcCondClear },
+          [SystemAdapter.current.systemPath("conditions.engines")]:        { ...npcCondClear },
+          [SystemAdapter.current.systemPath("conditions.manoeuvring")]:    { ...npcCondClear },
+          [SystemAdapter.current.systemPath("conditions.coreSystems")]:    { ...npcCondClear },
+          [SystemAdapter.current.systemPath("conditions.weaponsSensors")]: { ...npcCondClear },
         };
         for (const sector of ["bow", "stern", "port", "starboard"]) {
           npcUpdate[`system.armourRend.${sector}`] = 0;
@@ -1047,7 +1069,10 @@ export class ShipCombatState {
     const hullTier = conditions.hull?.tier;
     if (hullTier) {
       const dmgMap = { low: 1, medium: 2, high: 3 };
-      condUpdates["hull.value"] = Math.min(hullMax, hullVal + (dmgMap[hullTier] ?? 0));
+      const hullBreachDmg = dmgMap[hullTier] ?? 0;
+      condUpdates["hull.value"] = SystemAdapter.current.hullDisplayMode === "hpRemaining"
+        ? Math.max(0, hullVal - hullBreachDmg)
+        : Math.min(hullMax, hullVal + hullBreachDmg);
       if (hullTier === "high") {
         // Critical Breach: +5 internal fire per round (deals hull damage starting next round)
         condUpdates.internalFire = fireBefore + 5;
@@ -1066,9 +1091,12 @@ export class ShipCombatState {
 
     const holdTheLineActive = data.resources?.captain?.holdTheLineActive ?? false;
     if (fireBefore > 0 && !holdTheLineActive) {
-      const hull    = this.ship?.system?.hull ?? {};
+      const hull    = SystemAdapter.current.getShipData(this.ship)?.hull ?? {};
       const hullMax = hull.max ?? 50;
-      const newHull = Math.min(hullMax, (hull.value ?? 0) + fireBefore);
+      const hullVal = hull.value ?? 0;
+      const newHull = SystemAdapter.current.hullDisplayMode === "hpRemaining"
+        ? Math.max(0, hullVal - fireBefore)
+        : Math.min(hullMax, hullVal + fireBefore);
       await this.update({ "hull.value": newHull });
     }
 
@@ -1095,14 +1123,14 @@ export class ShipCombatState {
     if (canvas?.scene) {
       for (const td of canvas.scene.tokens) {
         if (td.actor?.type !== `${MODULE_ID}.npcShip`) continue;
-        const npcSys   = td.actor.system;
+        const npcSys   = SystemAdapter.current.getShipData(td.actor);
         const ammoMax  = npcSys.resources?.gunner?.ammoMax  ?? 20;
         const powerMax = npcSys.resources?.gunner?.powerMax ?? 20;
         const ammoGain  = Math.floor(ammoMax  * 0.25);
         const powerGain = Math.floor(powerMax * 0.25);
         const npcRoundUpdates = {
-          "system.resources.gunner.ammo":  Math.min(ammoMax,  (npcSys.resources?.gunner?.ammo  ?? 0) + ammoGain),
-          "system.resources.gunner.power": Math.min(powerMax, (npcSys.resources?.gunner?.power ?? 0) + powerGain),
+          [SystemAdapter.current.systemPath("resources.gunner.ammo")]:  Math.min(ammoMax,  (npcSys.resources?.gunner?.ammo  ?? 0) + ammoGain),
+          [SystemAdapter.current.systemPath("resources.gunner.power")]: Math.min(powerMax, (npcSys.resources?.gunner?.power ?? 0) + powerGain),
         };
         // Core Systems (any tier): −1 Speed per round (replaces player-side core distribution lock)
         const npcCoreTier = npcSys.conditions?.coreSystems?.tier;
@@ -1222,11 +1250,11 @@ export class ShipCombatState {
 
   static getOrdnanceBayStats(shipActor) {
     const ship = shipActor ?? this.ship;
-    if (!ship) return { ammoCapacity: 20, chargeCapacity: 20, manpower: 0, torpedoCapacity: 4, strikeCraftCapacity: 6 };
+    if (!ship) return { ammoCapacity: 0, chargeCapacity: 0, manpower: 0, torpedoCapacity: 4, strikeCraftCapacity: 6 };
     const bay = ship.items.find(i => i.type === `${MODULE_ID}.component` && i.system.slot === "weaponsBay" && i.system.equipped !== false);
     return {
-      ammoCapacity:          bay?.system?.bayAmmoCapacity ?? 20,
-      chargeCapacity:        bay?.system?.bayChargeCapacity ?? 20,
+      ammoCapacity:          bay?.system?.bayAmmoCapacity ?? 0,
+      chargeCapacity:        bay?.system?.bayChargeCapacity ?? 0,
       manpower:              bay?.system?.bayManpower ?? 0,
       torpedoCapacity:       bay?.system?.bayTorpedoCapacity ?? 4,
       maxFlights:            bay?.system?.bayMaxFlights ?? 2,
@@ -1236,13 +1264,14 @@ export class ShipCombatState {
 
   static getShieldStats(shipActor) {
     const ship = shipActor ?? this.ship;
-    const _default = { maxVoidFlux: 20, zoneThresholds: { bow: 8, stern: 8, port: 8, starboard: 8 } };
+    const _default = { maxVoidFlux: 20, fluxToAPRate: 1, zoneThresholds: { bow: 8, stern: 8, port: 8, starboard: 8 } };
     if (!ship) return _default;
     const shield = ship.items.find(i => i.type === `${MODULE_ID}.component` && i.system.slot === "shields" && i.system.equipped !== false);
     if (!shield) return _default;
     const zt = shield.system.zoneThresholds;
     return {
       maxVoidFlux:    shield.system.maxVoidFlux ?? 0,
+      fluxToAPRate:   shield.system.fluxToAPRate ?? 1,
       zoneThresholds: {
         bow:       zt?.bow       ?? 0,
         stern:     zt?.stern     ?? 0,
@@ -1254,21 +1283,22 @@ export class ShipCombatState {
 
   static getSensorStats(shipActor) {
     const ship = shipActor ?? this.ship;
-    if (!ship) return { rating: 0, bandSize: 0, autoScanRange: 0, maxRange: 0 };
+    if (!ship) return { rating: 0, bandSize: 0, autoScanRange: 0, maxRange: 0, apCostMultiplier: 1 };
     const sensor = ship.items.find(
       i => i.type === `${MODULE_ID}.component` && i.system.slot === "sensor" && i.system.equipped !== false
     );
-    const sys = ship.system ?? {};
-    const scanRange = (sensor?.system?.autoScanRange ?? 0) || (sensor?.system?.guaranteedHitRange ?? 0) || (sys.autoScanRange ?? 0);
+    const sys = SystemAdapter.current.getShipData(ship) ?? {};
+    const scanRange = (sensor?.system?.autoScanRange ?? 0) || (sys.autoScanRange ?? 0);
     const rangeAmpActive = (sys.resources?.sensors?.effects ?? []).some(e => e.actionId === "rangeAmplifier");
     const effectiveScanRange = rangeAmpActive ? scanRange * 2 : scanRange;
-    const bandExpanded     = !!(ship.system?.resources?.gunner?.sensorBandExpanded);
+    const bandExpanded     = !!(SystemAdapter.current.getShipData(ship)?.resources?.gunner?.sensorBandExpanded);
     const rawBandSize      = sensor?.system?.bandSize ?? sys.sensorBandSize ?? 0;
     return {
-      rating:        sensor?.system?.rating ?? sys.sensorRating ?? 0,
-      bandSize:      bandExpanded ? rawBandSize * 2 : rawBandSize,
-      autoScanRange: effectiveScanRange,
-      maxRange:      sensor?.system?.maxRange ?? 0,
+      rating:           sensor?.system?.rating ?? sys.sensorRating ?? 0,
+      bandSize:         bandExpanded ? rawBandSize * 2 : rawBandSize,
+      autoScanRange:    effectiveScanRange,
+      maxRange:         sensor?.system?.maxRange ?? 0,
+      apCostMultiplier: sensor?.system?.apCostMultiplier ?? 1,
     };
   }
 
@@ -1277,12 +1307,12 @@ export class ShipCombatState {
    * through the same resolution path as the gunner.
    * Called via socket from StrikeCraftAttackPopup._onConfirmAttack.
    */
-  static async strikeCraftAttack({ craftName, craftImg, targetTokenId, hitQuadrant, accuracy, damage, traits, salvoSize = 1 }) {
+  static async strikeCraftAttack({ craftName, craftImg, targetTokenId, hitQuadrant, accuracy, damage, payloadDiceCount, payloadDiceSize, traits, salvoSize = 1 }) {
     const targetTok   = canvas.tokens.get(targetTokenId);
     const targetActor = targetTok?.document?.actor ?? null;
     if (!targetActor) return;
 
-    const sys              = targetActor.system;
+    const sys              = SystemAdapter.current.getShipData(targetActor);
     const qLabel           = game.i18n.localize(
       "SHIPCOMBAT.Sector." + hitQuadrant.charAt(0).toUpperCase() + hitQuadrant.slice(1)
     );
@@ -1294,13 +1324,14 @@ export class ShipCombatState {
     const _delay     = ms => new Promise(r => setTimeout(r, ms));
     const adapter    = SystemAdapter.current;
     const formula    = adapter.getRollFormula();
+    const targetAC   = adapter.getTargetAC(targetActor);
     const salvoRolls = [];
     for (let i = 0; i < salvoSize; i++) {
       if (i > 0) await _delay(100);
       const roll = await new Roll(formula).evaluate();
       if (game.dice3d) game.dice3d.showForRoll(roll, game.user, true);
-      const hit    = roll.total <= accuracy;
-      const isCrit = hit && !isOrdnanceTarget && adapter.isAutomaticCrit(roll);
+      const hit    = adapter.isHit(roll, accuracy, targetAC);
+      const isCrit = hit && !isOrdnanceTarget && (adapter.isAutomaticCrit(roll) || adapter.isCriticalHit(roll, accuracy, targetAC, traits));
       salvoRolls.push({
         roll:        roll.total,
         target:      accuracy,
@@ -1346,7 +1377,9 @@ export class ShipCombatState {
     if (isOrdnanceTarget) {
       const currentHull = sys.hull?.value ?? 0;
       const hullMax     = sys.hull?.max ?? 1;
-      await targetActor.update({ "system.hull.value": Math.min(hullMax, currentHull + totalHits) });
+      const _isHP       = SystemAdapter.current.hullDisplayMode === "hpRemaining";
+      const _newHull    = _isHP ? Math.max(0, currentHull - totalHits) : Math.min(hullMax, currentHull + totalHits);
+      await targetActor.update({ [SystemAdapter.current.systemPath("hull.value")]: _newHull });
       const content = await renderTemplate(templatePath, {
         ..._baseData(),
         hasShieldResults: false,
@@ -1364,7 +1397,7 @@ export class ShipCombatState {
     let shieldsRemaining = targetShields;
     let hitsAbsorbed    = 0;
     let shieldCostTotal = 0;
-    const hardenedShields = targetActor?.system?.resources?.captain?.hardenedShields ?? false;
+    const hardenedShields = SystemAdapter.current.getShipData(targetActor)?.resources?.captain?.hardenedShields ?? false;
     const shieldBypass  = hardenedShields ? false : (traits?.shieldBypass ?? false);
     const shieldBurnVal = traits?.shieldBurn ?? 0;
 
@@ -1385,18 +1418,30 @@ export class ShipCombatState {
 
     const hitsThroughShield = totalHits - hitsAbsorbed;
 
-    // ── Armour & damage per hit ──
+    // ── Armour & damage ──
     const sectorArmour    = sys.armour?.[hitQuadrant] ?? 0;
     const ap              = traits?.armourPenetration ?? 0;
     const effectiveArmour = Math.max(0, sectorArmour - ap);
-    const damagePerHit    = Math.max(0, rawDamage - effectiveArmour);
     const rendVal         = traits?.rend ?? 0;
+    const rendTotal       = rendVal > 0 ? rendVal * hitsThroughShield : 0;
 
     let totalDamage = 0;
-    let rendTotal   = 0;
-    for (let i = 0; i < hitsThroughShield; i++) {
-      totalDamage += damagePerHit;
-      if (rendVal > 0) rendTotal += rendVal;
+    let strikeDiceBreakdown = null;
+    if (hitsThroughShield > 0) {
+      if (payloadDiceCount && payloadDiceSize) {
+        // SF2e: multiply dice count by hits, roll once, apply armour once
+        const dmgFormula = `${hitsThroughShield * payloadDiceCount}${payloadDiceSize}`;
+        const dmgRoll = await new Roll(dmgFormula).evaluate();
+        if (game.dice3d) game.dice3d.showForRoll(dmgRoll, game.user, true);
+        totalDamage = Math.max(0, dmgRoll.total - effectiveArmour);
+        const diceResults = dmgRoll.terms?.[0]?.results?.map(r => r.result) ?? [];
+        if (diceResults.length > 0) {
+          strikeDiceBreakdown = { formula: dmgFormula, dice: diceResults, total: dmgRoll.total };
+        }
+      } else {
+        const damagePerHit = Math.max(0, rawDamage - effectiveArmour);
+        totalDamage = hitsThroughShield * damagePerHit;
+      }
     }
 
     // ── Apply to target ──
@@ -1407,7 +1452,10 @@ export class ShipCombatState {
     if (totalDamage > 0) {
       const currentHull = sys.hull?.value ?? 0;
       const hullMax     = sys.hull?.max ?? 50;
-      targetUpdates["system.hull.value"] = Math.min(hullMax, currentHull + totalDamage);
+      const _isHP       = SystemAdapter.current.hullDisplayMode === "hpRemaining";
+      targetUpdates["system.hull.value"] = _isHP
+        ? Math.max(0, currentHull - totalDamage)
+        : Math.min(hullMax, currentHull + totalDamage);
     }
     if (rendTotal > 0) {
       const currentRend = sys.armourRend?.[hitQuadrant] ?? 0;
@@ -1442,6 +1490,7 @@ export class ShipCombatState {
         effectiveArmour,
         ap:              ap > 0 ? ap : null,
         rendTotal:       rendTotal > 0 ? rendTotal : null,
+        diceBreakdown:   strikeDiceBreakdown,
       },
       critResult: critResult ?? { hasCrit: false },
     });
@@ -1457,12 +1506,25 @@ export class ShipCombatState {
    * Apply torpedo detonation damage to a ship.
    * Called via socket from TorpedoSheet._onDetonate.
    */
-  static async torpedoDamage({ targetActorId, torName, torImg, damage, hitQuadrant, traits }) {
+  static async torpedoDamage({ targetActorId, torName, torImg, damage, diceFormula, hitQuadrant, traits }) {
     const target = game.actors.get(targetActorId);
     if (!target) return;
 
-    const sys             = target.system;
-    const rawDamage       = damage;
+    const sys             = SystemAdapter.current.getShipData(target);
+    // Roll damage dice if a formula was provided (SF2e dice-breakdown path)
+    let rawDamage;
+    let diceBreakdown = null;
+    if (diceFormula) {
+      const dmgRoll = await new Roll(diceFormula).evaluate();
+      if (game.dice3d) game.dice3d.showForRoll(dmgRoll, game.user, true);
+      rawDamage = dmgRoll.total;
+      const diceResults = dmgRoll.terms?.[0]?.results?.map(r => r.result) ?? [];
+      if (diceResults.length > 0) {
+        diceBreakdown = { formula: diceFormula, dice: diceResults, total: rawDamage };
+      }
+    } else {
+      rawDamage = damage ?? 1;
+    }
     const qLabel          = game.i18n.localize(
       "SHIPCOMBAT.Sector." + hitQuadrant.charAt(0).toUpperCase() + hitQuadrant.slice(1)
     );
@@ -1473,9 +1535,9 @@ export class ShipCombatState {
     let shieldsRemaining = targetShields;
     let hitsAbsorbed     = 0;
     let costPerHit       = 0;
-    const hardenedShields = target?.system?.resources?.captain?.hardenedShields ?? false;
+    const hardenedShields = SystemAdapter.current.getShipData(target)?.resources?.captain?.hardenedShields ?? false;
     const shieldBypass   = hardenedShields ? false : (traits?.shieldBypass ?? false);
-    const shieldBurnVal  = Math.min(traits?.shieldBurn ?? 0, damage);
+    const shieldBurnVal  = Math.min(traits?.shieldBurn ?? 0, rawDamage);
 
     if (shieldBypass) {
       // Bypass: damage goes through, but shield burn still applies
@@ -1485,39 +1547,42 @@ export class ShipCombatState {
     } else {
       // Normal shield absorption: 1 shield absorbs 1 hit, shield burn increases cost
       costPerHit = 1 + shieldBurnVal;
-      if (targetShields >= costPerHit && damage > 0) {
+      if (targetShields >= costPerHit && rawDamage > 0) {
         hitsAbsorbed = 1; // torpedoes are single-hit
         shieldsRemaining = Math.max(0, targetShields - costPerHit);
-        damage = 0;
+        rawDamage = 0;
       }
     }
 
     if (shieldsRemaining !== targetShields) {
-      hullUpdates[`shields.${hitQuadrant}`] = shieldsRemaining;
+      hullUpdates[`system.shields.${hitQuadrant}`] = shieldsRemaining;
     }
 
     // Armour
     const sectorArmour    = sys.armour?.[hitQuadrant] ?? 0;
     const ap              = traits?.armourPenetration ?? 0;
     const effectiveArmour = Math.max(0, sectorArmour - ap);
-    const appliedDamage   = Math.max(0, damage - effectiveArmour);
+    const appliedDamage   = Math.max(0, rawDamage - effectiveArmour);
 
-    // Hull (hull.value = damage taken; 0 = full)
+    // Hull
     if (appliedDamage > 0) {
       const currentHull = sys.hull?.value ?? 0;
-      const hullMax = sys.hull?.max ?? 50;
-      hullUpdates["hull.value"] = Math.min(hullMax, currentHull + appliedDamage);
+      const hullMax     = sys.hull?.max ?? 50;
+      const _isHP       = SystemAdapter.current.hullDisplayMode === "hpRemaining";
+      hullUpdates["system.hull.value"] = _isHP
+        ? Math.max(0, currentHull - appliedDamage)
+        : Math.min(hullMax, currentHull + appliedDamage);
     }
 
     // Rend  -  applies even if armour blocks all hull damage
     const rendVal = traits?.rend ?? 0;
     if (rendVal > 0) {
       const currentRend = sys.armourRend?.[hitQuadrant] ?? 0;
-      hullUpdates[`armourRend.${hitQuadrant}`] = currentRend + rendVal;
+      hullUpdates[`system.armourRend.${hitQuadrant}`] = currentRend + rendVal;
       // For NPC ships, armour is stored as a direct current value (not derived from rend)
       if (target.type === `${MODULE_ID}.npcShip`) {
         const currentArmour = sys.armour?.[hitQuadrant] ?? 0;
-        hullUpdates[`armour.${hitQuadrant}`] = Math.max(0, currentArmour - rendVal);
+        hullUpdates[`system.armour.${hitQuadrant}`] = Math.max(0, currentArmour - rendVal);
       }
     }
 
@@ -1553,6 +1618,7 @@ export class ShipCombatState {
           effectiveArmour,
           ap:              ap > 0 ? ap : null,
           rendTotal:       rendVal > 0 ? rendVal : null,
+          diceBreakdown,
         },
         critResult: critResult ?? { hasCrit: false },
       }

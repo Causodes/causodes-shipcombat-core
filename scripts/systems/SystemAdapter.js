@@ -36,6 +36,18 @@ export class SystemAdapter {
   /** Human-readable system name for logging / tooltips. */
   get systemName() { throw new Error("Not implemented"); }
 
+  /**
+   * The English spelling variant preferred by this system's companion module.
+   * Applied once at `i18nInit` to every string in the `SHIPCOMBAT` translation
+   * tree before any template or UI code reads it.
+   *
+   * - `"british"` (default): "armour", "manoeuvre", etc.
+   * - `"american"`:          "armor",  "maneuver",  etc.
+   *
+   * @returns {"british"|"american"}
+   */
+  get englishVariant() { return "british"; }
+
   /* ── Base classes ──────────────────────────────────────────────────────── */
 
   /**
@@ -44,6 +56,22 @@ export class SystemAdapter {
    * @returns {typeof Application}
    */
   get SheetBaseClass() { throw new Error("Not implemented"); }
+
+  /**
+   * Return the AppV1 (legacy ActorSheet) base class to use for the ship sheet,
+   * or `null` if this adapter does not support V1 sheets.
+   * @returns {typeof foundry.appv1.sheets.ActorSheet|null}
+   */
+  get SheetBaseClassV1() { return null; }
+
+  /**
+   * When true, all ship-combat sheets and popups use AppV1 variants instead of
+   * the default AppV2 variants.  System adapters whose host system does not
+   * supply background CSS for AppV2 `.application` elements (e.g. SF2e/PF2e)
+   * should override this to return `true`.
+   * @returns {boolean}
+   */
+  get useApplicationV1() { return false; }
 
   /**
    * Return the base data-model class for actor models (e.g. BaseWarhammerActorModel).
@@ -172,11 +200,12 @@ export class SystemAdapter {
    * True if a hitting roll counts as a critical hit (matching tens/units,
    * natural 20, etc.). Hit/miss itself is decided by computeSuccessLevel >= 0.
    *
-   * @param {Roll}   roll
-   * @param {number} target
+   * @param {Roll}        roll
+   * @param {number}      target     - effectiveAccuracy
+   * @param {number|null} [targetAC] - target's AC (d20 systems only; ignored by default)
    * @returns {boolean}
    */
-  isCriticalHit(roll, target) { return false; }
+  isCriticalHit(roll, target, _targetAC = null, _traits = {}) { return false; }
 
   /**
    * True if the roll counts as a weapon jam. The salvo resolver passes the
@@ -187,7 +216,55 @@ export class SystemAdapter {
    * @param {object} traits
    * @returns {boolean}
    */
-  isJam(roll, target, traits) { return false; }
+  isJam(roll, target, traits, _targetAC = null) { return false; }
+
+  /**
+   * Whether this individual shot result constitutes a critical failure
+   * (for die-chip CSS highlighting).  Default false; d20 adapters override.
+   *
+   * @param {Roll}        roll
+   * @param {number}      accuracy
+   * @param {number|null} targetAC
+   * @param {object}      traits
+   * @returns {boolean}
+   */
+  isCriticalMiss(_roll, _accuracy, _targetAC, _traits) { return false; }
+
+  /**
+   * Return the number of crit rolls to make for this salvo, or `null` to use
+   * the default damage-threshold path (one roll based on total hull damage).
+   *
+   * SF2e override: one crit per critting shot; Devastation Protocol makes ALL
+   * hits through shield count as crits.
+   *
+   * @param {object[]} salvoRolls
+   * @param {number}   hitsThroughShield
+   * @param {boolean}  isDevastation
+   * @returns {number|null}
+   */
+  getCritHitCount(_salvoRolls, _hitsThroughShield, _isDevastation) { return null; }
+
+  /**
+   * Return IWR data for `actor` as `{ immunities, weaknesses, resistances }`,
+   * or null if this system does not expose IWR on actors.
+   * Used by the sensor-radar Lock-4 popup drawer.
+   *
+   * @param {Actor} actor
+   * @returns {{ immunities: string[], weaknesses: {type:string,value:number}[], resistances: {type:string,value:number}[] }|null}
+   */
+  getIWR(_actor) { return null; }
+
+  /**
+   * Optionally enrich a chat message flavor with a skill roll DC table.
+   * Base implementation returns the flavor unchanged; SF2e overrides to append
+   * the SL threshold table and "Points Granted" line.
+   *
+   * @param {string} baseFlavor - the plain-text or HTML flavor string
+   * @param {Roll}   roll       - the evaluated Roll
+   * @param {number} sl         - clamped success level (0+)
+   * @returns {string}
+   */
+  buildSkillRollFlavor(baseFlavor, _roll, _sl) { return baseFlavor; }
 
   /* ── Sensor lock retention thresholds ──────────────────────────────────── */
 
@@ -219,6 +296,36 @@ export class SystemAdapter {
   getModifierStepSize() { return 1; }
 
   /**
+   * Magnitude of one fixed hit bonus/penalty step. Used for:
+   *   - Lock-tier 4 accuracy bonus
+   *   - BDA adjust-bearing correction
+   *   - Ranging-fire correction
+   *   - Battle-clarity pierce
+   *   - Captain "Inspired Targeting" action (captain-state.js)
+   *
+   * Defaults to getModifierStepSize(). Override when fixed bonuses use a
+   * different scale than per-SL modifiers. SF2e example: getModifierStepSize()
+   * returns 1 (d20 per-SL step) but getHitBonusStep() returns 2 (fixed bonuses
+   * always grant +2 regardless of SL scale).
+   *
+   * @returns {number}
+   */
+  getHitBonusStep() { return this.getModifierStepSize(); }
+
+  /**
+   * Maximum number of decay bands a weapon can fire into beyond its effective
+   * range.  Systems that use a fixed cap (e.g. SF2e: 20) should override this.
+   * The default derives the cap from sensor.rating — when the per-band penalty
+   * would exceed the sensor's base accuracy there is nothing more to gain.
+   *
+   * @param {number} sensorRating  The sensor's base hit modifier.
+   * @returns {number}
+   */
+  getMaxDecayBands(sensorRating) {
+    return Math.floor(sensorRating / this.getModifierStepSize());
+  }
+
+  /**
    * Format an accuracy modifier for tooltips/chat. Default has no unit; IM
    * appends "%".
    *
@@ -240,14 +347,65 @@ export class SystemAdapter {
   formatTargetNumber(target) { return String(target); }
 
   /**
+   * Format the BDA result SL as a sensor-tab button badge.
+   * Default: "SL N". SF2e overrides to "(N Points)".
+   *
+   * @param {number} sl
+   * @returns {string}
+   */
+  formatBdaBadge(sl) { return `SL ${sl}`; }
+
+  /**
+   * Format the accuracy value for display in the targeting popup.
+   * Default appends "%" (d100 percentile systems).
+   * d20 systems override to show a signed modifier (e.g. "+5 to hit vs AC 18").
+   *
+   * @param {number}      accuracy   - the computed totalAccuracy value
+   * @param {number|null} [targetAC] - the target's AC (d20 systems only)
+   * @returns {string}
+   */
+  formatAccuracyDisplay(accuracy, _targetAC = null) { return `${accuracy}%`; }
+
+  /**
+   * Format the "vs X" accuracy reference shown in the chat card salvo summary.
+   * Roll-under adapters return the attack modifier / TN as-is.  d20 adapters
+   * override to show the target's AC with a unit label.
+   *
+   * @param {number|null} effectiveAccuracy - attack modifier / TN used for rolls
+   * @param {number|null} targetAC          - target AC (d20 systems); null for roll-under
+   * @returns {string|number|null}
+   */
+  formatChatAccuracyDisplay(effectiveAccuracy, _targetAC) { return effectiveAccuracy; }
+
+  /**
+   * Format the attack hit modifier for display in the chat card salvo summary.
+   * Return null (base) to hide; d20 adapters override to show the modifier.
+   *
+   * @param {number|null} effectiveAccuracy - the total attack bonus
+   * @returns {string|null}
+   */
+  formatChatHitMod(_effectiveAccuracy) { return null; }
+
+  /**
+   * Extract the target's Armour Class (or equivalent DC) for d20-style hit
+   * resolution.  Returns null by default (ignored by roll-under adapters);
+   * d20 adapters override to return the target ship's AC.
+   *
+   * @param {Actor} actor  - the target actor
+   * @returns {number|null}
+   */
+  getTargetAC(actor) { return null; }  // eslint-disable-line no-unused-vars
+
+  /**
    * Hit decision for a single shot. Default is roll-under (correct for
    * WFRP/IM/GURPS); d20-style adapters override.
    *
-   * @param {Roll}   roll
-   * @param {number} target
+   * @param {Roll}        roll
+   * @param {number}      target     - effectiveAccuracy (target number for roll-under; attack bonus for d20)
+   * @param {number|null} [targetAC] - target's AC (d20 systems only; ignored by default)
    * @returns {boolean}
    */
-  isHit(roll, target) { return (roll?.total ?? 0) <= target; }
+  isHit(roll, target, _targetAC = null) { return (roll?.total ?? 0) <= target; }
 
   /**
    * Zone 1 (close scan / point-blank) accuracy bonus. In IM this halves the
@@ -318,6 +476,69 @@ export class SystemAdapter {
    */
   getAvailabilityOptions() { return {}; }
 
+  /**
+   * Return a sorted array of damage type options for weapon component sheets.
+   * Each entry: { value: string, label: string }.
+   * @returns {{ value: string, label: string }[]}
+   */
+  getDamageTypeChoices() { return []; }
+
+  /**
+   * Build the Roll formula string for a weapon component item.
+   * The default reads the free-text `system.damage` field (e.g. "4d6").
+   * Adapters that store damage as structured fields should override this.
+   *
+   * @param {Item} weapon  – weapon component item
+   * @returns {string}     – Roll-compatible formula, e.g. "4d6", "1d8+2", "10"
+   */
+  getWeaponDamageFormula(weapon) {
+    return String(weapon.system.damage || "0").trim() || "0";
+  }
+
+  /**
+   * Return a localized display label for the weapon's damage type (e.g. "Piercing").
+   * Return null for systems that do not track damage type per-weapon.
+   *
+   * @param {Item} weapon  – weapon component item
+   * @returns {string|null}
+   */
+  getWeaponDamageType(_weapon) {
+    return null;
+  }
+
+  /**
+   * Return a localized display label for the damage type dealt by a ramming
+   * collision (e.g. "Bludgeoning"). Return null for systems that do not type
+   * ram damage.
+   *
+   * @returns {string|null}
+   */
+  getRamDamageType() {
+    return null;
+  }
+
+  /**
+   * Apply damage-type interactions (resistances, weaknesses, immunities) to a
+   * single hit's post-armour hull damage. Called once per surviving hit inside
+   * the salvo loop, after armour reduction and before totaling.
+   *
+   * Return shape:
+   *   - `finalDamage`  adjusted hull damage (0 when immune)
+   *   - `immune`       true if this damage type is fully negated by the target
+   *   - `note`         optional short string for chat display
+   *                    (e.g. "Resistant −5", "Weak +10", "Immune")
+   *
+   * Default: pass-through — no modification.
+   *
+   * @param {number} hullDamage   post-armour hull damage for one hit
+   * @param {string} damageType   weapon damage type key (e.g. "fire", "cold")
+   * @param {Actor}  targetActor  target ship actor
+   * @returns {{ finalDamage: number, immune: boolean, note: string|null }}
+   */
+  modifyDamageForType(hullDamage, _damageType, _targetActor) {
+    return { finalDamage: hullDamage, immune: false, note: null };
+  }
+
   /* ── Model interface stubs ─────────────────────────────────────────────── */
 
   /**
@@ -357,6 +578,35 @@ export class SystemAdapter {
    */
   async getRoleSkillOptions() { return []; }
 
+  /**
+   * Return actor-specific extra skill options (e.g. lore skills) not in the
+   * global list from getRoleSkillOptions().  Merged per-role with the assigned actor.
+   * @param {Actor} actor
+   * @returns {Promise<Array<{value: string, skillKey: string, specName: string, label: string}>>}
+   */
+  async getActorExtraSkillOptions(actor) { return []; }
+
+  /**
+   * Return the numeric check modifier for a given skill key on an actor.
+   * Returns null when the skill is unknown or the data is unavailable.
+   * Override in system adapters to handle system-specific data paths (e.g.
+   * perception as a separate attribute, or lore skills in a synthetic layer).
+   * @param {Actor} actor
+   * @param {string} skillKey
+   * @returns {number|null}
+   */
+  getSkillScore(actor, skillKey) {
+    return actor?.system?.skills?.[skillKey]?.total ?? null;
+  }
+
+  /**
+   * Return the numeric roll modifier to display in the helm skill-block row.
+   * Called with the already-resolved pilot crew actor (or null if none assigned).
+   * @param {Actor|null} actor
+   * @returns {number|null}
+   */
+  getHelmRollModifier(actor) { return null; }
+
   /* ── Crew eligibility ──────────────────────────────────────────────────── */
 
   /**
@@ -377,9 +627,74 @@ export class SystemAdapter {
   applyHullDisplay(model) {}
 
   /**
+   * How hull health bars should be presented for this system.
+   *
+   *   "damageTaken"  – bar grows as damage accumulates; value shown is damage count.
+   *                    Appropriate for Warhammer-style "wounds" systems.
+   *   "hpRemaining" – bar shrinks as damage accumulates; value shown is remaining HP.
+   *                    Appropriate for systems where players think in terms of HP left.
+   *
+   * Override in a system adapter to change the default for every world using
+   * that system without exposing a GM-facing setting.
+   *
+   * @returns {"damageTaken"|"hpRemaining"}
+   */
+  get hullDisplayMode() { return "damageTaken"; }
+
+  /**
    * CSS classes appended to DEFAULT_OPTIONS.classes on every ship/ordnance
    * sheet. Lets the adapter inject system-specific styling selectors.
    * @returns {string[]}
    */
   get sheetCSSClasses() { return []; }
+
+  /* ── Ship data access ─────────────────────────────────────────────────── */
+
+  /**
+   * Return the ship data object for an actor.
+   *
+   * For systems that use custom actor sub-types (e.g. impmal):
+   *   actor.system  — the TypeDataModel instance.
+   *
+   * For systems that re-use an existing actor type and store ship data in
+   * flags (e.g. SF2e, which does not allow module-defined sub-types):
+   *   actor.flags["<moduleId>"]  — the plain flag bag.
+   *
+   * All role handlers, state managers, canvas overlays, and sheet mixins
+   * call this method rather than reading actor.system directly, so the
+   * same core code works for both storage strategies.
+   *
+   * @param {Actor} actor
+   * @returns {object}
+   */
+  getShipData(actor) {
+    return actor?.system;
+  }
+
+  /**
+   * Convert a short ship-data key to the full Foundry document-update path.
+   *
+   * For impmal:  "hull.value"  →  "system.hull.value"
+   * For SF2e:    "hull.value"  →  "flags.<moduleId>.hull.value"
+   *
+   * All actor.update() calls for ship data go through this method so that
+   * writes are directed to the correct storage location.
+   *
+   * @param {string} shortKey  dot-separated key relative to the ship data root
+   * @returns {string}
+   */
+  systemPath(shortKey) {
+    return `system.${shortKey}`;
+  }
+
+  /**
+   * Colour palette used by SensorRadar for canvas drawing.
+   * Return an object whose keys match the _pal defaults in SensorRadar.js.
+   * Partial objects are fine — missing keys fall back to the green defaults.
+   *
+   * @returns {object}
+   */
+  radarPalette() {
+    return {};  // use SensorRadar green defaults
+  }
 }

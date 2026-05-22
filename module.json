@@ -1,24 +1,26 @@
 {
   "id": "causodes-shipcombat-core",
   "title": "Causodes's Ship Combat (Core)",
-  "description": "System-agnostic ship combat engine for Foundry VTT. Provides the bridge-crew framework, socket protocol, canvas overlays, and template infrastructure. Requires a system-specific companion module (e.g. Causodes's Ship Combat (Imperium Maledictum)) to activate.",
-  "version": "0.0.1",
+  "description": "<p>System-agnostic ship combat engine for Foundry VTT. Provides the bridge-crew framework, socket protocol, canvas overlays, and template infrastructure. Requires a system-specific companion module (e.g. Causodes's Ship Combat (Imperium Maledictum)) to activate.</p>",
+  "version": "2.0.0",
   "compatibility": {
-    "minimum": 13,
-    "verified": 13,
-    "maximum": 13
+    "minimum": "13",
+    "verified": "14",
+    "maximum": "14"
   },
   "authors": [
     {
-      "name": "Causodes"
+      "name": "Causodes",
+      "flags": {}
     }
   ],
   "socket": true,
   "relationships": {
-    "required": [
+    "requires": [
       {
         "id": "socketlib",
-        "type": "module"
+        "type": "module",
+        "manifest": "https://github.com/farling42/foundryvtt-socketlib/releases/latest/download/module.json"
       }
     ],
     "optional": [
@@ -37,18 +39,44 @@
   "esmodules": [
     "causodes-shipcombat-core.js"
   ],
-  "scripts": [],
-  "styles": [],
   "languages": [
     {
       "lang": "en",
       "name": "English",
-      "path": "lang/en.json"
+      "path": "lang/en.json",
+      "flags": {}
     }
   ],
   "flags": {
     "hotReload": {
-      "extensions": ["css", "hbs", "json"]
+      "extensions": [
+        "css",
+        "hbs",
+        "json"
+      ]
     }
-  }
+  },
+  "url": "https://github.com/Causodes/causodes-shipcombat-core",
+  "download": "https://github.com/Causodes/causodes-shipcombat-core/archive/refs/tags/v2.0.0.zip",
+  "manifest": "https://github.com/Causodes/causodes-shipcombat-core/releases/latest/download/module.json",
+  "readme": "https://github.com/Causodes/causodes-shipcombat-core/blob/main/README.md",
+  "changelog": "https://github.com/Causodes/causodes-shipcombat-core/blob/main/CHANGELOG.md",
+  "allowBugReporter": true,
+  "styles": [
+    "styles/custom-class-compat.css",
+    "styles/appv1-compact.css",
+    "styles/header.css",
+    "styles/overview.css",
+    "styles/engineer.css",
+    "styles/captain.css",
+    "styles/popup.css",
+    "styles/gunner.css",
+    "styles/pilot.css",
+    "styles/components.css",
+    "styles/sensors.css",
+    "styles/npc.css",
+    "styles/ordnance.css",
+    "styles/torpedo.css",
+    "styles/chat.css"
+  ]
 }

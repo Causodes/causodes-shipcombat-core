@@ -7,7 +7,7 @@
             <i class="fa-solid fa-satellite-dish"></i>
             {{#if sensorsCtx.bdaCorrectionPending}}
                 {{localize "SHIPCOMBAT.BDA.CorrectionTitle"}}
-                <span class="shipcombat-bda-sl-badge">SL {{sensorsCtx.bdaResultSL}}</span>
+                <span class="shipcombat-bda-sl-badge">{{sensorsCtx.bdaSlBadge}}</span>
             {{else}}
                 {{localize "SHIPCOMBAT.BDA.Title"}}
             {{/if}}

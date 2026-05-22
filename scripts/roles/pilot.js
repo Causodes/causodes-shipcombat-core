@@ -17,7 +17,7 @@ import { getEffectiveSkillSpec } from "../actors/ship/ShipSheetMixin.js";
 // ── Action handlers (static, `this` = sheet instance) ──────────────────────
 
 async function _onAllocBonus(event, target) {
-  const sys = this.actor.system;
+  const sys = SystemAdapter.current.getShipData(this.actor);
   const stat  = target.dataset.stat;
   const delta = Number(target.dataset.delta);
   const pilotingSL  = sys.resources?.pilot?.pilotingSL  ?? 0;
@@ -52,7 +52,7 @@ async function _onAllocBonus(event, target) {
 }
 
 async function _onRollPiloting() {
-  const sys = this.actor.system;
+  const sys = SystemAdapter.current.getShipData(this.actor);
   const crewSize = sys.crewSize ?? 6;
   const is3man = crewSize <= 3;
   // In 3-man mode the Engineer handles helm; roll Engineering instead of Piloting.
@@ -120,17 +120,17 @@ async function _onConfirmHelm() {
     return;
   }
 
-  const sys        = this.actor.system;
+  const sys        = SystemAdapter.current.getShipData(this.actor);
   const speed      = (sys.movement?.speed ?? 6) + (sys.resources?.pilot?.allocSpeed ?? 0);
   const fuelBurned = sys.resources?.pilot?.fuelBurned ?? 0;
   const fuelSlider = this._helmState?.fuelSlider ?? fuelBurned;
   const bearing    = this._helmState?.bearing ?? 0;
 
-  const thrustPct  = fuelSlider - fuelBurned;
-  const prevTurnMove = sys.resources?.pilot?.prevTurnMove ?? 0;
-  const minMove      = Math.ceil(prevTurnMove / 2);
-  const isFirstCommit = fuelBurned === 0;
-  const driftUnits = isFirstCommit ? minMove : 0;
+  const thrustPct    = fuelSlider - fuelBurned;
+  const prevTurnMove  = sys.resources?.pilot?.prevTurnMove ?? 0;
+  const minMove       = Math.ceil(prevTurnMove / 2);
+  // minMove widens turn radius for the whole turn; all piecemeal arcs use the same R.
+  const driftUnits = minMove;
 
   const isRealistic = game.settings.get(MODULE_ID, "movementMode") === "realistic";
 
@@ -153,6 +153,8 @@ async function _onConfirmHelm() {
     const thrustMag = (thrustPct / 100) * speed;
     const newVx = vx + Math.cos(thrustDir) * thrustMag;
     const newVy = vy + Math.sin(thrustDir) * thrustMag;
+    // Keep the highest carryPct across piecemeal commits so turn-end auto-drift is correct.
+    const momentumUsedSoFar = sys.resources?.pilot?.momentumUsed ?? 0;
     emitToGM("confirmMovement", {
       fuelUsed:     fuelSlider,
       driftUsed:    0,
@@ -164,13 +166,16 @@ async function _onConfirmHelm() {
       velocityX:    newVx,
       velocityY:    newVy,
       bearingDelta: Math.abs(bearing),
-      momentumUsed: carryPct,
+      momentumUsed: Math.max(momentumUsedSoFar, carryPct),
     });
+    // Drift phase complete; reset carryPct so piecemeal commits don't re-apply it.
     this._helmState = {
       ...this._helmState,
-      bearing:   0,
+      bearing:       0,
       fuelSlider,
-      confirmed: true,
+      carryPct:      0,
+      carryConsumed: true,
+      confirmed:     true,
     };
     return;
   }
@@ -209,7 +214,7 @@ async function _onConfirmHelm() {
 // ── Overcharge action handlers ──────────────────────────────────────────────
 
 async function _onPilotRetrograde() {
-  const sys = this.actor.system;
+  const sys = SystemAdapter.current.getShipData(this.actor);
   if (!((sys.resources?.pilot?.coreCount ?? 0) > 0)) return;
 
   const token = this.actor.getActiveTokens()?.[0];
@@ -237,7 +242,7 @@ async function _onPilotRetrograde() {
 }
 
 async function _onPilotOverdrive() {
-  const sys = this.actor.system;
+  const sys = SystemAdapter.current.getShipData(this.actor);
   if (!((sys.resources?.pilot?.coreCount ?? 0) > 0)) return;
   const confirmed = await foundry.applications.api.DialogV2.confirm({
     window: { title: game.i18n.localize("SHIPCOMBAT.Dialog.OverdriveTitle") },
@@ -248,7 +253,7 @@ async function _onPilotOverdrive() {
 }
 
 async function _onApToThrust() {
-  const sys = this.actor.system;
+  const sys = SystemAdapter.current.getShipData(this.actor);
   const ap = sys.resources?.engineer?.auxiliaryPower ?? 0;
   if (ap <= 0) {
     ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoAuxiliaryPower"));
@@ -258,7 +263,7 @@ async function _onApToThrust() {
 }
 
 async function _onPilotStrafe() {
-  const sys = this.actor.system;
+  const sys = SystemAdapter.current.getShipData(this.actor);
   if (!((sys.resources?.pilot?.coreCount ?? 0) > 0)) return;
 
   const token = this.actor.getActiveTokens()?.[0];
@@ -294,7 +299,7 @@ async function _onPilotStrafe() {
 }
 
 async function _onPilotFlipAndBurn() {
-  const sys = this.actor.system;
+  const sys = SystemAdapter.current.getShipData(this.actor);
   if (!((sys.resources?.pilot?.coreCount ?? 0) > 0)) return;
 
   const token = this.actor.getActiveTokens()?.[0];
@@ -347,12 +352,10 @@ async function _onPilotRam() {
     return;
   }
 
-  const sys            = this.actor.system;
-  const fuelBurned     = sys.resources?.pilot?.fuelBurned ?? 0;
-  const isFirstCommit  = fuelBurned === 0;
-  const prevTurnMove   = sys.resources?.pilot?.prevTurnMove ?? 0;
-  const minMove        = Math.ceil(prevTurnMove / 2);
-  const minMoveGridUnits = isFirstCommit ? minMove : 0;
+  const sys              = SystemAdapter.current.getShipData(this.actor);
+  const fuelBurned       = sys.resources?.pilot?.fuelBurned ?? 0;
+  const prevTurnMove     = sys.resources?.pilot?.prevTurnMove ?? 0;
+  const minMoveGridUnits = Math.ceil(prevTurnMove / 2);
 
   const isRealistic    = game.settings.get(MODULE_ID, "movementMode") === "realistic";
   const vx             = isRealistic ? (sys.resources?.pilot?.velocityX ?? 0) : 0;
@@ -370,47 +373,19 @@ async function _onPilotRam() {
   const baseMano       = sys.movement?.maneuverability ?? 2;
   const allocMano      = sys.resources?.pilot?.allocMano ?? 0;
   const effMano        = Math.max(0, baseMano + allocMano);
-  const maxBearingDeg  = effMano * 15;
+  const bearingUsed    = sys.resources?.pilot?.bearingUsed ?? 0;
+  const maxBearingDeg  = Math.max(0, effMano * 15 - bearingUsed);
 
   const shipBasis = HelmPreview._tokenBasis(token);
 
-  // Quick pre-check: does at least one reachable lock≥1 target exist?
-  const candidates = canvas.tokens.placeables.filter(t =>
-    t !== token && !t.document.hidden,
-  );
-  const gridSize = canvas.grid.size;
-  const tokenW   = token.document.width  * gridSize;
-  const tokenH   = token.document.height * gridSize;
-  const cx       = token.x + tokenW / 2;
-  const cy       = token.y + tokenH / 2;
-
-  let hasAny = false;
-  for (const tgt of candidates) {
-    const tW  = tgt.document.width  * gridSize;
-    const tH  = tgt.document.height * gridSize;
-    const tx  = tgt.x + tW / 2;
-    const ty  = tgt.y + tH / 2;
-    const reach = isRealistic
-      ? HelmPreview.canReachRealistic(shipBasis, tx, ty, effSpeed, maxBearingDeg, powerRemaining, powerMax, vx, vy, carryPct)
-      : HelmPreview.canReach(shipBasis, tx, ty, effSpeed, maxBearingDeg, powerRemaining, powerMax, minMoveGridUnits);
-    if (!reach) continue;
-    const distSquares = Math.sqrt(Math.pow((tx - cx) / gridSize, 2) + Math.pow((ty - cy) / gridSize, 2));
-    const lockTier = ShipCombatState.getEffectiveLockTier(tgt.id, distSquares);
-    if (lockTier >= 1) { hasAny = true; break; }
-  }
-
-  if (!hasAny) {
-    ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoRamTargets"));
-    return;
-  }
-
-  const popup = new RamTargetPopup({
+  const RamTargetPopupClass = ShipCombat._popupClass("ramTarget", RamTargetPopup);
+  const popup = new RamTargetPopupClass({
     ship:            this.actor,
     effSpeed,
     powerMax,
     powerRemaining,
     maxBearingDeg,
-    minMoveGridUnits: isRealistic ? 0 : minMoveGridUnits,
+    minMoveGridUnits,  // arc radius matches helm preview (minMove widens the turn radius)
     fuelBurned,
     shipBasis,
     isRealistic,
@@ -595,7 +570,6 @@ export function buildHelmContext(sys, opts = {}) {
     velocityTooltip,
     strafeMax:       Math.max(1, Math.floor(baseSpeed / 2)),
     retroMax:        Math.max(1, baseSpeed),
-    overchargeAction: sys.resources?.pilot?.overchargeAction ?? "",
     // Per-action flags for template button gating (replaced overchargedUsed boolean)
     overdriveUsed:    (sys.resources?.pilot?.coreActionsPlayed ?? []).includes("overdrive"),
     strafeUsed:       (sys.resources?.pilot?.coreActionsPlayed ?? []).includes("strafe"),
@@ -646,7 +620,9 @@ export function buildHelmContext(sys, opts = {}) {
  * @param {ShipSheet} sheet – the sheet instance (provides _helmState, element, _updateHelmPreview)
  */
 export function helmOnRender(sheet) {
-  const sys          = sheet.actor.system;
+  // V1 compat: sheet.element may be a jQuery object — normalise to raw HTMLElement
+  const sheetEl = sheet.element instanceof jQuery ? sheet.element[0] : sheet.element;
+  const sys          = SystemAdapter.current.getShipData(sheet.actor);
   const fuelBurned   = sys.resources?.pilot?.fuelBurned ?? 0;
   const currentRound = sys.round ?? 0;
   const helmResetId  = sys.resources?.pilot?.helmResetId ?? 0;
@@ -680,8 +656,12 @@ export function helmOnRender(sheet) {
     if (sheet._helmState.fuelSlider > powerMax) {
       sheet._helmState.fuelSlider = powerMax;
     }
-    // Carry can't be less than what's already committed; when stopped, clamp to 100%
-    const momentumFloor = (isRealistic && velocityMag === 0) ? 100 : (sys.resources?.pilot?.momentumUsed ?? 0);
+    // Carry can't be less than what's already committed; when stopped, clamp to 100%.
+    // Exception: if the drift phase was already applied in an earlier piecemeal commit
+    // (carryConsumed flag), the floor drops to 0 — no more drift to lock in.
+    const momentumFloor = (isRealistic && velocityMag === 0) ? 100
+      : sheet._helmState.carryConsumed ? 0
+      : (sys.resources?.pilot?.momentumUsed ?? 0);
     if ((sheet._helmState.carryPct ?? 0) < momentumFloor) {
       sheet._helmState.carryPct = momentumFloor;
     }
@@ -691,15 +671,15 @@ export function helmOnRender(sheet) {
     sheet._strafeState = { value: 0 };
   }
 
-  const powerBarEl       = sheet.element.querySelector("[data-helm-power-bar]");
-  const powerInput       = sheet.element.querySelector("[data-helm-fuel]");
-  const bearingSlider    = sheet.element.querySelector("[data-helm-bearing]");
-  const bearingDisp      = sheet.element.querySelector("[data-bearing-display]");
-  const fuelDisp         = sheet.element.querySelector("[data-fuel-display]");
-  const bearingBudgetBar = sheet.element.querySelector("[data-bearing-budget-bar]");
-  const carryInput       = sheet.element.querySelector("[data-helm-carry]");
-  const carryDisp        = sheet.element.querySelector("[data-carry-display]");
-  const carryBarEl       = sheet.element.querySelector("[data-helm-carry-bar]");
+  const powerBarEl       = sheetEl.querySelector("[data-helm-power-bar]");
+  const powerInput       = sheetEl.querySelector("[data-helm-fuel]");
+  const bearingSlider    = sheetEl.querySelector("[data-helm-bearing]");
+  const bearingDisp      = sheetEl.querySelector("[data-bearing-display]");
+  const fuelDisp         = sheetEl.querySelector("[data-fuel-display]");
+  const bearingBudgetBar = sheetEl.querySelector("[data-bearing-budget-bar]");
+  const carryInput       = sheetEl.querySelector("[data-helm-carry]");
+  const carryDisp        = sheetEl.querySelector("[data-carry-display]");
+  const carryBarEl       = sheetEl.querySelector("[data-helm-carry-bar]");
 
   // Realistic-mode bearing budget values
   const baseManoHOR   = sys.movement?.maneuverability ?? 2;
@@ -718,7 +698,7 @@ export function helmOnRender(sheet) {
     bearingBudgetBar.style.setProperty("--committed", `${committed}%`);
     bearingBudgetBar.style.setProperty("--extra",     `${extra}%`);
     bearingBudgetBar.style.setProperty("--minmove",   "0%");
-    const bearingBudgetDisp = sheet.element.querySelector("[data-bearing-budget-display]");
+    const bearingBudgetDisp = sheetEl.querySelector("[data-bearing-budget-display]");
     if (bearingBudgetDisp) bearingBudgetDisp.textContent = `${Math.round(bearingUsed + Math.min(bearingAbs, bearingRemain))}°`;
   };
   _syncBearingBudgetBar(Math.abs(sheet._helmState.bearing));
@@ -735,8 +715,8 @@ export function helmOnRender(sheet) {
     bearingSlider.value = String(sheet._helmState.bearing);
     if (bearingDisp) bearingDisp.textContent = `${sheet._helmState.bearing}°`;
     // Update the degree labels on each end of the realistic bearing slider
-    const minLbl = sheet.element.querySelector("[data-bearing-min-label]");
-    const maxLbl = sheet.element.querySelector("[data-bearing-max-label]");
+    const minLbl = sheetEl.querySelector("[data-bearing-min-label]");
+    const maxLbl = sheetEl.querySelector("[data-bearing-max-label]");
     if (minLbl) minLbl.textContent = `\u2212${sliderMax}\u00b0`;
     if (maxLbl) maxLbl.textContent = `${sliderMax}\u00b0`;
   }
@@ -836,9 +816,9 @@ export function helmOnRender(sheet) {
   // ── Strafe controls ──────────────────────────────────────────────────────
   const token = sheet.actor.getActiveTokens()?.[0];
 
-  const strafeSlider  = sheet.element.querySelector("[data-strafe-slider]");
-  const strafeDisplay = sheet.element.querySelector("[data-strafe-display]");
-  const strafeConfirm = sheet.element.querySelector("[data-strafe-confirm]");
+  const strafeSlider  = sheetEl.querySelector("[data-strafe-slider]");
+  const strafeDisplay = sheetEl.querySelector("[data-strafe-display]");
+  const strafeConfirm = sheetEl.querySelector("[data-strafe-confirm]");
 
   const _syncStrafe = () => {
     const v = sheet._strafeState.value;
@@ -869,8 +849,8 @@ export function helmOnRender(sheet) {
     sheet._retrogradeState = { value: 1 };
   }
 
-  const retroSlider  = sheet.element.querySelector("[data-retro-slider]");
-  const retroDisplay = sheet.element.querySelector("[data-retro-display]");
+  const retroSlider  = sheetEl.querySelector("[data-retro-slider]");
+  const retroDisplay = sheetEl.querySelector("[data-retro-display]");
 
   const _syncRetro = () => {
     const v = sheet._retrogradeState.value;
@@ -884,7 +864,7 @@ export function helmOnRender(sheet) {
     else                     label = game.i18n.localize("SHIPCOMBAT.Helm.RetrogradeNeutral");
     if (retroDisplay) retroDisplay.textContent = label;
 
-    const retroBtn = sheet.element.querySelector("[data-action='pilotRetrograde']");
+    const retroBtn = sheetEl.querySelector("[data-action='pilotRetrograde']");
     const canPreview = retroBtn && !retroBtn.disabled && token && canvas?.ready;
     if (canPreview && netAft > 0) {
       HelmPreview.showRetrograde(token, netAft);
@@ -906,7 +886,7 @@ export function helmOnRender(sheet) {
   sheet._updateHelmPreview();
 
   // ── Flip and Burn preview (hover on panel) ──────────────────────────────
-  const flipBurnPanel = sheet.element.querySelector("[data-flip-burn-panel]");
+  const flipBurnPanel = sheetEl.querySelector("[data-flip-burn-panel]");
   if (flipBurnPanel && token && canvas?.ready) {
     const baseSpdFB  = sys.movement?.speed ?? 6;
     const allocSpdFB = sys.resources?.pilot?.allocSpeed ?? 0;
@@ -914,7 +894,7 @@ export function helmOnRender(sheet) {
     const halfDist   = Math.max(1, Math.round(effSpdFB * 0.5));
 
     // Inject the striped overlay zone into the power bar (once per render)
-    const powerBar = sheet.element.querySelector("[data-helm-power-bar]");
+    const powerBar = sheetEl.querySelector("[data-helm-power-bar]");
     let flipZone = powerBar?.querySelector(".shipcombat-flip-burn-zone");
     if (powerBar && !flipZone) {
       flipZone = document.createElement("div");
@@ -925,9 +905,9 @@ export function helmOnRender(sheet) {
 
     const _showFlipZone = () => {
       if (!flipZone || !canvas?.ready) return;
-      const fuelBurnedNow = sheet.actor.system.resources?.pilot?.fuelBurned ?? 0;
-      const overdriveNow  = sheet.actor.system.resources?.pilot?.overdrive  ?? false;
-      const apBonusNow    = sheet.actor.system.resources?.pilot?.apThrustBonus ?? 0;
+      const fuelBurnedNow = SystemAdapter.current.getShipData(sheet.actor).resources?.pilot?.fuelBurned ?? 0;
+      const overdriveNow  = SystemAdapter.current.getShipData(sheet.actor).resources?.pilot?.overdrive  ?? false;
+      const apBonusNow    = SystemAdapter.current.getShipData(sheet.actor).resources?.pilot?.apThrustBonus ?? 0;
       const powerMaxNow   = (overdriveNow ? 200 : 100) + apBonusNow;
       const leftPct  = (fuelBurnedNow / powerMaxNow) * 100;
       const widthPct = Math.min(50 / powerMaxNow * 100, 100 - leftPct);
@@ -948,7 +928,7 @@ export function helmOnRender(sheet) {
 
   // ── Velocity bearing toggle (Realistic mode) ────────────────────────────
   if (!sheet._velocityBearingMode) sheet._velocityBearingMode = "relative";
-  const velBearingToggle = sheet.element.querySelector("[data-vel-bearing-toggle]");
+  const velBearingToggle = sheetEl.querySelector("[data-vel-bearing-toggle]");
   if (velBearingToggle) {
     velBearingToggle.addEventListener("click", ev => {
       ev.preventDefault();
@@ -970,7 +950,7 @@ export function helmUpdatePreview(sheet) {
   const token = sheet.actor.getActiveTokens()?.[0];
   if (!token || !canvas?.ready) return;
 
-  const sys          = sheet.actor.system;
+  const sys          = SystemAdapter.current.getShipData(sheet.actor);
   const speed        = (sys.movement?.speed ?? 6) + (sys.resources?.pilot?.allocSpeed ?? 0);
   const prevTurnMove = sys.resources?.pilot?.prevTurnMove ?? 0;
   const minMove      = Math.ceil(prevTurnMove / 2);
@@ -1000,9 +980,9 @@ export function helmUpdatePreview(sheet) {
     return;
   }
 
-  const isFirstCommit = fuelBurned === 0 && !sheet._helmState?.confirmed;
-  const thrustPct     = fuelSlider - fuelBurned;
-  const driftUnits    = isFirstCommit ? minMove : 0;
+  const thrustPct  = fuelSlider - fuelBurned;
+  // driftUnits always uses minMove — see _onConfirmHelm for rationale.
+  const driftUnits = minMove;
 
   if (thrustPct <= 0) {
     HelmPreview.hide();

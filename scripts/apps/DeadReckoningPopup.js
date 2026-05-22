@@ -8,9 +8,7 @@
 import { MODULE_ID, CORE_MODULE_ID } from "../constants.js";
 import { emitToGM }  from "../socket.js";
 
-export class DeadReckoningPopup extends foundry.applications.api.HandlebarsApplicationMixin(
-  foundry.applications.api.ApplicationV2
-) {
+export class DeadReckoningPopup extends foundry.appv1.api.Application {
 
   constructor({ cards = [], rest = [] } = {}) {
     super({});
@@ -18,28 +16,20 @@ export class DeadReckoningPopup extends foundry.applications.api.HandlebarsAppli
     this._rest  = rest;       // cards below the preview window (unchanged)
   }
 
-  static DEFAULT_OPTIONS = {
-    id: "shipcombat-dead-reckoning-popup",
-    classes: ["shipcombat-dead-reckoning-popup"],
-    tag: "div",
-    window: {
-      title: "Dead Reckoning  -  Set Draw Order",
+  static get defaultOptions() {
+    return foundry.utils.mergeObject(super.defaultOptions, {
+      id:        "shipcombat-dead-reckoning-popup",
+      classes:   ["shipcombat-dead-reckoning-popup"],
+      title:     "Dead Reckoning — Set Draw Order",
+      template:  `modules/${CORE_MODULE_ID}/templates/apps/dead-reckoning-popup.hbs`,
+      width:     420,
+      height:    "auto",
       resizable: false,
-    },
-    position: { width: 420, height: "auto" },
-  };
+    });
+  }
 
-  static PARTS = {
-    body: { template: `modules/${CORE_MODULE_ID}/templates/apps/dead-reckoning-popup.hbs` },
-  };
-
-  static ACTIONS = {
-    confirmOrder: DeadReckoningPopup._onConfirmOrder,
-    cancelOrder:  DeadReckoningPopup._onCancelOrder,
-  };
-
-  async _prepareContext(options) {
-    const context = await super._prepareContext(options);
+  async getData(options) {
+    const context = await super.getData(options);
     return {
       ...context,
       cards: this._cards.map((id, i) => ({
@@ -51,13 +41,29 @@ export class DeadReckoningPopup extends foundry.applications.api.HandlebarsAppli
     };
   }
 
-  _onRender(context, options) {
-    super._onRender?.(context, options);
-    this._initDragDrop();
+  activateListeners($html) {
+    super.activateListeners($html);
+    const html = $html[0];
+    this._initDragDrop(html);
+
+    // Wire confirm/cancel buttons (were static ACTIONS)
+    html.querySelector("[data-action='confirmOrder']")?.addEventListener("click", ev => {
+      ev.preventDefault();
+      const newOrder = this._getCurrentOrder();
+      const newPile  = [...newOrder, ...this._rest];
+      emitToGM("captainCoreAction", { actionId: "deadReckoning", newPile });
+      this.close();
+    });
+    html.querySelector("[data-action='cancelOrder']")?.addEventListener("click", ev => {
+      ev.preventDefault();
+      this.close();
+    });
   }
 
-  _initDragDrop() {
-    const list = this.element.querySelector(".shipcombat-dr-list");
+  _initDragDrop(list_or_root) {
+    const list = (list_or_root instanceof Element)
+      ? list_or_root.querySelector(".shipcombat-dr-list")
+      : (this.element[0] ?? this.element).querySelector(".shipcombat-dr-list");
     if (!list) return;
 
     let dragSrcEl = null;
@@ -102,7 +108,8 @@ export class DeadReckoningPopup extends foundry.applications.api.HandlebarsAppli
 
   /** Update the numbered position badges to reflect DOM order. */
   _syncPositionNumbers() {
-    this.element?.querySelectorAll(".shipcombat-dr-card").forEach((card, i) => {
+    const root = this.element[0] ?? this.element;
+    root?.querySelectorAll(".shipcombat-dr-card").forEach((card, i) => {
       const badge = card.querySelector(".shipcombat-dr-pos");
       if (badge) badge.textContent = String(i + 1);
     });
@@ -110,9 +117,11 @@ export class DeadReckoningPopup extends foundry.applications.api.HandlebarsAppli
 
   /** Read current card order from the DOM. */
   _getCurrentOrder() {
-    return [...this.element.querySelectorAll(".shipcombat-dr-card")].map(el => el.dataset.cardId);
+    const root = this.element[0] ?? this.element;
+    return [...root.querySelectorAll(".shipcombat-dr-card")].map(el => el.dataset.cardId);
   }
 
+  // Kept as static methods for reference; now wired in activateListeners above.
   static _onConfirmOrder(event, element) {
     const newOrder = this._getCurrentOrder();
     const newPile  = [...newOrder, ...this._rest];

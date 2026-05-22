@@ -22,6 +22,10 @@
                     <i class="fa-solid fa-arrow-right-long"></i> {{captainCtx.pendingLabel}}
                 </span>
                 {{/if}}
+                <a class="shipcombat-roll-initiative-btn" data-action="rollInitiative"
+                   data-tooltip="{{localize 'SHIPCOMBAT.Captain.RollInitiativeBtn'}}">
+                    <i class="fa-solid fa-dice-d20"></i>
+                </a>
                 <div class="shipcombat-triage-counter"
                      data-tooltip="{{captainCtx.triageCount}}/{{captainCtx.triageMax}}: {{localize 'SHIPCOMBAT.Captain.TriageTooltip'}}">
                     <i class="fa-solid fa-wrench"></i>
@@ -32,7 +36,7 @@
             <div class="shipcombat-resource-bar-row">
                 <span class="shipcombat-resource-bar-label">{{localize "SHIPCOMBAT.Engineer.CoreBank"}}</span>
                 <div class="shipcombat-resource-bar-track shipcombat-resource-bar-track--plasma">
-                    <div class="shipcombat-resource-bar-fill" style="width: {{captainCtx.auxPowerPct}}%"></div>
+                    <div class="shipcombat-resource-bar-fill shipcombat-bar-aux" style="width: {{captainCtx.auxPowerPct}}%"></div>
                 </div>
                 <span class="shipcombat-resource-bar-value shipcombat-resource-bar-value--plasma">{{captainCtx.auxiliaryPower}}/{{captainCtx.auxPowerCapacity}}</span>
             </div>

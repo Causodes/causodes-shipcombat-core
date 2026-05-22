@@ -13,6 +13,7 @@
  */
 
 import { THEME, pixi } from "../theme.js";
+import { SystemAdapter } from "../systems/SystemAdapter.js";
 
 const SEGS = 32;
 const COL  = pixi(THEME.roles.ordnance);   // orange  -  ordnance role colour
@@ -42,7 +43,7 @@ export class StrikeCraftArcOverlay {
     // Forward heading (same convention as WeaponArcOverlay "prow")
     const h0 = (tok.document.rotation - 90) * (Math.PI / 180);
 
-    const sys      = actor.system;
+    const sys      = SystemAdapter.current.getShipData(actor);
     const arcDeg   = sys.payloadAngle   ?? 120;
     const radius   = sys.payloadRadius  ?? 0;
     const autoScan = sys.autoScanRange  ?? 0;

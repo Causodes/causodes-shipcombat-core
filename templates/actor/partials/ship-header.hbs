@@ -57,7 +57,7 @@
     {{!-- Attribute boxes: Hull Damage + Internal Fire --}}
     <div class="shipcombat-ship-attr-row">
       <div class="shipcombat-ship-attr-box">
-        <div class="shipcombat-ship-attr-label">{{localize "SHIPCOMBAT.Label.HullDamage"}}</div>
+        <div class="shipcombat-ship-attr-label">{{hullBarLabel}}</div>
         <div class="shipcombat-ship-attr-fields">
           {{#if isOwner}}
             <input type="number" name="system.hull.value" value="{{sys.hull.value}}" min="0">

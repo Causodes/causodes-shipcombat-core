@@ -246,7 +246,7 @@ async function _onTriage(event, target) {
 }
 
 async function _onDrawCards(event, target) {
-  const captain = this.actor.system.resources?.captain ?? {};
+  const captain = SystemAdapter.current.getShipData(this.actor).resources?.captain ?? {};
   const baseDraws  = 3;
   const bonusDraws = captain.allocInspire ?? 0;
   const maxDraw    = Math.min(baseDraws + bonusDraws, BASE_HAND_CAP + (captain.handCapBonus ?? 0) + bonusDraws - (captain.hand ?? []).length);
@@ -310,7 +310,7 @@ async function _onFullRedraw(event, _target) {
 /** Roll the ship's initiative via the system adapter. */
 async function _onRollInitiative() {
   let crewActor = null;
-  const sys = this.actor.system;
+  const sys = SystemAdapter.current.getShipData(this.actor);
   const captainRef = sys.crewActors?.captain;
   if (captainRef?.uuid) {
     try { crewActor = await fromUuid(captainRef.uuid); } catch { /* ignore */ }
@@ -341,7 +341,7 @@ async function _onRollInitiative() {
 
 /** Roll Presence (Leadership) to generate the SL pool for inspire/resolve/initiative allocation. */
 async function _onRollLeadershipSL() {
-  const sys = this.actor.system;
+  const sys = SystemAdapter.current.getShipData(this.actor);
   if (sys.resources?.captain?.leadershipRolled) {
     ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.CaptainLeadershipAlreadyRolled"));
     return;
@@ -386,7 +386,7 @@ async function _onRollLeadershipSL() {
  * Allocate leadership SL between Inspire (extra draws) and Resolve (extra triages).
  */
 async function _onAllocLeadershipSL(event, target) {
-  const sys = this.actor.system;
+  const sys = SystemAdapter.current.getShipData(this.actor);
   const captain = sys.resources?.captain ?? {};
   if (!captain.leadershipRolled) return;
 
@@ -419,7 +419,7 @@ async function _onAllocLeadershipSL(event, target) {
 // ── Core Action Handlers ─────────────────────────────────────────────────────
 
 async function _onCaptainCoreAction(event, target) {
-  const sys      = this.actor.system;
+  const sys      = SystemAdapter.current.getShipData(this.actor);
   const actionId = target.dataset.coreAction;
   const captain  = sys.resources?.captain ?? {};
 
@@ -455,7 +455,8 @@ async function _onCaptainCoreAction(event, target) {
 
   // ── Battle Clarity: open target-picker popup (Lock 1+ only) ──
   if (actionId === "battleClarity") {
-    const popup = new BattleClarityPopup();
+    const BattleClarityPopupClass = ShipCombat._popupClass("battleClarity", BattleClarityPopup);
+    const popup = new BattleClarityPopupClass();
     popup.render(true);
     return;
   }
@@ -532,7 +533,7 @@ async function _onCaptainReorderCard(event, target) {
   if (!card) return;
   const cardId    = card.dataset.cardId;
   const direction = target.dataset.direction;
-  const captain   = this.actor.system.resources?.captain ?? {};
+  const captain   = SystemAdapter.current.getShipData(this.actor).resources?.captain ?? {};
   const hand      = [...(captain.hand ?? [])];
   const idx       = hand.indexOf(cardId);
   if (idx === -1) return;

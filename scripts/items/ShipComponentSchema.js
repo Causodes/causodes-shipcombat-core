@@ -34,8 +34,10 @@ export const ShipComponentSchemaMixin = (BaseClass) => class extends BaseClass {
     // ── Header fields (shared by all slots) ───────────────────────────
     schema.quantity     = new fields.NumberField({ initial: 1, min: 0, integer: true });
     schema.cost         = new fields.NumberField({ initial: 0, min: 0, integer: true });
-    schema.slotCount    = new fields.NumberField({ initial: 1, min: 1, integer: true });
     schema.equipped     = new fields.BooleanField({ initial: true });
+    schema.bulk         = new fields.StringField({ initial: "1", blank: true });
+    schema.size         = new fields.StringField({ initial: "med", blank: true,
+      choices: ["tiny", "sm", "med", "lg", "huge", "grg"] });
     schema.availability = new fields.StringField({ initial: "" });
 
     // ── Notes (player + GM) ──────────────────────────────────────────
@@ -81,14 +83,14 @@ export const ShipComponentSchemaMixin = (BaseClass) => class extends BaseClass {
         pdc_projectile:   "SHIPCOMBAT.WeaponCategory.PdcProjectile",
         lance:            "SHIPCOMBAT.WeaponCategory.Lance",
         laser_pdc:        "SHIPCOMBAT.WeaponCategory.LaserPdc",
-        melta:            "SHIPCOMBAT.WeaponCategory.Melta",
         plasma:           "SHIPCOMBAT.WeaponCategory.Plasma",
         missile:          "SHIPCOMBAT.WeaponCategory.Missile",
       },
     });
-    schema.damage       = new fields.NumberField({ initial: 0, integer: true });
+    schema.damage       = new fields.StringField({ initial: "", blank: true, nullable: false });
+    schema.damageType   = new fields.StringField({ initial: "", blank: true, nullable: false });
     schema.salvoSize    = new fields.NumberField({ initial: 1, min: 1, integer: true });
-    schema.chargeStep   = new fields.NumberField({ initial: 5, min: 1, integer: true });
+    schema.chargeStep   = new fields.NumberField({ initial: 10, min: 1, integer: true });
     schema.range        = new fields.NumberField({ initial: 0, min: 0, integer: true });
     schema.degreeOfFire = new fields.NumberField({ initial: 0, min: 0, max: 360, integer: true });
 
@@ -112,6 +114,7 @@ export const ShipComponentSchemaMixin = (BaseClass) => class extends BaseClass {
 
     // ── Shield fields ─────────────────────────────────────────────────
     schema.maxVoidFlux     = new fields.NumberField({ initial: 0, min: 0, integer: true });
+    schema.fluxToAPRate    = new fields.NumberField({ initial: 1, min: 1, integer: true });
     schema.zoneThresholds  = new fields.SchemaField({
       bow:       new fields.NumberField({ initial: 0, min: 0, integer: true }),
       stern:     new fields.NumberField({ initial: 0, min: 0, integer: true }),
@@ -134,16 +137,16 @@ export const ShipComponentSchemaMixin = (BaseClass) => class extends BaseClass {
 
     // ── Sensor fields ────────────────────────────────────────────────
     schema.rating             = new fields.NumberField({ initial: 0, min: 0, integer: true });
-    schema.bandSize           = new fields.NumberField({ initial: 0, min: 0, integer: true });
+    schema.bandSize           = new fields.NumberField({ initial: 1, min: 0, integer: true });
     schema.autoScanRange      = new fields.NumberField({ initial: 0, min: 0, integer: true });
     schema.maxRange           = new fields.NumberField({ initial: 0, min: 0, integer: true });
-    schema.guaranteedHitRange = new fields.NumberField({ initial: 0, min: 0, integer: true });
+    schema.apCostMultiplier   = new fields.NumberField({ initial: 1, min: 0 });
 
     // ── Reactor fields ──────────────────────────────────────────────────
-    schema.shieldStrengthPerCore = new fields.NumberField({ initial: 5, min: 0, integer: true });
-    schema.heatCapacity          = new fields.NumberField({ initial: 10, min: 0, integer: true });
-    schema.bankCapacity          = new fields.NumberField({ initial: 40, min: 0, integer: true });
-    schema.reserveMultiplier     = new fields.NumberField({ initial: 1, min: 0, integer: true });
+    schema.shieldStrengthPerCore = new fields.NumberField({ initial: 0, min: 0, integer: true });
+    schema.heatCapacity          = new fields.NumberField({ initial: 0, min: 0, integer: true });
+    schema.bankCapacity          = new fields.NumberField({ initial: 0, min: 0, integer: true });
+    schema.reserveMultiplier     = new fields.NumberField({ initial: 0, min: 0, integer: true });
 
     // ── Torpedo component fields ────────────────────────────────────────
     schema.torpedoFuel           = new fields.NumberField({ initial: 0, min: 0, integer: true });
@@ -176,7 +179,7 @@ export const ShipComponentSchemaMixin = (BaseClass) => class extends BaseClass {
     schema.craftPayloadDamage    = new fields.NumberField({ initial: 0, min: 0, integer: true });
     schema.craftPayloadRadius    = new fields.NumberField({ initial: 0, min: 0, integer: true });
     schema.craftPayloadCount     = new fields.NumberField({ initial: 1, min: 1, integer: true });
-    schema.craftFlightSize       = new fields.NumberField({ initial: 3, min: 1, integer: true });
+    schema.craftFlightSize       = new fields.NumberField({ initial: 1, min: 1, integer: true });
     schema.craftSensorRating     = new fields.NumberField({ initial: 0, min: 0, integer: true });
     schema.craftTraits = new fields.SchemaField({
       shieldBypass:      new fields.BooleanField({ initial: false }),
@@ -189,14 +192,14 @@ export const ShipComponentSchemaMixin = (BaseClass) => class extends BaseClass {
     });
 
     // ── Ordnance Bay component fields ────────────────────────────────────
-    schema.bayMaxFlights      = new fields.NumberField({ initial: 2, min: 0, integer: true });
+    schema.bayMaxFlights      = new fields.NumberField({ initial: 0, min: 0, integer: true });
     schema.bayManpower        = new fields.NumberField({ initial: 0, min: 0, integer: true });
-    schema.bayAmmoCapacity    = new fields.NumberField({ initial: 20, min: 0, integer: true });
-    schema.bayChargeCapacity  = new fields.NumberField({ initial: 20, min: 0, integer: true });
+    schema.bayAmmoCapacity    = new fields.NumberField({ initial: 0, min: 0, integer: true });
+    schema.bayChargeCapacity  = new fields.NumberField({ initial: 0, min: 0, integer: true });
     schema.bayTorpedoSalvoSize     = new fields.NumberField({ initial: 1, min: 1, integer: true });
-    schema.bayTorpedoCapacity      = new fields.NumberField({ initial: 4, min: 0, integer: true });
-    schema.bayStrikeCraftFlightSize = new fields.NumberField({ initial: 3, min: 1, integer: true });
-    schema.bayStrikeCraftCapacity     = new fields.NumberField({ initial: 6, min: 0, integer: true });
+    schema.bayTorpedoCapacity      = new fields.NumberField({ initial: 0, min: 0, integer: true });
+    schema.bayStrikeCraftFlightSize = new fields.NumberField({ initial: 1, min: 1, integer: true });
+    schema.bayStrikeCraftCapacity     = new fields.NumberField({ initial: 0, min: 0, integer: true });
 
     // ── Adapter-extended fields ──────────────────────────────────────────
     // System adapters may declare additional typed fields via

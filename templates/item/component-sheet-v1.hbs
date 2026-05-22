@@ -1,0 +1,35 @@
+{{!--
+  modules/causodes-shipcombat-core/templates/item/component-sheet-v1.hbs
+  AppV1 wrapper template for ShipComponentSheetV1Mixin.
+
+  Context keys from ShipComponentSheetV1Mixin.getData():
+    cssClass   – Foundry-supplied class string
+    item       – the item document
+    source     – item._source (for formInput bindings)
+    fields     – item.system.schema.fields (for formInput)
+    enriched   – { system: { notes: { gm, player } } }
+    tabsById   – { description: {id, cssClass}, details: {id, cssClass} }
+    sys        – item.system
+    ... all context keys from ShipComponentSheetMixin._prepareContext()
+--}}
+<form class="{{cssClass}} shipcombat-component-sheet shipcombat-v1" autocomplete="off">
+
+  {{!-- Header --}}
+  {{> "modules/causodes-shipcombat-core/templates/item/component-header.hbs"}}
+
+  {{!-- Tab navigation --}}
+  <nav class="component-sheet-tabs sheet-tabs tabs" data-group="primary">
+    <a class="item" data-tab="description" data-group="primary">{{localize "SHIPCOMBAT.Tab.Description"}}</a>
+    <a class="item" data-tab="details"     data-group="primary">{{localize "SHIPCOMBAT.Tab.Details"}}</a>
+  </nav>
+
+  {{!-- Tab content — partials are self-wrapping (<section class="tab" data-tab="{{tab.id}}">).
+       Pass tab context objects so {{tab.id}} renders the correct value; without
+       this, data-tab renders as empty string and Foundry's global
+       .tab[data-tab]:not(.active) rule permanently hides the content. --}}
+  <section class="component-sheet-body">
+    {{> "modules/causodes-shipcombat-core/templates/item/component-description.hbs" tab=(lookup tabsById "description")}}
+    {{> "modules/causodes-shipcombat-core/templates/item/component-details.hbs"     tab=(lookup tabsById "details")}}
+  </section>
+
+</form>

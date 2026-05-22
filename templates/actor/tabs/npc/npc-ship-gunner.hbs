@@ -146,9 +146,9 @@
                     {{#if (shipcombatEq this.system.resourceType "ammo")}}
                     <div class="shipcombat-battery-body shipcombat-battery--macro">
                         <div class="shipcombat-battery-stats-row">
-                            <div class="shipcombat-battery-stat">
+                            <div class="shipcombat-battery-stat" data-macro-stat-display="damage">
                                 <span class="shipcombat-battery-stat-label">{{localize "SHIPCOMBAT.Label.Damage"}}</span>
-                                <span class="shipcombat-battery-stat-value">{{this.system.damage}}</span>
+                                <span class="shipcombat-battery-stat-value">{{this.damageLabel}}</span>
                             </div>
                             <div class="shipcombat-battery-stat">
                                 <span class="shipcombat-battery-stat-label">{{localize "SHIPCOMBAT.Label.Range"}}</span>
@@ -217,7 +217,7 @@
                         <div class="shipcombat-battery-actions">
                             {{#if this.plasma.canFire}}
                             <button class="shipcombat-battery-fire-btn shipcombat-fire--plasma" data-action="npcFireWeapon" data-fire-mode="plasmaShot" data-weapon-id="{{this.id}}">
-                                <i class="fa-solid fa-bolt"></i> {{localize "SHIPCOMBAT.Gunner.PlasmaShot"}}
+                                <i class="fa-solid fa-bolt"></i> {{localize "SHIPCOMBAT.Gunner.EnergyDischarge"}} {{this.plasma.totalDamage}} Damage{{#if (gt this.plasma.salvoSize 1)}} ×{{this.plasma.salvoSize}}{{/if}}
                             </button>
                             {{/if}}
                         </div>
@@ -230,7 +230,7 @@
                         <div class="shipcombat-battery-stats-row">
                             <div class="shipcombat-battery-stat">
                                 <span class="shipcombat-battery-stat-label">{{localize "SHIPCOMBAT.Label.Damage"}}</span>
-                                <span class="shipcombat-battery-stat-value">{{this.system.damage}}</span>
+                                <span class="shipcombat-battery-stat-value">{{this.damageLabel}}</span>
                             </div>
                             <div class="shipcombat-battery-stat">
                                 <span class="shipcombat-battery-stat-label">{{localize "SHIPCOMBAT.Label.Range"}}</span>
@@ -254,7 +254,7 @@
                             <button class="shipcombat-battery-fire-btn shipcombat-fire--lance" data-action="npcFireWeapon" data-fire-mode="lanceFire" data-weapon-id="{{this.id}}">
                                 <i class="fa-solid fa-bolt-lightning"></i>
                                 {{#if this.lance.activeTierLabel}}
-                                    {{this.lance.activeTierLabel}} ({{this.lance.activeDamage}} dmg)
+                                    {{this.lance.activeTierLabel}} {{this.lance.activeDamageLabel}} Damage
                                 {{else}}
                                     {{localize "SHIPCOMBAT.Gunner.LanceFire"}}
                                 {{/if}}
@@ -270,7 +270,7 @@
                         <div class="shipcombat-battery-stats-row">
                             <div class="shipcombat-battery-stat">
                                 <span class="shipcombat-battery-stat-label">{{localize "SHIPCOMBAT.Label.Damage"}}</span>
-                                <span class="shipcombat-battery-stat-value">{{this.system.damage}}</span>
+                                <span class="shipcombat-battery-stat-value">{{this.damageLabel}}</span>
                             </div>
                             <div class="shipcombat-battery-stat">
                                 <span class="shipcombat-battery-stat-label">{{localize "SHIPCOMBAT.Label.Range"}}</span>

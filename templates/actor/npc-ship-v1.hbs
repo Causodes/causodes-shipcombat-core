@@ -1,0 +1,38 @@
+{{!--
+  modules/causodes-shipcombat-core/templates/actor/npc-ship-v1.hbs
+  AppV1 wrapper template for the NPC ship actor sheet.
+
+  Context keys from NpcShipSheetV1Mixin.getData():
+    cssClass  – Foundry-supplied class string
+    actor     – the actor document
+    sys       – SystemAdapter.current.getShipData(actor)
+    … (full NPC context — same as NpcShipSheetMixin._preparePartContext)
+
+  Tab partials are included as Handlebars partials registered via loadTemplates.
+  The "npc-ship-header" partial is overridable via ShipCombat.registerPartialOverride.
+--}}
+<form class="{{cssClass}} shipcombat-npc-sheet shipcombat-v1" autocomplete="off">
+
+  {{!-- Header (system modules may override "npc-ship-header" partial) --}}
+  {{> "npc-ship-header"}}
+
+  {{!-- Tab navigation --}}
+  <nav class="npc-sheet-tabs sheet-tabs tabs" data-group="primary">
+    <a class="item" data-tab="main"     data-group="primary">{{localize "SHIPCOMBAT.Tab.Overview"}}</a>
+    <a class="item" data-tab="movement" data-group="primary">{{localize "SHIPCOMBAT.Tab.Movement"}}</a>
+    <a class="item" data-tab="gunner"   data-group="primary">{{localize "SHIPCOMBAT.Tab.NpcWeapons"}}</a>
+    <a class="item" data-tab="ordnance" data-group="primary">{{localize "SHIPCOMBAT.NpcShip.OrdnanceTab"}}</a>
+  </nav>
+
+  {{!-- Tab content — partials are self-wrapping (<section class="tab" data-tab="{{tab.id}}">).
+       Pass tab context objects so {{tab.id}} renders the correct value; without
+       this, data-tab renders as empty string and Foundry's global
+       .tab[data-tab]:not(.active) rule permanently hides the content. --}}
+  <section class="npc-sheet-body">
+    {{> "modules/causodes-shipcombat-core/templates/actor/tabs/npc/npc-ship-body.hbs"     tab=(lookup tabsById "main")}}
+    {{> "modules/causodes-shipcombat-core/templates/actor/tabs/npc/npc-ship-movement.hbs" tab=(lookup tabsById "movement")}}
+    {{> "modules/causodes-shipcombat-core/templates/actor/tabs/npc/npc-ship-gunner.hbs"   tab=(lookup tabsById "gunner")}}
+    {{> "modules/causodes-shipcombat-core/templates/actor/tabs/npc/npc-ship-ordnance.hbs" tab=(lookup tabsById "ordnance")}}
+  </section>
+
+</form>

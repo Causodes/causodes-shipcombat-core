@@ -1,0 +1,1037 @@
+/* ══════════════════════════════════════════════════════════════════════════ */
+/* Ship Combat: Popup Styles                                                  */
+/* All floating-window and overlay popup styles live here.                   */
+/* ══════════════════════════════════════════════════════════════════════════ */
+
+/* ══════════════════════════════════════════════════════════════════════════ */
+/* Targeting Popup, Strike-Craft/Recover/Battle-Clarity popup variants       */
+/* ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Targeting Popup ───────────────────────────────────────────────────── */
+.shipcombat-targeting-popup {
+  background: rgb(18, 42, 44);
+  color: #ddd;
+}
+.shipcombat-tp-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.5rem;
+}
+.shipcombat-tp-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background: rgba(255,255,255,0.04);
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.shipcombat-tp-weapon-icon {
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 2rem;
+  border-radius: 4px;
+  border: none;
+}
+.shipcombat-tp-header-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.shipcombat-tp-weapon-name { font-weight: 700; font-size: 0.85rem; }
+.shipcombat-tp-mode-name   { font-size: 0.7rem; opacity: 0.65; }
+.shipcombat-tp-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0.3rem 0.1rem;
+  font-size: 0.7rem;
+}
+.shipcombat-tp-stat {
+  background: rgba(255,255,255,0.06);
+  padding: 0.15rem 0.4rem;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+.shipcombat-tp-stat i { margin-right: 0.2rem; opacity: 0.6; }
+.shipcombat-tp-stat--cost  { color: #e8a33a; }
+.shipcombat-tp-stat--bonus { color: #7ec8e3; }
+
+.shipcombat-tp-empty {
+  text-align: center;
+  padding: 1.5rem;
+  opacity: 0.5;
+  font-style: italic;
+}
+.shipcombat-tp-empty i { margin-right: 0.3rem; }
+
+.shipcombat-tp-targets {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.shipcombat-tp-target {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.02);
+  transition: background 0.15s;
+}
+.shipcombat-tp-target:hover { background: rgba(255,255,255,0.06); }
+.shipcombat-tp-target-icon {
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 2rem;
+  border-radius: 50%;
+  border: none;
+}
+.shipcombat-tp-target-icon--l1 {
+  opacity: 0.75;
+}
+.shipcombat-tp-target-info { flex: 1; }
+.shipcombat-tp-target-name { font-weight: 600; font-size: 0.8rem; display: block; }
+.shipcombat-tp-l1-meta {
+  display: flex;
+  gap: 0.5rem;
+  font-size: 0.65rem;
+  opacity: 0.8;
+  margin-top: 0.1rem;
+  color: #f1c40f;
+}
+.shipcombat-tp-l1-meta i { margin-right: 0.15rem; }
+.shipcombat-tp-target-details {
+  display: flex;
+  gap: 0.4rem;
+  font-size: 0.65rem;
+  opacity: 0.65;
+  margin-top: 0.1rem;
+}
+.shipcombat-tp-detail i { margin-right: 0.15rem; }
+.shipcombat-tp-zone--1 { color: #44ff88; }
+.shipcombat-tp-zone--2 { color: #f1c40f; }
+.shipcombat-tp-zone--3 { color: #e74c3c; }
+
+.shipcombat-tp-target-stats {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.15rem;
+}
+.shipcombat-tp-acc {
+  font-size: 0.85rem;
+  font-weight: bold;
+}
+.shipcombat-tp-acc--auto    { color: #44ff88; }
+.shipcombat-tp-acc--boosted { color: #88ccff; }
+.shipcombat-tp-acc--ranged  { color: #f1c40f; }
+.shipcombat-ranging-active  { font-size: 0.65rem; opacity: 0.8; margin-left: 0.2rem; }
+.shipcombat-tp-optimal-badge {
+  display: block;
+  font-size: 0.6rem;
+  font-style: italic;
+  font-weight: 600;
+  margin-top: 0.1rem;
+  opacity: 0.85;
+  color: #4ab0ff;
+}
+.shipcombat-tp-defenses {
+  display: flex;
+  gap: 0.3rem;
+  font-size: 0.65rem;
+  opacity: 0.65;
+}
+.shipcombat-tp-armour-val { color: #e8a33a; }
+.shipcombat-tp-fire-btn {
+  border: 1px solid rgba(231,76,60,0.4);
+  border-radius: 6px;
+  background: rgba(231,76,60,0.15);
+  color: #e74c3c;
+  cursor: pointer;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.85rem;
+  transition: background 0.15s;
+  flex: 0 0 auto;
+}
+.shipcombat-tp-fire-btn:hover { background: rgba(231,76,60,0.35); }
+/* AppV1 compat: Foundry AppV1 sets width:100% on all <button> elements.
+   Adapters using AppV1 popup classes need this override. */
+.window-app .shipcombat-tp-fire-btn { width: auto; }
+
+/* ── Strike craft attack popup: already-attacked row ─────────────────── */
+.shipcombat-tp-target--done {
+  opacity: 0.45;
+}
+.shipcombat-tp-target--done:hover { background: rgba(255,255,255,0.02); }
+
+.shipcombat-sc-attacked-badge {
+  flex: 0 0 auto;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: 1px solid rgba(68,255,136,0.35);
+  background: rgba(68,255,136,0.10);
+  color: #44ff88;
+  font-size: 0.85rem;
+}
+
+/* ── Recover craft popup: green recall button ────────────────────────── */
+.shipcombat-rc-recall-btn {
+  border-color: rgba(0,255,136,0.45);
+  background: rgba(0,255,136,0.15);
+  color: #00ff88;
+}
+.shipcombat-rc-recall-btn:hover { background: rgba(0,255,136,0.35); }
+
+/* ── Recover craft popup: header icon placeholder ────────────────────── */
+.shipcombat-rc-header-icon {
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  background: rgba(0,255,136,0.20);
+  color: #00ff88;
+  font-size: 1rem;
+}
+
+.shipcombat-empty-slot {
+  opacity: 0.4;
+  font-style: italic;
+  font-size: 0.75rem;
+  padding: 0.25rem 0;
+}
+
+/* ── Battle Clarity popup: lock badge + disabled fire button ──────────── */
+
+.shipcombat-tp-lock-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 2px 5px;
+  border-radius: 3px;
+  border: 1px solid;
+  white-space: nowrap;
+  text-align: center;
+  min-width: 1.8rem;
+}
+
+.shipcombat-tp-fire-btn--no-lock {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 6px;
+  background: rgba(255,255,255,0.03);
+  color: rgba(255,255,255,0.25);
+  cursor: default;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.85rem;
+  flex: 0 0 auto;
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════ */
+/* Overcharge Toggle (Targeting Popup)                                        */
+/* ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Overcharge toggle (TargetingPopup) ── */
+.shipcombat-tp-overcharge-row {
+  display: flex;
+  justify-content: center;
+  padding: 0.3rem 0.6rem 0;
+}
+.shipcombat-tp-overcharge-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 4px;
+  cursor: pointer;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: rgba(255,255,255,0.5);
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.shipcombat-tp-overcharge-btn:hover {
+  background: rgba(255, 102, 68, 0.12);
+  border-color: rgba(255, 102, 68, 0.4);
+  color: #ff6644;
+}
+/* AppV1 compat: same as .window-app .shipcombat-tp-fire-btn above */
+.window-app .shipcombat-tp-overcharge-btn { width: auto; }
+.shipcombat-tp-overcharge--on {
+  background: rgba(255, 102, 68, 0.15) !important;
+  border-color: rgba(255, 102, 68, 0.5) !important;
+  color: #ff6644 !important;
+}
+.shipcombat-tp-overcharge--on i {
+  animation: shipcombat-pulse 0.9s ease-in-out infinite;
+}
+.shipcombat-tp-oc-note {
+  font-size: 0.65rem;
+  font-weight: 400;
+  opacity: 0.75;
+  margin-left: 0.2rem;
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════ */
+/* Ram Target Popup                                                           */
+/* ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Ram popup: damage preview per target row ─────────────────────────── */
+.shipcombat-ram-dmg-preview {
+  display: flex;
+  gap: 0.6rem;
+  font-size: 0.65rem;
+  margin-top: 0.2rem;
+  opacity: 0.9;
+}
+.shipcombat-ram-dmg-preview i { margin-right: 0.15rem; }
+.shipcombat-ram-dmg-in  { color: #ff6b6b; }
+
+/* ── Ram target popup: warning footer ───────────────────────────────────── */
+.shipcombat-ram-warning {
+  font-size: 0.65rem;
+  opacity: 0.6;
+  margin: 0;
+  padding: 0.25rem 0.3rem;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+.shipcombat-ram-warning i {
+  margin-right: 0.25rem;
+  color: #e8a33a;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════ */
+/* Radar Action Popup                                                         */
+/* ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Radar action popup ────────────────────────────────────────────────── */
+.shipcombat-radar-popup {
+  position: absolute;
+  z-index: 100;
+  background: rgba(10, 16, 22, 0.95);
+  border: 1px solid rgba(0, 255, 136, 0.3);
+  border-radius: 6px;
+  color: #ddd;
+  padding: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 55%;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.shipcombat-rpop-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(0, 255, 136, 0.12);
+  min-height: 22px;
+}
+
+.shipcombat-rpop-name {
+  color: #ffcc00;
+  font-weight: 600;
+  font-size: 0.8rem;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shipcombat-rpop-dist {
+  color: rgba(255, 255, 255, 0.45);
+  font-family: monospace;
+  font-size: 0.7rem;
+  flex-shrink: 0;
+}
+
+.shipcombat-rpop-close {
+  background: none    !important;
+  border:     none    !important;
+  box-shadow: none    !important;
+  width:      auto    !important;
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  padding: 0 2px;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+.shipcombat-rpop-close:hover { color: #ff4444; }
+
+/* Active effect pills */
+.shipcombat-rpop-fx {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding: 2px 0;
+}
+
+.shipcombat-rpop-pip {
+  display: inline-block;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  font-family: monospace;
+  color: #000;
+  line-height: 1.2;
+}
+.shipcombat-rpop-pip sup {
+  font-size: 0.5rem;
+  margin-left: 1px;
+}
+
+/* Status notice */
+.shipcombat-rpop-notice {
+  font-size: 0.7rem;
+  color: rgba(255, 200, 100, 0.7);
+  font-style: italic;
+  padding: 2px 0;
+}
+.shipcombat-rpop-notice i { margin-right: 4px; }
+
+/* Action buttons */
+.shipcombat-rpop-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 4px 6px;
+  border: 1px solid rgba(0, 255, 136, 0.12);
+  border-radius: 4px;
+  background: rgba(0, 255, 136, 0.04);
+  color: #ddd;
+  font-size: 0.7rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.shipcombat-rpop-btn:hover:not(:disabled) {
+  background: rgba(0, 255, 136, 0.12);
+  border-color: rgba(0, 255, 136, 0.3);
+  color: #fff;
+}
+
+.shipcombat-rpop-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.shipcombat-rpop-btn--core {
+  border-color: rgba(255, 200, 50, 0.15);
+  background: rgba(255, 200, 50, 0.04);
+}
+.shipcombat-rpop-btn--core:hover:not(:disabled) {
+  background: rgba(255, 200, 50, 0.1);
+  border-color: rgba(255, 200, 50, 0.3);
+}
+
+.shipcombat-rpop-btn i {
+  flex-shrink: 0;
+  width: 12px;
+  text-align: center;
+  font-size: 0.65rem;
+}
+
+.shipcombat-rpop-cost {
+  margin-left: auto;
+  color: rgba(126, 200, 227, 0.7);
+  font-family: monospace;
+  font-size: 0.65rem;
+  flex-shrink: 0;
+}
+
+.shipcombat-rpop-divider {
+  height: 1px;
+  background: rgba(255, 200, 50, 0.15);
+  margin: 2px 0;
+}
+
+/* Lock tier status row */
+.shipcombat-rpop-lock {
+  font-size: 0.7rem;
+  font-weight: bold;
+  padding: 2px 0 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.shipcombat-rpop-lock i { font-size: 0.65rem; }
+.shipcombat-rpop-decay {
+  font-weight: normal;
+  opacity: 0.5;
+  font-size: 0.6rem;
+}
+
+/* Bearing readout (tier 1+) */
+.shipcombat-rpop-bearing {
+  font-size: 0.65rem;
+  opacity: 0.75;
+  padding: 1px 0 4px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.shipcombat-rpop-bearing i { font-size: 0.6rem; }
+
+/* Lock-upgrade button variant */
+.shipcombat-rpop-btn--lock {
+  border-color: rgba(68, 170, 255, 0.2);
+  background: rgba(68, 170, 255, 0.06);
+}
+.shipcombat-rpop-btn--lock:hover:not(:disabled) {
+  background: rgba(68, 170, 255, 0.15);
+  border-color: rgba(68, 170, 255, 0.4);
+}
+
+/* Tier badge on lock action buttons */
+.shipcombat-rpop-tier-badge {
+  margin-left: 4px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: rgba(68, 170, 255, 0.2);
+  color: #44aaff;
+  font-family: monospace;
+  font-size: 0.6rem;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+/* ── Compact intel section inside radar popup ─────────────────────────── */
+.shipcombat-rpop-intel {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 3px 0;
+  border-top: 1px solid rgba(0, 255, 136, 0.08);
+}
+
+/* Collapsible drawers */
+.shipcombat-rpop-drawer {
+  border: 1px solid rgba(0, 255, 136, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.shipcombat-rpop-drawer[open] {
+  border-color: rgba(0, 255, 136, 0.2);
+}
+.shipcombat-rpop-drawer-hd {
+  cursor: pointer;
+  font-size: 0.6rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 5px;
+  color: rgba(0, 255, 136, 0.55);
+  background: rgba(0, 255, 136, 0.04);
+  list-style: none;        /* hide default triangle */
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  user-select: none;
+}
+.shipcombat-rpop-drawer-hd::-webkit-details-marker { display: none; }
+.shipcombat-rpop-drawer-hd::before {
+  content: "\f054";  /* fa-chevron-right */
+  font-family: "Font Awesome 6 Free";
+  font-weight: 900;
+  font-size: 0.45rem;
+  transition: transform 0.15s ease;
+}
+.shipcombat-rpop-drawer[open] > .shipcombat-rpop-drawer-hd::before {
+  transform: rotate(90deg);
+}
+.shipcombat-rpop-drawer-hd:hover {
+  background: rgba(0, 255, 136, 0.08);
+}
+.shipcombat-rpop-drawer-hd i {
+  font-size: 0.55rem;
+  opacity: 0.7;
+}
+.shipcombat-rpop-drawer-body {
+  padding: 3px 4px;
+}
+
+/* Sector row: 4 inline cells showing shield (+ armour at tier 3) */
+.shipcombat-rpop-sectors {
+  display: flex;
+  gap: 2px;
+}
+.shipcombat-rpop-sec {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  font-size: 0.6rem;
+  font-family: monospace;
+}
+.shipcombat-rpop-sec-lbl {
+  font-size: 0.55rem;
+  opacity: 0.45;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+}
+.shipcombat-rpop-sec-sh {
+  color: #44aaff;
+  font-weight: bold;
+}
+.shipcombat-rpop-sec-bar {
+  display: inline-block;
+  width: 32px;
+  height: 5px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 2px;
+  overflow: hidden;
+  vertical-align: middle;
+}
+.shipcombat-rpop-sec-bar-fill {
+  display: block;
+  height: 100%;
+  background: #44aaff;
+  border-radius: 2px;
+  transition: width .2s ease;
+}
+.shipcombat-rpop-sec-ar {
+  color: #aaa;
+  font-size: 0.55rem;
+}
+
+/* Hull bar row */
+.shipcombat-rpop-hull-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.6rem;
+}
+.shipcombat-rpop-hull-lbl {
+  flex: 0 0 auto;
+  opacity: 0.5;
+  font-size: 0.55rem;
+  text-transform: uppercase;
+}
+.shipcombat-rpop-hull-bar {
+  flex: 1;
+  height: 5px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.shipcombat-rpop-hull-fill {
+  display: block;
+  height: 100%;
+  background: #cc3333;
+  border-radius: 2px;
+}
+.shipcombat-rpop-hull-val {
+  font-family: monospace;
+  flex-shrink: 0;
+  color: #ccc;
+}
+.shipcombat-rpop-fires {
+  color: #ff6633;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+.shipcombat-rpop-fires i { margin-right: 1px; }
+
+/* Armament drawer scrollable body */
+.shipcombat-rpop-armament-scroll {
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+/* Weapon position sections */
+.shipcombat-rpop-wep-section {
+  margin-top: 3px;
+}
+.shipcombat-rpop-wep-section-hd {
+  font-size: 0.58rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: rgba(0, 255, 136, 0.5);
+  padding: 1px 0;
+  border-bottom: 1px solid rgba(0, 255, 136, 0.08);
+  margin-bottom: 1px;
+}
+.shipcombat-rpop-wep-section-hd i {
+  font-size: 0.5rem;
+  margin-right: 2px;
+}
+.shipcombat-rpop-wep-entry {
+  font-size: 0.58rem;
+  color: rgba(255,255,255,0.65);
+  padding: 0 0 0 8px;
+  line-height: 1.4;
+  cursor: default;
+  border-radius: 2px;
+  transition: background 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+.shipcombat-rpop-wep-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.shipcombat-rpop-cond-tier {
+  flex: 0 0 auto;
+  margin-right: 0.5rem;
+}
+.shipcombat-rpop-wep-entry[data-wep-pos]:hover {
+  background: rgba(255, 68, 68, 0.15);
+  color: #ff6666;
+}
+.shipcombat-rpop-wep-count {
+  color: rgba(255,255,255,0.35);
+  font-family: monospace;
+  font-size: 0.52rem;
+}
+/* Thumbtack pin button in radar popup weapon entries */
+.shipcombat-rpop-pin-arc {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  font-size: 0.5rem;
+  color: rgba(255,255,255,0.25);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.15s, transform 0.15s;
+}
+.shipcombat-rpop-pin-arc:hover {
+  color: #ff6666;
+}
+.shipcombat-rpop-pin-arc.shipcombat-pin-active {
+  color: #ff4444;
+  transform: rotate(45deg);
+}
+
+/* ── Friendly ordnance popup stats ─────────────────────────────── */
+.shipcombat-rpop-torp-stats {
+  display: flex;
+  gap: 6px;
+  padding: 2px 0;
+  flex-wrap: wrap;
+}
+.shipcombat-rpop-torp-stat {
+  font-size: 0.6rem;
+  font-family: monospace;
+  color: rgba(255,255,255,0.7);
+}
+.shipcombat-rpop-torp-stat i { opacity: 0.5; margin-right: 2px; font-size: 0.5rem; }
+.shipcombat-rpop-torp-traits {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  padding: 2px 0;
+}
+.shipcombat-rpop-torp-trait {
+  font-size: 0.55rem;
+  background: rgba(0, 255, 136, 0.1);
+  border: 1px solid rgba(0, 255, 136, 0.2);
+  border-radius: 3px;
+  padding: 0 4px;
+  color: #00ff88;
+  font-family: monospace;
+}
+.shipcombat-rpop-torp-range {
+  font-size: 0.6rem;
+  color: rgba(255,255,255,0.5);
+  padding: 2px 0;
+  font-family: monospace;
+}
+.shipcombat-rpop-torp-range i { opacity: 0.4; margin-right: 3px; }
+
+/* Selected-target info strip (legacy, now minimal) */
+.shipcombat-radar-selection {
+  width: 100%;
+}
+
+.shipcombat-radar-sel-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px;
+  background: rgba(0, 255, 136, 0.06);
+  border: 1px solid rgba(0, 255, 136, 0.12);
+  border-radius: 4px;
+  font-size: 0.8rem;
+  min-height: 28px;
+}
+
+.shipcombat-radar-sel-row.shipcombat-radar-sel--empty {
+  justify-content: center;
+  opacity: 0.45;
+  font-style: italic;
+}
+
+.shipcombat-radar-sel-name {
+  color: #ffcc00;
+  font-weight: 600;
+}
+
+.shipcombat-radar-sel-name i {
+  margin-right: 4px;
+}
+
+.shipcombat-radar-sel-dist {
+  color: rgba(255, 255, 255, 0.5);
+  font-family: monospace;
+  font-size: 0.75rem;
+}
+
+.shipcombat-eng-stats {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.shipcombat-eng-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 5rem;
+}
+
+.shipcombat-eng-stat-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+}
+
+.shipcombat-eng-stat-value {
+  font-size: 1.2rem;
+  font-weight: bold;
+}
+
+.shipcombat-heat-row {
+  gap: 8px;
+}
+
+.shipcombat-heat-bar-wrap {
+  flex: 1;
+  height: 0.75rem;
+  background: linear-gradient(90deg, #27ae60 0%, #90c93c 20%, #f39c12 55%, #c0392b 100%);
+  border-radius: 4px;
+  border: 1px solid var(--color-border-light);
+  overflow: hidden;
+  min-width: 4rem;
+  position: relative;
+}
+
+/* Cover overlay hides the unfilled portion of the gradient */
+.shipcombat-heat-cover {
+  position: absolute;
+  right: 0; top: 0; bottom: 0;
+  width: calc(100% - var(--heat-pct, 0%));
+  background: var(--color-dark-5, #262626);
+  border-radius: 0 4px 4px 0;
+  transition: width 0.2s ease;
+}
+
+/* Heat value  -  never shrinks so bar fills remaining space */
+.shipcombat-heat-val {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════ */
+/* Pop-out Radar Window, NPC Intel Panel, BDA Fire Correction Popup           */
+/* ══════════════════════════════════════════════════════════════════════════ */
+
+/* ═══════ Pop-out Radar Window ══════════════════════════════════════════ */
+.shipcombat-popout-radar .window-content {
+  background: #0a0f16;
+  padding: 0;
+}
+.shipcombat-popout-radar-body {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #0a0f16;
+  overflow: hidden;
+}
+.shipcombat-popout-toolbar-bottom {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  padding: 2px 6px 4px;
+  flex-shrink: 0;
+}
+.shipcombat-popout-radar-wrap {
+  flex: 1 1 0;
+  aspect-ratio: 1 / 1;
+  position: relative;
+  align-self: center;
+  min-height: 0;
+  min-width: 0;
+  max-width: 100%;
+  max-height: 100%;
+}
+/* Bearing toggle floats inside the popout radar wrap */
+.shipcombat-popout-bearing-btn {
+  position: absolute !important;
+  top: 6px;
+  left: 6px;
+  z-index: 5;
+  width: auto !important;
+  max-width: fit-content;
+}
+.shipcombat-popout-radar-body canvas {
+  display: block;
+  /* Canvas pixel buffer is always square; display should match */
+  aspect-ratio: 1 / 1;
+  max-width: 100%;
+  max-height: 100%;
+  margin: auto;
+}
+
+/* ── NPC Intel Panel (Deep Scan L3+ reveals enemy conditions) ────────────── */
+
+.shipcombat-npc-intel-panel {
+  border-left: 3px solid rgba(74, 158, 255, 0.5);  /* sensors blue accent */
+}
+
+.shipcombat-lock-tier-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  border-radius: 3px;
+  margin-left: 0.4rem;
+}
+
+.shipcombat-lock-tier--3 {
+  color: #4a9eff;
+  background: rgba(74, 158, 255, 0.1);
+  border: 1px solid rgba(74, 158, 255, 0.3);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════ */
+/* BDA Fire Correction Popup                                                  */
+/* ══════════════════════════════════════════════════════════════════════════ */
+.shipcombat-bda-popup .window-content {
+  padding: 0;
+  font-family: var(--type-font, serif);
+}
+
+.shipcombat-bda-popup-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  padding: 1rem;
+}
+
+.shipcombat-bda-result-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.65rem 1rem;
+  background: rgba(74, 255, 232, 0.05);
+  border: 1px solid rgba(74, 255, 232, 0.2);
+  border-radius: 3px;
+  text-align: center;
+}
+
+.shipcombat-bda-sl-value {
+  font-family: var(--header-font, serif);
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #4affe8;
+  letter-spacing: 0.08em;
+  line-height: 1;
+}
+
+.shipcombat-bda-retain-desc {
+  font-family: var(--type-font, serif);
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.shipcombat-bda-correction-prompt {
+  text-align: center;
+  font-family: var(--type-font, serif);
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.5);
+  margin: 0;
+  font-style: italic;
+}
+
+.shipcombat-bda-corrections {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.shipcombat-bda-correction-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  overflow: visible;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s, border-color 0.12s;
+  color: var(--color-text-primary, #eee);
+  line-height: 1.4;
+  white-space: normal;
+  word-wrap: break-word;
+}
+
+.shipcombat-bda-correction-btn:hover {
+  background: rgba(74, 255, 232, 0.08);
+  border-color: rgba(74, 255, 232, 0.32);
+}
+
+.shipcombat-bda-correction-name {
+  font-family: var(--header-font, serif);
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--color-text-primary, #eee);
+}
+
+.shipcombat-bda-correction-hint {
+  font-family: var(--type-font, serif);
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.68);
+  line-height: 1.45;
+  white-space: normal;
+}
+

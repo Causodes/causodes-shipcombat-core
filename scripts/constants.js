@@ -1,4 +1,5 @@
 import { THEME, hex } from "./theme.js";
+import { SystemAdapter } from "./systems/SystemAdapter.js";
 
 // The core module's own ID — used for template paths, CSS, and other static
 // assets that always live in this module regardless of which companion activated it.
@@ -98,19 +99,19 @@ export const MACRO_FIRE_TIERS = [
 // power core (+5) or Augur divert (1:1 Data→Charge).
 
 export const LANCE_CHARGE_TIERS = [
-  { min: 1,  max: 5,  label: "SHIPCOMBAT.Gunner.LanceGlancing",       multiplier: 0.5 },
-  { min: 6,  max: 10, label: "SHIPCOMBAT.Gunner.LanceStandard",       multiplier: 1   },
-  { min: 11, max: 15, label: "SHIPCOMBAT.Gunner.LanceFocused",        multiplier: 1.5 },
-  { min: 16, max: 20, label: "SHIPCOMBAT.Gunner.LanceFullDischarge",  multiplier: 2   },
+  { min: 1,  max: 5,  label: "SHIPCOMBAT.Gunner.LanceGlancing",       multiplier: 1 },
+  { min: 6,  max: 10, label: "SHIPCOMBAT.Gunner.LanceStandard",       multiplier: 2 },
+  { min: 11, max: 15, label: "SHIPCOMBAT.Gunner.LanceFocused",        multiplier: 3 },
+  { min: 16, max: 20, label: "SHIPCOMBAT.Gunner.LanceFullDischarge",  multiplier: 4 },
 ];
 
 // Default charge tier template (labels + multipliers only).
 // Boundaries are computed dynamically based on weapon chargeStep.
 const CHARGE_TIER_TEMPLATE = [
-  { label: "SHIPCOMBAT.Gunner.LanceGlancing",      multiplier: 0.5 },
-  { label: "SHIPCOMBAT.Gunner.LanceStandard",       multiplier: 1   },
-  { label: "SHIPCOMBAT.Gunner.LanceFocused",        multiplier: 1.5 },
-  { label: "SHIPCOMBAT.Gunner.LanceFullDischarge",  multiplier: 2   },
+  { label: "SHIPCOMBAT.Gunner.LanceGlancing",      multiplier: 1 },
+  { label: "SHIPCOMBAT.Gunner.LanceStandard",       multiplier: 2 },
+  { label: "SHIPCOMBAT.Gunner.LanceFocused",        multiplier: 3 },
+  { label: "SHIPCOMBAT.Gunner.LanceFullDischarge",  multiplier: 4 },
 ];
 
 /**
@@ -253,8 +254,6 @@ export const ORDNANCE_MASTER_CORE_ACTIONS = [
     label: "SHIPCOMBAT.Ordnance.CombatRecoveryDoctrine",
     desc: "SHIPCOMBAT.Ordnance.CombatRecoveryDoctrineDesc",
     icon: "fa-solid fa-helicopter",
-    effect: "Convert half destroyed craft to recovering, OR 1 recovering to armed",
-    tradeoff: "Cannot launch strike craft this round",
     requiresStrikeCraft: true,
   },
   {
@@ -269,24 +268,18 @@ export const ORDNANCE_MASTER_CORE_ACTIONS = [
     label: "SHIPCOMBAT.Ordnance.ShockLoadingRotation",
     desc: "SHIPCOMBAT.Ordnance.ShockLoadingRotationDesc",
     icon: "fa-solid fa-forward",
-    effect: "Instantly complete one active commitment (armTorpedo/armCraft/loadPayload)",
-    tradeoff: "Commit 3 manpower for 2 rounds as fatigued crew",
   },
   {
     id: "magazineCrossfeed",
     label: "SHIPCOMBAT.Ordnance.MagazineCrossfeed",
     desc: "SHIPCOMBAT.Ordnance.MagazineCrossfeedDesc",
     icon: "fa-solid fa-arrows-split-up-and-left",
-    effect: "Convert gunner ammo to ordnance: spend 6 ammo for +1 torpedo or 4 ammo for +1 payload",
-    tradeoff: "Gunner cannot receive ammo reloads until next round",
   },
   {
     id: "deckConsciption",
     label: "SHIPCOMBAT.Ordnance.DeckConsciption",
     desc: "SHIPCOMBAT.Ordnance.DeckConscriptionDesc",
     icon: "fa-solid fa-people-group",
-    effect: "Gain +25% of max temporary manpower this round, OR restore 10% of permanently lost crew",
-    tradeoff: "Next round manpower regeneration reduced by 4",
   },
 ];
 
@@ -537,6 +530,34 @@ export const CAPTAIN_CARDS = [
   { id: "devastationProtocol", category: "gambit",  copies: 1, setsStance: "devastation", label: "SHIPCOMBAT.Captain.Card.DevastationProtocol" },
   { id: "standDown",           category: "gambit",  copies: 2, setsStance: "none",        label: "SHIPCOMBAT.Captain.Card.StandDown" },
 ];
+
+/**
+ * Compute mode-aware hull display values based on the adapter's hullDisplayMode.
+ * hull.value = accumulated damage (0 = pristine, max = destroyed).
+ * @param {number} hullValue - Damage taken (raw actor data)
+ * @param {number} hullMax   - Maximum damage capacity
+ * @returns {{ pct: number, displayValue: number, isDamageTaken: boolean }}
+ */
+export function hullDisplay(hullValue, hullMax) {
+  const isDamageTaken =
+    SystemAdapter.current.hullDisplayMode !== "hpRemaining";
+  const val = hullValue ?? 0;
+  const max = hullMax ?? 0;
+  if (isDamageTaken) {
+    return {
+      pct:          max > 0 ? Math.round((val / max) * 100) : 0,
+      displayValue: val,
+      isDamageTaken: true,
+    };
+  }
+  // HP mode: hull.value IS current HP remaining (0 = destroyed, max = full health).
+  // Return val directly — do NOT invert with (max - val).
+  return {
+    pct:          max > 0 ? Math.round((val / max) * 100) : 0,
+    displayValue: val,
+    isDamageTaken: false,
+  };
+}
 
 /**
  * Build the shuffled starting deck as an array of card ID strings.

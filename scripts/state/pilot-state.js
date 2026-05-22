@@ -8,6 +8,7 @@
 import { MODULE_ID } from "../constants.js";
 import { getHitQuadrant } from "../apps/TargetingPopup.js";
 import { rollCrit } from "./crit-state.js";
+import { SystemAdapter } from "../systems/SystemAdapter.js";
 
 /**
  * Consume the pilot's assigned Power Core and record the overcharge action played.
@@ -170,15 +171,15 @@ export async function apToThrust(userId) {
 export async function confirmMovement({ fuelUsed, driftUsed = 0, speed, newX, newY, newRotation, gridSquaresMoved, waypoints, velocityX, velocityY, bearingDelta, momentumUsed }) {
   const data = this.getData();
   const effectiveSpeed = speed
-    ?? (this.ship?.system?.movement?.speed ?? 6) + (data.resources?.pilot?.allocSpeed ?? 0);
+    ?? (SystemAdapter.current.getShipData(this.ship)?.movement?.speed ?? 6) + (data.resources?.pilot?.allocSpeed ?? 0);
   const existingDrift  = data.resources?.pilot?.driftBurned ?? 0;
   const newDriftBurned = existingDrift + driftUsed;
-  // prevTurnMove = total grid squares moved this turn (fuel-based + accumulated drift)
-  const prevTurnMove = (fuelUsed / 100) * effectiveSpeed + newDriftBurned;
+  // prevTurnMove is NOT updated here — it is computed and set by resetHelmState at the
+  // start of the next turn so that it remains stable (last-turn total) throughout the
+  // current turn, even during piecemeal / fractional movement commits.
   const updates = {
-    "resources.pilot.fuelBurned":   fuelUsed,
-    "resources.pilot.driftBurned":  newDriftBurned,
-    "resources.pilot.prevTurnMove": prevTurnMove,
+    "resources.pilot.fuelBurned":  fuelUsed,
+    "resources.pilot.driftBurned": newDriftBurned,
   };
   // Persist velocity vector when provided (Realistic mode)
   if (velocityX !== undefined && velocityY !== undefined) {
@@ -256,10 +257,10 @@ export async function pilotRam(
     const effectiveSpeed = rammingActor.system?.resources?.pilot?.speed ?? speed;
     const prevTurnMove   = (fuelUsed / 100) * effectiveSpeed;
     await rammingActor.update({
-      "system.resources.pilot.fuelBurned":   fuelUsed,
-      "system.resources.pilot.prevTurnMove": prevTurnMove,
-      "system.resources.pilot.prowGunLocked":  true,
-      "system.resources.pilot.ramAllocLocked": true,
+      [SystemAdapter.current.systemPath("resources.pilot.fuelBurned")]:   fuelUsed,
+      [SystemAdapter.current.systemPath("resources.pilot.prevTurnMove")]: prevTurnMove,
+      [SystemAdapter.current.systemPath("resources.pilot.prowGunLocked")]:  true,
+      [SystemAdapter.current.systemPath("resources.pilot.ramAllocLocked")]: true,
     });
     const npcToken = rammingActor.getActiveTokens?.()?.[0];
     if (npcToken) {
@@ -327,13 +328,13 @@ export async function pilotRam(
   const rammedHullCur = rammedSys?.hull?.value ?? 0;
   const rammedHullMax = rammedSys?.hull?.max ?? 50;
   await rammedActor.update({
-    "system.hull.value": Math.min(rammedHullMax, rammedHullCur + damageToRammed),
+    [SystemAdapter.current.systemPath("hull.value")]: Math.min(rammedHullMax, rammedHullCur + damageToRammed),
   });
 
   // ── 10. Apply hull damage to ramming ship ─────────────────────────────────
   const rammingHullCur = rammingSys?.hull?.value ?? 0;
   await rammingActor.update({
-    "system.hull.value": Math.min(rammingHullMax, rammingHullCur + damageToRamming),
+    [SystemAdapter.current.systemPath("hull.value")]: Math.min(rammingHullMax, rammingHullCur + damageToRamming),
   });
 
   // ── 11. Crit rolls for both ships ─────────────────────────────────────────
@@ -363,12 +364,12 @@ export async function pilotRam(
     const newTvx = tvx + rvx * 0.50;
     const newTvy = tvy + rvy * 0.50;
     await rammingActor.update({
-      "system.resources.pilot.velocityX": newRvx,
-      "system.resources.pilot.velocityY": newRvy,
+      [SystemAdapter.current.systemPath("resources.pilot.velocityX")]: newRvx,
+      [SystemAdapter.current.systemPath("resources.pilot.velocityY")]: newRvy,
     });
     await rammedActor.update({
-      "system.resources.pilot.velocityX": newTvx,
-      "system.resources.pilot.velocityY": newTvy,
+      [SystemAdapter.current.systemPath("resources.pilot.velocityX")]: newTvx,
+      [SystemAdapter.current.systemPath("resources.pilot.velocityY")]: newTvy,
     });
     // Physical displacement: push rammed ship one full tile in impact direction
     if (rammedToken && canvas?.ready) {
@@ -423,6 +424,8 @@ export async function pilotRam(
   const attackAngleDeg = Math.round(Math.abs(incoming) * (180 / Math.PI));
   const rammingName = rammingActor.name ?? "Unknown";
   const quadLabel   = hitSectorRammed.charAt(0).toUpperCase() + hitSectorRammed.slice(1);
+  const ramDmgType  = SystemAdapter.current.getRamDamageType();
+  const dmgTypeSuffix = ramDmgType ? ` ${ramDmgType}` : "";
   const chatContent = `
     <div class="shipcombat-ram-chat">
       <div class="shipcombat-ram-chat-header">
@@ -439,8 +442,8 @@ export async function pilotRam(
       <hr style="border-color:#444;margin:0.4em 0">
       <strong style="font-size:0.9em">${game.i18n.localize("SHIPCOMBAT.Ram.ChatDamageTitle")}</strong>
       <table class="shipcombat-ram-dmg-table">
-        <tr><td>${rammingName}</td><td style="color:#ff6b6b">${damageToRamming} hull damage</td></tr>
-        <tr><td>${rammedActor.name}</td><td style="color:#ff6b6b">${damageToRammed} hull damage</td></tr>
+        <tr><td>${rammingName}</td><td style="color:#ff6b6b">${damageToRamming}${dmgTypeSuffix} hull damage</td></tr>
+        <tr><td>${rammedActor.name}</td><td style="color:#ff6b6b">${damageToRammed}${dmgTypeSuffix} hull damage</td></tr>
       </table>
       <p style="font-size:0.85em;color:#888">${game.i18n.format("SHIPCOMBAT.Ram.ChatDamageNote", { thrust: thrustPct, angle: attackAngleDeg, sector: game.i18n.localize(`SHIPCOMBAT.Sector.${quadLabel}`) })}</p>
     </div>`;

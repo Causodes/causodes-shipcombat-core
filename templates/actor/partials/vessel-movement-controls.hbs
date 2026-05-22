@@ -2,7 +2,12 @@
      Requires helm context: helm.minMove, helm.maxBearing, helm.bearing, helm.powerMax,
      helm.isRealistic, helm.velocityX, helm.velocityY, helm.bearingUsed, helm.bearingMax,
      helm.bearingRemaining, helm.momentumUsed, helm.bearingBudgetTooltip --}}
-<h4>Movement</h4>
+<h4 class="shipcombat-movement-heading">
+    Movement
+    {{#if showArmorClass}}
+    <span class="shipcombat-movement-ac" data-tooltip="Armor Class">AC {{sys.armorClass}}</span>
+    {{/if}}
+</h4>
 <div class="shipcombat-torpedo-movement-info">
     {{#if helm.isRealistic}}
     <span>Velocity: {{helm.minMove}} {{shipcombatTerm "DistanceUnitAbbr"}}</span>

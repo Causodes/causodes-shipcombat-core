@@ -10,6 +10,7 @@
 
 import { MODULE_ID } from "../constants.js";
 import { THEME, pixi } from "../theme.js";
+import { SystemAdapter } from "../systems/SystemAdapter.js";
 
 // ── Colour palette ───────────────────────────────────────────────────────────
 
@@ -150,13 +151,13 @@ export class WeaponArcOverlay {
     const sensorComp = this._actor.items.find(
       i => i.type === `${MODULE_ID}.component` && i.system.slot === "sensor"
     );
-    const actorSys = this._actor.system ?? {};
+    const actorSys = SystemAdapter.current.getShipData(this._actor) ?? {};
     const bandExpanded = !!(actorSys.resources?.gunner?.sensorBandExpanded);
     const rawBandSize  = Math.max(0, Number(sensorComp?.system?.bandSize) || Number(actorSys.sensorBandSize) || 0);
     const sensor = {
       rating:        Math.max(0, Number(sensorComp?.system?.rating) || Number(actorSys.sensorRating) || 0),
       bandSize:      bandExpanded ? rawBandSize * 2 : rawBandSize,
-      autoScanRange: Math.max(0, Number(sensorComp?.system?.autoScanRange) || Number(sensorComp?.system?.guaranteedHitRange) || Number(actorSys.autoScanRange) || 0),
+      autoScanRange: Math.max(0, Number(sensorComp?.system?.autoScanRange) || Number(actorSys.autoScanRange) || 0),
     };
 
     const wanted = this._wanted();
@@ -194,11 +195,12 @@ export class WeaponArcOverlay {
     const rEff       = range * gs;
     const col        = COLOURS[s.resource] ?? 0xffffff;
 
-    // Calculate how many extended bands the sensor can reach before accuracy ≤ 0
-    // Each band beyond weapon range applies -10; base accuracy is sensor.rating
+    // Calculate how many extended bands the sensor can reach beyond weapon range.
+    // Delegated to the system adapter so each ruleset can apply its own cap
+    // (e.g. WH40K: rating / step; SF2e: fixed 20).
     const bandSize   = sensor.bandSize;
     const maxBands   = (bandSize > 0 && sensor.rating > 0)
-      ? Math.floor(sensor.rating / 10)
+      ? SystemAdapter.current.getMaxDecayBands(sensor.rating)
       : 0;
 
     // Get-or-create PIXI objects

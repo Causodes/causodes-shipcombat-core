@@ -23,7 +23,7 @@ import { isOrdnance } from "../actors/ordnance/ordnance-types.js";
 
 // ── Shared arrow helper ──
 
-function _drawArrow(container, sx, sy, tx, ty, color) {
+export function _drawArrow(container, sx, sy, tx, ty, color) {
   const g = new PIXI.Graphics();
   container.addChild(g);
 
@@ -55,7 +55,7 @@ function _drawArrow(container, sx, sy, tx, ty, color) {
   g.endFill();
 }
 
-function _makeArrowContainer(name) {
+export function _makeArrowContainer(name) {
   const c = new PIXI.Container();
   c.name = name;
   c.eventMode = "none";
@@ -63,7 +63,7 @@ function _makeArrowContainer(name) {
   return c;
 }
 
-function _destroyContainer(ref) {
+export function _destroyContainer(ref) {
   if (ref && !ref.destroyed) ref.destroy({ children: true });
 }
 
@@ -237,7 +237,7 @@ export class StrikeCraftAttackPopup extends foundry.applications.api.HandlebarsA
   _onRender(context, options) {
     super._onRender?.(context, options);
 
-    // ── Live accuracy refresh ──────────────────────────────────────────────
+    // ── Live accuracy refresh ─────────────────────────────────────────────
     if (!this._liveHooks) {
       const _rerender = foundry.utils.debounce(() => {
         if (this.rendered) this.render();
@@ -266,6 +266,41 @@ export class StrikeCraftAttackPopup extends foundry.applications.api.HandlebarsA
     });
   }
 
+  async _onConfirmAttack(tokenId) {
+    const target = this.targets.find(t => t.tokenId === tokenId);
+    if (!target || target.alreadyAttacked) return;
+
+    const sys       = this.craftActor.system;
+    const flightSize = Math.max(1, (sys.hull?.max ?? 1) - (sys.hull?.value ?? 0));
+    const damage     = sys.payloadDamage ?? 0;
+    const salvoSize  = (sys.payloadCount ?? 1) * flightSize;
+
+    emitToGM("strikeCraftAttack", {
+      craftActorId:    this.craftActor.id,
+      craftName:       this.craftActor.name,
+      craftImg:        this.craftActor.img,
+      targetTokenId:   tokenId,
+      hitQuadrant:     target.hitQuadrant,
+      accuracy:        target.totalAccuracy,
+      damage,
+      payloadDiceCount: sys.payloadDiceCount ?? null,
+      payloadDiceSize:  sys.payloadDiceSize  ?? null,
+      traits:          sys.traits,
+      salvoSize,
+    });
+
+    // Consume 1 ammo
+    await this.craftActor.update({
+      [SystemAdapter.current.systemPath("ammo.value")]: Math.max(0, (sys.ammo?.value ?? 0) - 1),
+    });
+
+    // Mark this target as attacked this turn (cleared by advanceRound)
+    const prev = this.craftActor.getFlag(MODULE_ID, "attackedThisTurn") ?? [];
+    await this.craftActor.setFlag(MODULE_ID, "attackedThisTurn", [...prev, tokenId]);
+
+    this.close();
+  }
+
   _showArrow(target) {
     this._hideArrow();
     if (!canvas?.ready || !this._shipPos) return;
@@ -290,43 +325,10 @@ export class StrikeCraftAttackPopup extends foundry.applications.api.HandlebarsA
       Hooks.off("updateActor",  this._rerenderFn);
       Hooks.off("updateToken",  this._rerenderFn);
       Hooks.off("refreshToken", this._rerenderFn);
-      this._liveHooks = null;
+      this._liveHooks  = null;
       this._rerenderFn = null;
     }
     super._onClose?.(options);
-  }
-
-  async _onConfirmAttack(tokenId) {
-    const target = this.targets.find(t => t.tokenId === tokenId);
-    if (!target || target.alreadyAttacked) return;
-
-    const sys       = this.craftActor.system;
-    const flightSize = Math.max(1, (sys.hull?.max ?? 1) - (sys.hull?.value ?? 0));
-    const damage     = sys.payloadDamage ?? 0;
-    const salvoSize  = (sys.payloadCount ?? 1) * flightSize;
-
-    emitToGM("strikeCraftAttack", {
-      craftActorId:  this.craftActor.id,
-      craftName:     this.craftActor.name,
-      craftImg:      this.craftActor.img,
-      targetTokenId: tokenId,
-      hitQuadrant:   target.hitQuadrant,
-      accuracy:      target.totalAccuracy,
-      damage,
-      traits:        sys.traits,
-      salvoSize,
-    });
-
-    // Consume 1 ammo
-    await this.craftActor.update({
-      "system.ammo.value": Math.max(0, (sys.ammo?.value ?? 0) - 1),
-    });
-
-    // Mark this target as attacked this turn (cleared by advanceRound)
-    const prev = this.craftActor.getFlag(MODULE_ID, "attackedThisTurn") ?? [];
-    await this.craftActor.setFlag(MODULE_ID, "attackedThisTurn", [...prev, tokenId]);
-
-    this.close();
   }
 }
 

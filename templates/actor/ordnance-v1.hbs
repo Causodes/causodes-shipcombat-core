@@ -1,0 +1,38 @@
+{{!--
+  modules/causodes-shipcombat-core/templates/actor/ordnance-v1.hbs
+  AppV1 wrapper template for ordnance actor sheets (torpedo / strike craft).
+
+  Context keys from OrdnanceSheetV1Mixin.getData():
+    cssClass      – Foundry-supplied class string
+    actor         – the actor document
+    sys           – SystemAdapter.current.getShipData(actor)
+    owner         – actor.isOwner
+    isTorpedo     – boolean
+    isStrikeCraft – boolean
+    mainTabLabel  – localization key for the main tab
+--}}
+<form class="{{cssClass}} shipcombat-ordnance-sheet shipcombat-v1" autocomplete="off">
+
+  {{!-- Header --}}
+  {{> "modules/causodes-shipcombat-core/templates/actor/sheets/ordnance-header.hbs"}}
+
+  {{!-- Tab navigation --}}
+  <nav class="ordnance-sheet-tabs sheet-tabs tabs" data-group="primary">
+    <a class="item" data-tab="main" data-group="primary">{{localize mainTabLabel}}</a>
+    {{#if owner}}
+    <a class="item" data-tab="config" data-group="primary">{{localize "SHIPCOMBAT.Tab.Configuration"}}</a>
+    {{/if}}
+  </nav>
+
+  {{!-- Tab content — partials are self-wrapping (<section class="tab" data-tab="{{tab.id}}">).
+       Pass tab context objects so {{tab.id}} renders the correct value; without
+       this, data-tab renders as empty string and Foundry's global
+       .tab[data-tab]:not(.active) rule permanently hides the content. --}}
+  <section class="ordnance-sheet-body">
+    {{> "modules/causodes-shipcombat-core/templates/actor/sheets/ordnance-main.hbs"   tab=(lookup tabsById "main")}}
+    {{#if owner}}
+    {{> "modules/causodes-shipcombat-core/templates/actor/sheets/ordnance-config.hbs" tab=(lookup tabsById "config")}}
+    {{/if}}
+  </section>
+
+</form>

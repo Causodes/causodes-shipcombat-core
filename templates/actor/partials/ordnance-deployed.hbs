@@ -18,11 +18,11 @@
             <span class="shipcombat-deployed-name">{{name}}</span>
             <span class="shipcombat-deployed-type"><i class="fa-solid fa-rocket"></i></span>
             <div class="shipcombat-deployed-controls">
-                <button data-action="panToOrdnance" data-token-id="{{tokenId}}"
+                <button type="button" data-action="panToOrdnance" data-token-id="{{tokenId}}"
                         data-tooltip="{{localize 'SHIPCOMBAT.Ordnance.PanTo'}}">
                     <i class="fa-solid fa-eye"></i>
                 </button>
-                <button data-action="markOrdnanceDone" data-token-id="{{tokenId}}"
+                <button type="button" data-action="markOrdnanceDone" data-token-id="{{tokenId}}"
                         class="{{#if turnComplete}}active{{/if}}"
                         {{#if isLaunchTurn}}disabled data-tooltip="{{localize 'SHIPCOMBAT.Ordnance.LaunchTurnLocked'}}"{{else}}data-tooltip="{{localize 'SHIPCOMBAT.Ordnance.MarkDone'}}"{{/if}}>
                     <i class="{{#if turnComplete}}fa-solid fa-circle-check{{else}}fa-regular fa-circle{{/if}}"></i>
@@ -42,14 +42,14 @@
                 <i class="fa-solid fa-jet-fighter-up"></i>
             </span>
             <div class="shipcombat-deployed-hull">
-                <span>{{hull.value}}/{{hull.max}}</span>
+                <span>{{hull.displayValue}}/{{hull.max}}</span>
             </div>
             <div class="shipcombat-deployed-controls">
-                <button data-action="panToOrdnance" data-token-id="{{tokenId}}"
+                <button type="button" data-action="panToOrdnance" data-token-id="{{tokenId}}"
                         data-tooltip="{{localize 'SHIPCOMBAT.Ordnance.PanTo'}}">
                     <i class="fa-solid fa-eye"></i>
                 </button>
-                <button data-action="markOrdnanceDone" data-token-id="{{tokenId}}"
+                <button type="button" data-action="markOrdnanceDone" data-token-id="{{tokenId}}"
                         class="{{#if turnComplete}}active{{/if}}"
                         data-tooltip="{{localize 'SHIPCOMBAT.Ordnance.MarkDone'}}">
                     <i class="{{#if turnComplete}}fa-solid fa-circle-check{{else}}fa-regular fa-circle{{/if}}"></i>

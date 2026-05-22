@@ -11,28 +11,41 @@
  * Foundry hooks (updateToken, etc.) trigger lightweight `repaint()` without
  * a full sheet re-render, so the radar stays current when tokens move.
  */
-import { MODULE_ID, CORE_MODULE_ID, LOCK_DECAY_ROUNDS } from "../constants.js";
+import { MODULE_ID, CORE_MODULE_ID, LOCK_DECAY_ROUNDS, hullDisplay } from "../constants.js";
 import { ShipCombatState } from "../state/ShipCombatState.js";
 import { emitToGM } from "../socket.js";
 import { refreshTokenVisibility } from "./TokenVisibility.js";
 import { SENSORS_ACTIONS } from "../roles/sensors.js";
 import { isOrdnance as _isOrdnanceActor, ordnanceSubtype as _ordnanceSubtype, actorTypeIsOrdnance, actorTypeIsTorpedo, actorTypeIsStrikeCraft } from "../actors/ordnance/ordnance-types.js";
+import { SystemAdapter } from "../systems/SystemAdapter.js";
 
 // ── Visual constants ──────────────────────────────────────────────────────
 
 const RADAR_BG        = "#0a0f16";
-const RING_COLOUR     = "rgba(0, 255, 136, 0.22)";
-const RING_LABEL_COL  = "rgba(0, 255, 136, 0.55)";
-const GH_RING_COLOUR  = "rgba(68, 170, 255, 0.28)";
-const CROSSHAIR_COL   = "rgba(0, 255, 136, 0.10)";
-const HEADING_COL     = "rgba(0, 255, 136, 0.35)";
 const BLIP_SELECTED   = "#ffffff";     // Bright white for selected blip
 const BLIP_RADIUS     = 6;
-const FRIENDLY_COLOUR     = "#44aaff";    // Blue for friendly ships
-const FRIENDLY_ORD_COLOUR = "#44aaff";    // Match friendly ship blip for torpedoes/craft
-const SWEEP_HIGHLIGHT = "#00ff88";    // Green glow when sweep passes a blip
-const SWEEP_COLOUR    = "rgba(0, 255, 136, 0.35)";
-const SWEEP_TRAIL     = "rgba(0, 255, 136, 0.08)";
+
+// ── Radar colour palette ──────────────────────────────────────────────────
+// Defaults: Core green theme.
+// System adapters may override via radarPalette() — e.g. SF2e uses blue.
+// _pal is refreshed at the start of every full _paint() call.
+let _pal = {
+  ring:           "rgba(0, 255, 136, 0.22)",
+  ringLabel:      "rgba(0, 255, 136, 0.55)",
+  ghRing:         "rgba(0, 255, 136, 0.28)",
+  crosshair:      "rgba(0, 255, 136, 0.10)",
+  heading:        "rgba(0, 255, 136, 0.35)",
+  friendly:       "#00ff88",
+  friendlyOrd:    "#00ff88",
+  sweepHighlight: "#00ff88",
+  sweep:          "rgba(0, 255, 136, 0.35)",
+  sweepTrail:     "rgba(0, 255, 136, 0.08)",
+  sweepGlow:      "rgba(0, 255, 136, 0.6)",
+  trailStop1:     "rgba(0, 255, 136, 0.03)",
+  trailStop2:     "rgba(0, 255, 136, 0.08)",
+  trailStop3:     "rgba(0, 255, 136, 0.18)",
+  outerRim:       "rgba(0, 255, 136, 0.35)",
+};
 const SWEEP_SPEED     = 0.7;   // radians per second (~9 s per full rotation)
 const EDGE_PAD        = 0.15;
 
@@ -115,7 +128,8 @@ export class SensorRadar {
     _activeSensorsCtx = sensorsCtx;
     _registerHooks();
 
-    const el = sheet.element?.querySelector?.("canvas[data-sensor-radar]");
+    const _root = sheet.element?.querySelector ? sheet.element : sheet.element?.[0];
+    const el = _root?.querySelector?.("canvas[data-sensor-radar]");
     if (!el) return;
 
     _paint(el, sheet);
@@ -200,6 +214,9 @@ function _paint(el, sheet) {
   const ctx = el.getContext("2d");
   if (!ctx) return;
 
+  // Refresh colour palette from system adapter (supports per-system theming)
+  Object.assign(_pal, SystemAdapter.current.radarPalette?.() ?? {});
+
   const gridSize = canvas.grid.size;
   const sensor   = ShipCombatState.getSensorStats();
   const maxBands = (sensor.bandSize > 0 && sensor.rating > 0)
@@ -234,7 +251,7 @@ function _paint(el, sheet) {
     (ship.getActiveTokens?.() ?? []).map(t => t.id)
   );
 
-  const locks = ship.system.resources?.sensors?.locks ?? [];
+  const locks = SystemAdapter.current.getShipData(ship).resources?.sensors?.locks ?? [];
 
   const rawBlips = [];
   for (const c of candidates) {
@@ -253,7 +270,7 @@ function _paint(el, sheet) {
     // Check if this is friendly ordnance (torpedo / strike craft launched by us)
     const actorType = c.document.actor?.type ?? "";
     const isOrdnance = _isOrdnanceActor(c.document.actor);
-    const parentTokenId = c.document.actor?.system?.parentShipTokenId ?? "";
+    const parentTokenId = SystemAdapter.current.getShipData(c.document.actor)?.parentShipTokenId ?? "";
     const friendly = isOrdnance && ownTokenIds.has(parentTokenId);
 
     // Effective lock tier (explicit + auto-lock within guaranteed range)
@@ -349,7 +366,7 @@ function _paint(el, sheet) {
   const pxPerSq     = (side / 2) / scopeRadius;
 
   // Effects data
-  const effects = ship.system.resources?.sensors?.effects ?? [];
+  const effects = SystemAdapter.current.getShipData(ship).resources?.sensors?.effects ?? [];
 
   // ── Background ────────────────────────────────────────────────────
 
@@ -364,7 +381,7 @@ function _paint(el, sheet) {
   ctx.clip();
 
   // Crosshairs
-  ctx.strokeStyle = CROSSHAIR_COL;
+  ctx.strokeStyle = _pal.crosshair;
   ctx.lineWidth   = 1;
   ctx.beginPath();
   ctx.moveTo(half, 0); ctx.lineTo(half, side);
@@ -372,7 +389,7 @@ function _paint(el, sheet) {
   ctx.stroke();
 
   // Heading line (subtle forward bearing indicator)
-  ctx.strokeStyle = HEADING_COL;
+  ctx.strokeStyle = _pal.heading;
   ctx.lineWidth   = 1;
   ctx.setLineDash([4, 6]);
   ctx.globalAlpha = 0.5;
@@ -398,20 +415,20 @@ function _paint(el, sheet) {
   }
 
   if (ghRange > 0) {
-    _drawRing(ctx, half, half, ghRange * pxPerSq, GH_RING_COLOUR, 1.5);
-    _drawRingLabel(ctx, half, ghRange * pxPerSq, `${ghRange}`, FRIENDLY_COLOUR);
+    _drawRing(ctx, half, half, ghRange * pxPerSq, _pal.ghRing, 1.5);
+    _drawRingLabel(ctx, half, ghRange * pxPerSq, `${ghRange}`, _pal.friendly);
 
     // Filled min scan range zone when Hull & Armament drawer is open (L3+)
     if (_showScanRange) {
       ctx.save();
       ctx.globalAlpha = 0.08;
-      ctx.fillStyle = FRIENDLY_COLOUR;
+      ctx.fillStyle = _pal.friendly;
       ctx.beginPath();
       ctx.arc(half, half, ghRange * pxPerSq, 0, Math.PI * 2);
       ctx.fill();
       // Brighter ring to emphasize
       ctx.globalAlpha = 0.55;
-      ctx.strokeStyle = FRIENDLY_COLOUR;
+      ctx.strokeStyle = _pal.friendly;
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.arc(half, half, ghRange * pxPerSq, 0, Math.PI * 2);
@@ -423,14 +440,14 @@ function _paint(el, sheet) {
   const uniqueRanges = [...new Set(weapons.map(w => Number(w.system.range) || 0))]
     .filter(r => r > 0).sort((a, b) => a - b);
   for (const r of uniqueRanges) {
-    _drawRing(ctx, half, half, r * pxPerSq, RING_COLOUR, 1);
-    _drawRingLabel(ctx, half, r * pxPerSq, `${r}`, RING_LABEL_COL);
+    _drawRing(ctx, half, half, r * pxPerSq, _pal.ring, 1);
+    _drawRingLabel(ctx, half, r * pxPerSq, `${r}`, _pal.ringLabel);
   }
 
   if (maxBands > 0 && sensor.bandSize > 0 && longestRange > 0) {
     for (let b = 1; b <= maxBands; b++) {
       const rSq = longestRange + b * sensor.bandSize;
-      _drawRing(ctx, half, half, rSq * pxPerSq, RING_COLOUR, 0.5);
+      _drawRing(ctx, half, half, rSq * pxPerSq, _pal.ring, 0.5);
     }
   }
 
@@ -441,9 +458,9 @@ function _paint(el, sheet) {
     const labelR = edgeR - 16;         // label centre distance
     const bearingOffset = 0; // North is always at top in both modes
 
-    ctx.strokeStyle = RING_LABEL_COL;
+    ctx.strokeStyle = _pal.ringLabel;
     ctx.lineWidth   = 1;
-    ctx.fillStyle   = RING_LABEL_COL;
+    ctx.fillStyle   = _pal.ringLabel;
     ctx.font        = "9px monospace";
     ctx.textAlign   = "center";
     ctx.textBaseline = "middle";
@@ -490,10 +507,10 @@ function _paint(el, sheet) {
     ctx.closePath();
     const trailGrad = ctx.createConicGradient(-trailArc, 0, 0);
     trailGrad.addColorStop(0, "transparent");
-    trailGrad.addColorStop(arcFrac * 0.25, "rgba(0, 255, 136, 0.03)");
-    trailGrad.addColorStop(arcFrac * 0.5,  "rgba(0, 255, 136, 0.08)");
-    trailGrad.addColorStop(arcFrac * 0.75, "rgba(0, 255, 136, 0.18)");
-    trailGrad.addColorStop(arcFrac,        SWEEP_COLOUR);
+    trailGrad.addColorStop(arcFrac * 0.25, _pal.trailStop1);
+    trailGrad.addColorStop(arcFrac * 0.5,  _pal.trailStop2);
+    trailGrad.addColorStop(arcFrac * 0.75, _pal.trailStop3);
+    trailGrad.addColorStop(arcFrac,        _pal.sweep);
     // Hard cut-off beyond the visible arc to prevent ghost bleed
     trailGrad.addColorStop(Math.min(arcFrac + 0.001, 1), "transparent");
     ctx.fillStyle = trailGrad;
@@ -502,9 +519,9 @@ function _paint(el, sheet) {
 
     // Bright sweep line with glow
     ctx.save();
-    ctx.shadowColor = "rgba(0, 255, 136, 0.6)";
+    ctx.shadowColor = _pal.sweepGlow;
     ctx.shadowBlur  = 6;
-    ctx.strokeStyle = SWEEP_COLOUR;
+    ctx.strokeStyle = _pal.sweep;
     ctx.lineWidth   = 2;
     ctx.beginPath();
     ctx.moveTo(half, half);
@@ -527,7 +544,7 @@ function _paint(el, sheet) {
 
     const isSelected = b.selected;
     const isOrd = actorTypeIsOrdnance(b.actorType);
-    const tierCol = b.friendly ? (isOrd ? FRIENDLY_ORD_COLOUR : FRIENDLY_COLOUR) : (TIER_COLOUR[b.lockTier] ?? TIER_COLOUR[0]);
+    const tierCol = b.friendly ? (isOrd ? _pal.friendlyOrd : _pal.friendly) : (TIER_COLOUR[b.lockTier] ?? TIER_COLOUR[0]);
 
     // Sweep proximity  -  blip colour shifts toward green when the sweep arm
     // passes, then decays back to the original tier colour over ~2 seconds.
@@ -538,7 +555,7 @@ function _paint(el, sheet) {
     // sweepBoost: 1 at sweep arm, decays to 0 over ~2s worth of angular distance
     const DECAY_ARC     = SWEEP_SPEED * 2.0;  // radians the arm covers in 2 seconds
     const sweepBoost    = sweepDelta < DECAY_ARC ? (1 - sweepDelta / DECAY_ARC) : 0;
-    const col = isSelected ? BLIP_SELECTED : _lerpColour(tierCol, SWEEP_HIGHLIGHT, sweepBoost * 0.7);
+    const col = isSelected ? BLIP_SELECTED : _lerpColour(tierCol, _pal.sweepHighlight, sweepBoost * 0.7);
 
     // Constant brightness  -  no dimming/blinking
     ctx.globalAlpha = isSelected ? 1.0 : 0.85;
@@ -747,8 +764,8 @@ function _paint(el, sheet) {
   }
 
   // Own ship marker
-  ctx.fillStyle   = FRIENDLY_COLOUR;
-  ctx.shadowColor = FRIENDLY_COLOUR;
+  ctx.fillStyle   = _pal.friendly;
+  ctx.shadowColor = _pal.friendly;
   ctx.shadowBlur  = 8;
   if (_trueBearing) {
     ctx.save();
@@ -774,7 +791,7 @@ function _paint(el, sheet) {
   ctx.restore();
 
   // Outer rim
-  ctx.strokeStyle = "rgba(0, 255, 136, 0.35)";
+  ctx.strokeStyle = _pal.outerRim;
   ctx.lineWidth   = 2;
   ctx.beginPath();
   ctx.arc(half, half, half - 1, 0, Math.PI * 2);
@@ -901,7 +918,7 @@ function _showPopup(blip, canvasEl) {
   const wrap = canvasEl.parentElement;
   if (!wrap) return;
   const ctx = _activeSensorsCtx ?? {};
-  const effects = _activeSheet?.actor?.system?.resources?.sensors?.effects ?? [];
+  const effects = SystemAdapter.current.getShipData(_activeSheet?.actor)?.resources?.sensors?.effects ?? [];
   const blipEffects = effects.filter(e => e.targetTokenId === blip.tokenId);
 
   const popup = document.createElement("div");
@@ -1039,7 +1056,7 @@ function _buildPopupHTML(blip, ctx, blipEffects) {
   const loc = (k) => game.i18n.localize(k);
   const tier = blip.lockTier ?? 0;
   const isBlipOrd = actorTypeIsOrdnance(blip.actorType);
-  const tierCol = blip.friendly ? (isBlipOrd ? FRIENDLY_ORD_COLOUR : FRIENDLY_COLOUR) : (TIER_COLOUR[tier] ?? TIER_COLOUR[0]);
+  const tierCol = blip.friendly ? (isBlipOrd ? _pal.friendlyOrd : _pal.friendly) : (TIER_COLOUR[tier] ?? TIER_COLOUR[0]);
 
   // Friendly ordnance gets its own dedicated popup
   const isTorpedo = actorTypeIsTorpedo(blip.actorType, blip.actorSubtype);
@@ -1162,18 +1179,18 @@ function _buildPopupHTML(blip, ctx, blipEffects) {
 
 function _buildFriendlyOrdnancePopupHTML(blip, isTorpedo, ctx) {
   const actor = canvas.tokens.get(blip.tokenId)?.document?.actor;
-  const sys = actor?.system ?? {};
+  const sys = SystemAdapter.current.getShipData(actor) ?? {};
   let h = "";
 
   // Header
   h += `<div class="shipcombat-rpop-header">`;
-  h += `<span class="shipcombat-rpop-name" style="color:${FRIENDLY_ORD_COLOUR}">${_esc(blip.name)}</span>`;
+  h += `<span class="shipcombat-rpop-name" style="color:${_pal.friendlyOrd}">${_esc(blip.name)}</span>`;
   h += `<button class="shipcombat-rpop-close" data-dismiss-popup><i class="fa-solid fa-xmark"></i></button>`;
   h += `</div>`;
 
   // Type label
   const typeLabel = isTorpedo ? "Torpedo" : "Strike Craft";
-  h += `<div class="shipcombat-rpop-lock" style="color:${FRIENDLY_ORD_COLOUR}">`;
+  h += `<div class="shipcombat-rpop-lock" style="color:${_pal.friendlyOrd}">`;
   h += `<i class="fa-solid ${isTorpedo ? "fa-burst" : "fa-jet-fighter"}"></i> `;
   h += `${typeLabel}  -  Friendly`;
   h += `</div>`;
@@ -1181,7 +1198,10 @@ function _buildFriendlyOrdnancePopupHTML(blip, isTorpedo, ctx) {
   if (isTorpedo) {
     // Torpedo-specific stats
     const hull = sys.hull ?? {};
-    const hullPct = hull.max > 0 ? Math.round((hull.value / hull.max) * 100) : 0;
+    const _hullDisp = hullDisplay(hull.value, hull.max);
+    const hullPct = _hullDisp.pct;
+    const hullLabel = _hullDisp.isDamageTaken ? "Hull Damage" : "Hull Integrity";
+    const hullVal = _hullDisp.displayValue;
     const fuel = sys.fuel ?? {};
     const fuelPct = fuel.max > 0 ? Math.round((fuel.value / fuel.max) * 100) : 0;
     const speed = sys.movement?.speed ?? 0;
@@ -1190,9 +1210,9 @@ function _buildFriendlyOrdnancePopupHTML(blip, isTorpedo, ctx) {
 
     // Hull bar
     h += `<div class="shipcombat-rpop-hull-row">`;
-    h += `<span class="shipcombat-rpop-hull-lbl">Hull Damage</span>`;
+    h += `<span class="shipcombat-rpop-hull-lbl">${hullLabel}</span>`;
     h += `<span class="shipcombat-rpop-hull-bar"><span class="shipcombat-rpop-hull-fill" style="width:${hullPct}%"></span></span>`;
-    h += `<span class="shipcombat-rpop-hull-val">${hull.value ?? 0}/${hull.max ?? 0}</span>`;
+    h += `<span class="shipcombat-rpop-hull-val">${hullVal}/${hull.max ?? 0}</span>`;
     h += `</div>`;
 
     // Fuel bar
@@ -1234,13 +1254,16 @@ function _buildFriendlyOrdnancePopupHTML(blip, isTorpedo, ctx) {
   } else {
     // Strike craft  -  simpler
     const hull = sys.hull ?? {};
-    const hullPct = hull.max > 0 ? Math.round((hull.value / hull.max) * 100) : 0;
+    const _hullDisp2 = hullDisplay(hull.value, hull.max);
+    const hullPct = _hullDisp2.pct;
+    const hullLabel2 = _hullDisp2.isDamageTaken ? "Hull Damage" : "Hull Integrity";
+    const hullVal2 = _hullDisp2.displayValue;
 
     h += `<div class="shipcombat-rpop-intel">`;
     h += `<div class="shipcombat-rpop-hull-row">`;
-    h += `<span class="shipcombat-rpop-hull-lbl">Hull Damage</span>`;
+    h += `<span class="shipcombat-rpop-hull-lbl">${hullLabel2}</span>`;
     h += `<span class="shipcombat-rpop-hull-bar"><span class="shipcombat-rpop-hull-fill" style="width:${hullPct}%"></span></span>`;
-    h += `<span class="shipcombat-rpop-hull-val">${hull.value ?? 0}/${hull.max ?? 0}</span>`;
+    h += `<span class="shipcombat-rpop-hull-val">${hullVal2}/${hull.max ?? 0}</span>`;
     h += `</div>`;
 
     h += `<div class="shipcombat-rpop-torp-range">`;
@@ -1298,7 +1321,7 @@ function _buildIntelHTML(blip, tier) {
 
   const actor = canvas.tokens.get(blip.tokenId)?.document?.actor;
   if (!actor) return "";
-  const sys = actor.system ?? {};
+  const sys = SystemAdapter.current.getShipData(actor) ?? {};
 
   let h = `<div class="shipcombat-rpop-intel">`;
 
@@ -1309,7 +1332,7 @@ function _buildIntelHTML(blip, tier) {
   const maxPerSector = shieldStats.zoneThresholds ?? {};
 
   h += `<details class="shipcombat-rpop-drawer">`;
-  h += `<summary class="shipcombat-rpop-drawer-hd"><i class="fa-solid fa-shield-halved"></i> Void Shields</summary>`;
+  h += `<summary class="shipcombat-rpop-drawer-hd"><i class="fa-solid fa-shield-halved"></i> Shields</summary>`;
   h += `<div class="shipcombat-rpop-drawer-body">`;
   h += `<div class="shipcombat-rpop-sectors">`;
   for (const s of SECTOR_IDS) {
@@ -1339,39 +1362,27 @@ function _buildIntelHTML(blip, tier) {
     h += `<div class="shipcombat-rpop-drawer-body shipcombat-rpop-armament-scroll">`;
 
     const hull    = sys.hull ?? {};
-    const hullPct = hull.max > 0 ? Math.round((hull.value / hull.max) * 100) : 0;
+    const _hullDisp3 = hullDisplay(hull.value, hull.max);
+    const hullPct = _hullDisp3.pct;
+    const hullLabel3 = "Hit Points";
+    const hullVal3 = _hullDisp3.displayValue;
     const fires   = sys.internalFire ?? 0;
 
     h += `<div class="shipcombat-rpop-hull-row">`;
-    h += `<span class="shipcombat-rpop-hull-lbl">Hull Damage</span>`;
+    h += `<span class="shipcombat-rpop-hull-lbl">${hullLabel3}</span>`;
     h += `<span class="shipcombat-rpop-hull-bar"><span class="shipcombat-rpop-hull-fill" style="width:${hullPct}%"></span></span>`;
-    h += `<span class="shipcombat-rpop-hull-val">${hull.value ?? 0}/${hull.max ?? 0}</span>`;
+    h += `<span class="shipcombat-rpop-hull-val">${hullVal3}/${hull.max ?? 0}</span>`;
     if (fires > 0) {
       h += `<span class="shipcombat-rpop-fires"><i class="fa-solid fa-fire"></i>${fires}</span>`;
     }
     h += `</div>`;
 
-    // ── Conditions (NPC ships only, Targeting Solution tier) ──
-    if (tier >= 4 && blip.actorType === `${MODULE_ID}.npcShip`) {
-      const rawConds = sys.conditions ?? {};
-      const CRIT_LOCS = ["hull", "engines", "manoeuvring", "coreSystems", "weaponsSensors"];
-      const condList = CRIT_LOCS
-        .map(locId => ({ locId, condTier: rawConds[locId]?.tier ?? null }))
-        .filter(c => c.condTier);
-      h += `<div class="shipcombat-rpop-wep-section">`;
-      h += `<div class="shipcombat-rpop-wep-section-hd"><i class="fa-solid fa-triangle-exclamation"></i> Conditions</div>`;
-      if (condList.length > 0) {
-        for (const c of condList) {
-          const locLabel   = game.i18n.localize(`SHIPCOMBAT.Crit.Location.${c.locId}`);
-          const condName   = game.i18n.localize(`SHIPCOMBAT.Crit.Condition.${c.locId}.${c.condTier}`);
-          const condEffect = game.i18n.localize(`SHIPCOMBAT.Crit.Effect.${c.locId}.${c.condTier}`);
-          h += `<div class="shipcombat-rpop-wep-entry shipcombat-crit-tier--${c.condTier}" title="${_esc(condEffect)}">`;          h += `<span class="shipcombat-rpop-wep-name">${_esc(locLabel)}</span>`;
-          h += `<span class="shipcombat-rpop-cond-tier">${_capitalize(c.condTier)}</span>`;
-          h += `</div>`;
-        }
-      } else {
-        h += `<div class="shipcombat-rpop-wep-entry"><span class="shipcombat-rpop-wep-name" style="opacity:0.6">No active conditions</span></div>`;
-      }
+    // AC (d20 systems only, e.g. SF2e) — shown at tier 3+
+    const _displayAC = SystemAdapter.current.getTargetAC(actor);
+    if (_displayAC !== null) {
+      h += `<div class="shipcombat-rpop-hull-row">`;
+      h += `<span class="shipcombat-rpop-hull-lbl">AC</span>`;
+      h += `<span class="shipcombat-rpop-hull-val" style="margin-left:auto">${_displayAC}</span>`;
       h += `</div>`;
     }
 
@@ -1424,6 +1435,75 @@ function _buildIntelHTML(blip, tier) {
     }
 
     h += `</div></details>`;
+  }
+
+  // ── Drawer 3: Conditions (tier 4+, NPC ships only) ────────────────────────
+  if (tier >= 4 && blip.actorType === `${MODULE_ID}.npcShip`) {
+    const rawConds = sys.conditions ?? {};
+    const CRIT_LOCS = ["hull", "engines", "manoeuvring", "coreSystems", "weaponsSensors"];
+    const condList = CRIT_LOCS
+      .map(locId => ({ locId, condTier: rawConds[locId]?.tier ?? null }))
+      .filter(c => c.condTier);
+    h += `<details class="shipcombat-rpop-drawer">`;
+    h += `<summary class="shipcombat-rpop-drawer-hd"><i class="fa-solid fa-triangle-exclamation"></i> Conditions</summary>`;
+    h += `<div class="shipcombat-rpop-drawer-body">`;
+    if (condList.length > 0) {
+      for (const c of condList) {
+        const locLabel   = game.i18n.localize(`SHIPCOMBAT.Crit.Location.${c.locId}`);
+        const condEffect = game.i18n.localize(`SHIPCOMBAT.Crit.Effect.${c.locId}.${c.condTier}`);
+        h += `<div class="shipcombat-rpop-wep-entry shipcombat-crit-tier--${c.condTier}" title="${_esc(condEffect)}">`;        h += `<span class="shipcombat-rpop-wep-name">${_esc(locLabel)}</span>`;
+        h += `<span class="shipcombat-rpop-cond-tier">${_capitalize(c.condTier)}</span>`;
+        h += `</div>`;
+      }
+    } else {
+      h += `<div class="shipcombat-rpop-wep-entry"><span class="shipcombat-rpop-wep-name" style="opacity:0.6">No active conditions</span></div>`;
+    }
+    h += `</div></details>`;
+  }
+
+  // ── Drawer 4: Defenses / IWR (tier 4+) ────────────────────────────────
+  if (tier >= 4) {
+    const iwr = SystemAdapter.current.getIWR(actor);
+    if (iwr && (iwr.immunities.length || iwr.weaknesses.length || iwr.resistances.length)) {
+      h += `<details class="shipcombat-rpop-drawer">`;
+      h += `<summary class="shipcombat-rpop-drawer-hd"><i class="fa-solid fa-shield-halved"></i> Defenses</summary>`;
+      h += `<div class="shipcombat-rpop-drawer-body">`;
+
+      if (iwr.immunities.length) {
+        h += `<div class="shipcombat-rpop-wep-section">`;
+        h += `<div class="shipcombat-rpop-wep-section-hd"><i class="fa-solid fa-ban"></i> Immune</div>`;
+        for (const imm of iwr.immunities) {
+          h += `<div class="shipcombat-rpop-wep-entry"><span class="shipcombat-rpop-wep-name">${_esc(String(imm))}</span></div>`;
+        }
+        h += `</div>`;
+      }
+
+      if (iwr.weaknesses.length) {
+        h += `<div class="shipcombat-rpop-wep-section">`;
+        h += `<div class="shipcombat-rpop-wep-section-hd"><i class="fa-solid fa-arrow-up"></i> Weakness</div>`;
+        for (const w of iwr.weaknesses) {
+          h += `<div class="shipcombat-rpop-wep-entry">`;
+          h += `<span class="shipcombat-rpop-wep-name">${_esc(String(w.type))}</span>`;
+          h += `<span class="shipcombat-rpop-wep-count">+${w.value}</span>`;
+          h += `</div>`;
+        }
+        h += `</div>`;
+      }
+
+      if (iwr.resistances.length) {
+        h += `<div class="shipcombat-rpop-wep-section">`;
+        h += `<div class="shipcombat-rpop-wep-section-hd"><i class="fa-solid fa-arrow-down"></i> Resistance</div>`;
+        for (const r of iwr.resistances) {
+          h += `<div class="shipcombat-rpop-wep-entry">`;
+          h += `<span class="shipcombat-rpop-wep-name">${_esc(String(r.type))}</span>`;
+          h += `<span class="shipcombat-rpop-wep-count">${r.value}</span>`;
+          h += `</div>`;
+        }
+        h += `</div>`;
+      }
+
+      h += `</div></details>`;
+    }
   }
 
   h += `</div>`;
@@ -1606,7 +1686,8 @@ function _startSweepLoop(el, sheet) {
     // If the canvas was replaced by a re-render, find the new one
     let canvas = el;
     if (!canvas.isConnected) {
-      canvas = _activeSheet.element?.querySelector?.("canvas[data-sensor-radar]");
+      const _loopRoot = _activeSheet.element?.querySelector ? _activeSheet.element : _activeSheet.element?.[0];
+      canvas = _loopRoot?.querySelector?.("canvas[data-sensor-radar]");
       if (!canvas) { _animFrameId = requestAnimationFrame(_loop); return; }
       el = canvas;           // update closure reference
       _wireClick(canvas);    // re-bind click on new element
@@ -1734,7 +1815,8 @@ function _lerpColour(colA, colB, t) {
 
 /** Collapse or expand the Sensor Radar section on the main sheet. */
 function _collapseRadarSection(sheet, collapsed) {
-  const section = sheet?.element?.querySelector?.(".shipcombat-radar-section");
+  const _colRoot = sheet?.element?.querySelector ? sheet.element : sheet?.element?.[0];
+  const section = _colRoot?.querySelector?.(".shipcombat-radar-section");
   if (!section) return;
   const content = section.querySelector(".list-content");
   if (!content) return;

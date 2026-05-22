@@ -30,7 +30,7 @@ const CORE_POWER_BONUS  = 5;
 function _getOrdnanceBayCaps(shipActor) {
   const bay = shipActor?.items?.find(i => i.type === `${MODULE_ID}.component` && i.system.slot === "weaponsBay");
   return {
-    ammoMax:   bay?.system?.bayAmmoCapacity ?? 20,
+    ammoMax:   bay?.system?.bayAmmoCapacity ?? 0,
   };
 }
 
@@ -47,7 +47,7 @@ function _getAuxPowerCapacity(shipActor) {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 async function _resolveGunnerActor(sheet) {
-  const sys = sheet.actor.system;
+  const sys = SystemAdapter.current.getShipData(sheet.actor);
   const ref = sys.crewActors?.gunner;
   if (ref?.uuid) {
     try { return await fromUuid(ref.uuid); } catch { /* ignore */ }
@@ -67,7 +67,7 @@ async function _resolveGunnerActor(sheet) {
  * Mirrors the Helmsman pattern: one roll, then allocate before acting.
  */
 async function _onRollOrdnance() {
-  const sys = this.actor.system;
+  const sys = SystemAdapter.current.getShipData(this.actor);
   if (sys.resources?.gunner?.ordnanceRolled) {
     return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.AlreadyRolledOrdnance"));
   }
@@ -97,7 +97,7 @@ async function _onRollOrdnance() {
  * data-delta = "+1" | "-1"
  */
 async function _onAllocGunnerSL(event, target) {
-  const sys = this.actor.system;
+  const sys = SystemAdapter.current.getShipData(this.actor);
   const gunner = sys.resources?.gunner ?? {};
 
   // Cannot allocate if locked (already fired) or not yet rolled
@@ -126,7 +126,7 @@ async function _onAllocGunnerSL(event, target) {
  * data-track = "ammo" | "power"
  */
 async function _onConsumeCore(event, target) {
-  const sys   = this.actor.system;
+  const sys   = SystemAdapter.current.getShipData(this.actor);
   const track = target.dataset.track;
 
   const hasCoreAvail = (sys.resources?.gunner?.coreCount ?? 0) > 0;
@@ -160,7 +160,7 @@ async function _onConsumeCore(event, target) {
  *   chooseCritLoc  – activate choose-crit-location flag for next crit (consume core)
  */
 async function _onGunnerCoreAction(event, target) {
-  const sys    = this.actor.system;
+  const sys    = SystemAdapter.current.getShipData(this.actor);
   const action = target.dataset.coreAction;
 
   const hasCoreAvail = (sys.resources?.gunner?.coreCount ?? 0) > 0;
@@ -222,10 +222,17 @@ async function _onFireWeapon(event, target) {
   if (!weapon) return;
 
   // Validate resource availability
-  const sys = this.actor.system;
+  const sys = SystemAdapter.current.getShipData(this.actor);
 
   const gunnerRes = sys.resources?.gunner ?? {};
   const weaponType = weapon.system.resourceType;
+
+  // Guard: once-per-turn firing (weapons without Multiple Attacks trait)
+  const traits = weapon.system?.traits ?? {};
+  const firedWeaponIds = gunnerRes.firedWeaponIds ?? [];
+  if (!traits.unlimitedRof && firedWeaponIds.includes(weaponId)) {
+    return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.AlreadyFiredWeapon"));
+  }
 
   if (weaponType === "ammo") {
     const tier = MACRO_FIRE_TIERS.find(t => t.id === fireMode);
@@ -255,7 +262,8 @@ async function _onFireWeapon(event, target) {
     return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.WeaponNotConfigured"));
   }
 
-  const popup = new TargetingPopup({ weapon, fireMode });
+  const TargetingPopupClass = ShipCombat._popupClass("targeting", TargetingPopup);
+  const popup = new TargetingPopupClass({ weapon, fireMode });
   popup.render(true);
 }
 
@@ -278,15 +286,28 @@ async function _onRollTest(event, target) {
 function _enrichWeapon(item, gunnerCtx) {
   const sys = item.system;
   const type = sys.resourceType;
+  const damageFormula = SystemAdapter.current.getWeaponDamageFormula(item);
+  const damageType    = SystemAdapter.current.getWeaponDamageType(item);   // nullable
+  const damageLabel   = damageType ? `${damageFormula} ${damageType}` : damageFormula;
+  const fpBonus       = gunnerCtx.allocFirepower ?? 0;
+  const combinedDamageLabel = fpBonus > 0
+    ? `${damageFormula} + ${fpBonus}${damageType ? ` ${damageType}` : ""}`
+    : damageLabel;
   const enriched = {
     id:        item.id,
     uuid:      item.uuid,
     name:      item.name,
     img:       item.img,
     system:    sys,
+    damageFormula,
+    damageType,
+    damageLabel,
+    fpBonus,
+    combinedDamageLabel,
     traitsHtml: sys.traitsHtml ?? "",
     traitTags: _buildTraitTags(sys.traits, sys.resource),
     isMisconfigured: !sys.range || !sys.degreeOfFire,
+    isAlreadyFired: !(sys.traits?.unlimitedRof) && (gunnerCtx.firedWeaponIds ?? []).includes(item.id),
   };
 
   if (type === "ammo") {
@@ -307,17 +328,20 @@ function _enrichWeapon(item, gunnerCtx) {
   }
 
   if (type === "heat") {
-    const dmgBonus = 0;
+    const dmgBonus = gunnerCtx.allocFirepower ?? 0;
     const traits = sys.traits ?? {};
     const heatPerShot = 1;
     const salvoSize = sys.salvoSize ?? 1;
     const heatCost = heatPerShot * salvoSize;
+    const totalDamage = dmgBonus > 0
+      ? `${damageFormula} + ${dmgBonus}${damageType ? ` ${damageType}` : ""}`
+      : damageLabel;
     enriched.plasma = {
       heatPerShot,
       heatPerVolley: heatCost,
       dmgBonus,
-      baseDamage:   sys.damage,
-      totalDamage:  sys.damage + dmgBonus,
+      baseDamage:   damageLabel,
+      totalDamage,
       salvoSize,
       canFire:      (gunnerCtx.heat + heatCost <= gunnerCtx.heatMax),
       shotsRemaining: Math.max(0, Math.floor((gunnerCtx.heatMax - gunnerCtx.heat) / Math.max(1, heatPerShot))),
@@ -330,6 +354,12 @@ function _enrichWeapon(item, gunnerCtx) {
     const tiers = buildChargeTiers(step);
     const maxCharge = step * 4;
     const effectiveCharge = Math.min(power, maxCharge);
+    const diceMatch    = damageFormula.match(/^(\d+)(d\d+)/i);
+    const isDice        = !!diceMatch;
+    const baseDiceCount = isDice ? parseInt(diceMatch[1], 10) : 0;
+    const dieSizeStr    = isDice ? diceMatch[2].toLowerCase() : "";
+    const flatBase      = isDice ? 0 : (parseFloat(damageFormula) || 0);
+    const typePart      = damageType ? ` ${damageType}` : "";
     enriched.lance = {
       power,
       powerMax:   gunnerCtx.powerMax,
@@ -341,12 +371,19 @@ function _enrichWeapon(item, gunnerCtx) {
         max:        t.max,
         multiplier: t.multiplier,
         isActive:   effectiveCharge >= t.min && effectiveCharge <= t.max,
-        damage:     Math.round(sys.damage * t.multiplier),
+        damage:     isDice ? `${baseDiceCount * t.multiplier}${dieSizeStr}` : Math.round(flatBase * t.multiplier),
       })),
       activeTier: tiers.find(t => effectiveCharge >= t.min && effectiveCharge <= t.max),
     };
     if (enriched.lance.activeTier) {
-      enriched.lance.activeDamage = Math.round(sys.damage * enriched.lance.activeTier.multiplier);
+      const mult = enriched.lance.activeTier.multiplier;
+      const _scaledDmg = isDice
+        ? `${baseDiceCount * mult}${dieSizeStr}`
+        : `${Math.round(flatBase * mult)}`;
+      const _scaledFp = fpBonus * mult;
+      enriched.lance.activeDamageLabel = _scaledFp > 0
+        ? `${_scaledDmg} + ${_scaledFp}${typePart}`
+        : `${_scaledDmg}${typePart}`;
       enriched.lance.activeTierLabel = game.i18n.localize(enriched.lance.activeTier.label);
     }
   }
@@ -482,6 +519,8 @@ export function buildGunnerContext(sys, opts = {}) {
     // Arc overlay
     arcOverlayActive:    gunner.arcOverlayActive ?? false,
     chooseCritLocation:  gunner.chooseCritLocation ?? false,
+    // Once-per-turn weapon tracking
+    firedWeaponIds:      gunner.firedWeaponIds ?? [],
     // Condition / stance
     stanceHitMod,
     captainHitBonus,

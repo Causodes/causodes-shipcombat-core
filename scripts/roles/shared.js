@@ -4,6 +4,7 @@
  */
 import { MODULE_ID } from "../constants.js";
 import { emitToGM } from "../socket.js";
+import { SystemAdapter } from "../systems/SystemAdapter.js";
 
 // ── Item management ─────────────────────────────────────────────────────────
 
@@ -81,7 +82,7 @@ async function _onPerformOvercharged(event, target) {
 // ── Engineer ───────────────────────────────────────────────────────────────
 
 async function _onToggleCore(event, target) {
-  const sys = this.actor.system;
+  const sys = SystemAdapter.current.getShipData(this.actor);
   const roleId = target.dataset.roleId;
   if (!roleId) return;
   // Once dispatched (true) or core consumed this turn ("spent"), cannot toggle
@@ -95,7 +96,7 @@ async function _onToggleCore(event, target) {
 async function _onAdjustSector(event, target) {
   const { sector, field, delta } = target.dataset;
   if (field !== "shields") return;
-  const sys     = this.actor.system;
+  const sys     = SystemAdapter.current.getShipData(this.actor);
   const current = sys.shields?.[sector] ?? 0;
   const pool    = sys.shieldPool?.current ?? 0;
   const d       = Number(delta);
@@ -110,7 +111,7 @@ async function _onAdjustSector(event, target) {
 
 async function _onIncrementResource(event, target) {
   const { roleId, key, max } = target.dataset;
-  const sys     = this.actor.system;
+  const sys     = SystemAdapter.current.getShipData(this.actor);
   const current = sys.resources?.[roleId]?.[key] ?? 0;
   const next    = Math.min(Number(max ?? Infinity), current + 1);
   emitToGM("updateResource", { roleId, key, value: next });
@@ -118,7 +119,7 @@ async function _onIncrementResource(event, target) {
 
 async function _onDecrementResource(event, target) {
   const { roleId, key } = target.dataset;
-  const sys     = this.actor.system;
+  const sys     = SystemAdapter.current.getShipData(this.actor);
   const current = sys.resources?.[roleId]?.[key] ?? 0;
   const next    = Math.max(0, current - 1);
   emitToGM("updateResource", { roleId, key, value: next });
@@ -137,7 +138,7 @@ async function _onMarkDone(event, target) {
  * Used by the scroll/click interaction on the arc compass.
  */
 export function adjustShieldSectorDelta(sheet, sector, delta) {
-  const sys     = sheet.actor.system;
+  const sys     = SystemAdapter.current.getShipData(sheet.actor);
   const current = sys.shields?.[sector] ?? 0;
   const pool    = sys.shieldPool?.current ?? 0;
   if (delta > 0 && pool <= 0) return;

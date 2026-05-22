@@ -1,0 +1,372 @@
+/**
+ * custom-class-compat.css
+ *
+ * warhammer-lib scopes its utility classes (sheet-list, list-header, list-row,
+ * row-content, name-list, etc.) to `.warhammer.application`.  Ship and
+ * component sheets don't carry that class, so this file re-declares every
+ * relevant rule under `.shipcombat-ship` and `.shipcombat-component` so the
+ * core templates render correctly regardless of the outer application class.
+ */
+
+/* ── CSS variable defaults (dark theme — matches SF2e dark UI) ──────────── */
+
+.shipcombat-ship,
+.shipcombat-component {
+  --list-header:        rgba(255, 255, 255, 0.08);
+  --list-header-border: rgba(255, 255, 255, 0.18);
+  --list-row:           none;
+  --list-row-alternate: rgba(255, 255, 255, 0.04);
+  --name-bg:            rgba(255, 255, 255, 0.05);
+  --name-border:        rgba(255, 255, 255, 0.18);
+  --name-label:         rgba(255, 255, 255, 0.08);
+  --tab-color:          var(--color-border-light, rgba(255,255,255,0.2));
+}
+
+/* ── sheet-list ─────────────────────────────────────────────────────────── */
+
+.shipcombat-ship .sheet-list,
+.shipcombat-component .sheet-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.shipcombat-ship .sheet-list .list-row,
+.shipcombat-component .sheet-list .list-row {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  line-height: 2rem;
+  background: var(--list-row);
+}
+
+.shipcombat-ship .sheet-list .list-row:nth-child(even),
+.shipcombat-component .sheet-list .list-row:nth-child(even) {
+  background-color: var(--list-row-alternate);
+}
+
+.shipcombat-ship .sheet-list .list-header,
+.shipcombat-component .sheet-list .list-header {
+  display: flex;
+  align-items: center;
+  background-color: var(--list-header);
+  height: 1.5rem;
+  line-height: 1.5rem;
+  border: 1px solid var(--list-header-border);
+}
+
+.shipcombat-ship .sheet-list .list-header .list-name,
+.shipcombat-component .sheet-list .list-header .list-name {
+  margin: 0 5px;
+}
+
+.shipcombat-ship .sheet-list .list-header .list-button,
+.shipcombat-component .sheet-list .list-header .list-button {
+  flex: 0 0 10px;
+  margin: 0 10px;
+}
+
+.shipcombat-ship .sheet-list.condensed .list-row,
+.shipcombat-component .sheet-list.condensed .list-row {
+  line-height: 1.5rem;
+}
+
+.shipcombat-ship .sheet-list.condensed .list-content .row-content,
+.shipcombat-component .sheet-list.condensed .list-content .row-content {
+  height: 1.5rem;
+}
+
+.shipcombat-ship .sheet-list .list-content .row-content,
+.shipcombat-component .sheet-list .list-content .row-content {
+  height: 2rem;
+}
+
+.shipcombat-ship .sheet-list .row-content,
+.shipcombat-component .sheet-list .row-content {
+  display: flex;
+  width: 100%;
+  text-align: center;
+}
+
+.shipcombat-ship .sheet-list .row-content .list-name,
+.shipcombat-component .sheet-list .row-content .list-name {
+  display: flex;
+  align-items: center;
+  text-align: left;
+  flex: 2;
+}
+
+.shipcombat-ship .sheet-list .row-content .list-name img,
+.shipcombat-component .sheet-list .row-content .list-name img {
+  flex: 0 0 2rem;
+  height: 2rem;
+  width: 2rem;
+}
+
+.shipcombat-ship .sheet-list .row-content .list-name .label,
+.shipcombat-component .sheet-list .row-content .list-name .label {
+  margin: 0 5px;
+}
+
+.shipcombat-ship .sheet-list .row-content .list-name input.label,
+.shipcombat-component .sheet-list .row-content .list-name input.label {
+  margin: 0;
+  padding: 0 5px;
+}
+
+.shipcombat-ship .sheet-list .row-content .list-controls,
+.shipcombat-component .sheet-list .row-content .list-controls {
+  flex: 0 0 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+}
+
+.shipcombat-ship .sheet-list .row-content .list-controls .list-control,
+.shipcombat-component .sheet-list .row-content .list-controls .list-control {
+  flex: 1;
+}
+
+.shipcombat-ship .sheet-list .row-content .like-input,
+.shipcombat-ship .sheet-list .row-content input,
+.shipcombat-ship .sheet-list .row-content select,
+.shipcombat-component .sheet-list .row-content .like-input,
+.shipcombat-component .sheet-list .row-content input,
+.shipcombat-component .sheet-list .row-content select {
+  height: 100%;
+  width: 100%;
+  padding: 0;
+  border-radius: 0;
+  border: none;
+}
+
+.shipcombat-ship .sheet-list .row-content .like-input[type=checkbox],
+.shipcombat-ship .sheet-list .row-content input[type=checkbox],
+.shipcombat-ship .sheet-list .row-content select[type=checkbox],
+.shipcombat-component .sheet-list .row-content .like-input[type=checkbox],
+.shipcombat-component .sheet-list .row-content input[type=checkbox],
+.shipcombat-component .sheet-list .row-content select[type=checkbox] {
+  text-align: center;
+}
+
+/* Default flex-basis for row-content children — each child defaults to 100px */
+.shipcombat-ship .sheet-list .row-content > *,
+.shipcombat-component .sheet-list .row-content > * {
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  flex: 0 0 100px;
+}
+
+.shipcombat-ship .sheet-list .row-content > *.flex,
+.shipcombat-component .sheet-list .row-content > *.flex {
+  flex: 1;
+}
+
+.shipcombat-ship .sheet-list .row-content > *.fit,
+.shipcombat-component .sheet-list .row-content > *.fit {
+  flex: unset;
+}
+
+.shipcombat-ship .sheet-list .row-content .large,
+.shipcombat-component .sheet-list .row-content .large {
+  flex: 0 0 200px;
+}
+
+.shipcombat-ship .sheet-list .row-content .large.flex,
+.shipcombat-component .sheet-list .row-content .large.flex {
+  flex: 2;
+}
+
+.shipcombat-ship .sheet-list .row-content .small,
+.shipcombat-component .sheet-list .row-content .small {
+  flex: 0 0 50px;
+}
+
+.shipcombat-ship .sheet-list .row-content .small.flex,
+.shipcombat-component .sheet-list .row-content .small.flex {
+  flex: 0.5;
+}
+
+.shipcombat-ship .sheet-list .row-content .tiny,
+.shipcombat-component .sheet-list .row-content .tiny {
+  flex: 0 0 25px;
+}
+
+.shipcombat-ship .sheet-list .row-content .inline-description,
+.shipcombat-component .sheet-list .row-content .inline-description {
+  flex: 3;
+}
+
+.shipcombat-ship .sheet-list .row-content .inline-description p,
+.shipcombat-component .sheet-list .row-content .inline-description p {
+  margin: 0;
+}
+
+.shipcombat-ship .sheet-list .row-content .progress-bar,
+.shipcombat-component .sheet-list .row-content .progress-bar {
+  height: unset;
+  margin: 0.5rem;
+}
+
+.shipcombat-ship .sheet-list .description,
+.shipcombat-component .sheet-list .description {
+  line-height: 1rem;
+}
+
+/* Animated dropdown content rows */
+.shipcombat-ship .sheet-list .dropdown-content,
+.shipcombat-component .sheet-list .dropdown-content {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 250ms;
+  overflow: hidden;
+  padding: 0 0.5rem;
+  line-height: 1.5rem;
+}
+
+.shipcombat-ship .sheet-list .dropdown-content > *,
+.shipcombat-component .sheet-list .dropdown-content > * {
+  overflow: hidden;
+}
+
+.shipcombat-ship .sheet-list .dropdown-content.expanded,
+.shipcombat-component .sheet-list .dropdown-content.expanded {
+  grid-template-rows: 1fr;
+}
+
+/* ── name-list (tag/token list widgets) ─────────────────────────────────── */
+
+.shipcombat-ship .name-list,
+.shipcombat-component .name-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0.5rem 0;
+  border: 1px solid var(--name-border);
+}
+
+.shipcombat-ship .name-list label,
+.shipcombat-component .name-list label {
+  text-align: center;
+  height: 2rem;
+  line-height: 2rem;
+  background: var(--name-label);
+}
+
+.shipcombat-ship .name-list .list-content,
+.shipcombat-component .name-list .list-content {
+  border-top: 1px solid var(--name-border);
+  min-height: 2rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.5rem;
+}
+
+.shipcombat-ship .name-list .list-content .list-element,
+.shipcombat-component .name-list .list-content .list-element {
+  position: relative;
+}
+
+.shipcombat-ship .name-list .list-content .list-element:not(.input),
+.shipcombat-component .name-list .list-content .list-element:not(.input) {
+  border: 1px solid var(--name-border);
+  border-radius: 10px;
+  padding: 0.5rem;
+  background: var(--name-bg);
+}
+
+.shipcombat-ship .name-list .list-content .list-element .floating,
+.shipcombat-component .name-list .list-content .list-element .floating {
+  position: absolute;
+  right: -7px;
+  top: -5px;
+  border-radius: 50%;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  background: var(--name-bg);
+}
+
+.shipcombat-ship .name-list .list-content .list-element select,
+.shipcombat-ship .name-list .list-content .list-element input,
+.shipcombat-component .name-list .list-content .list-element select,
+.shipcombat-component .name-list .list-content .list-element input {
+  text-align: center;
+  border-radius: 5px;
+  height: 1.5rem;
+  padding: 0;
+  margin: 0;
+}
+
+/* ── Utilities ──────────────────────────────────────────────────────────── */
+
+.shipcombat-ship img,
+.shipcombat-component img {
+  border: none;
+  object-fit: contain;
+}
+
+.shipcombat-ship .inactive:not(.prosemirror),
+.shipcombat-component .inactive:not(.prosemirror) {
+  opacity: 0.5;
+}
+
+.shipcombat-ship .disabled,
+.shipcombat-component .disabled {
+  pointer-events: none;
+}
+
+.shipcombat-ship .hidden,
+.shipcombat-component .hidden {
+  display: none;
+}
+
+.shipcombat-ship .centered,
+.shipcombat-component .centered {
+  text-align: center;
+}
+
+.shipcombat-ship .align-left,
+.shipcombat-component .align-left {
+  text-align: left;
+}
+
+.shipcombat-ship input[type=number],
+.shipcombat-component input[type=number] {
+  text-align: center;
+}
+
+.shipcombat-ship .unlist,
+.shipcombat-component .unlist {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+/* ── form-group (warhammer .form-group outside .application scope) ──────── */
+
+.shipcombat-ship .form-group,
+.shipcombat-component .form-group {
+  clear: both;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.shipcombat-ship .form-group > *,
+.shipcombat-component .form-group > * {
+  flex: 3;
+}
+
+.shipcombat-ship .form-group > label,
+.shipcombat-component .form-group > label {
+  flex: 2;
+}
+
+.shipcombat-ship .form-group label,
+.shipcombat-component .form-group label {
+  line-height: var(--form-field-height, 2rem);
+}

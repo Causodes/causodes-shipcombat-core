@@ -1,0 +1,411 @@
+/* ── Fire Result Chat Card ─────────────────────────────────────────────── */
+
+.shipcombat-fire-result {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.4rem;
+}
+.shipcombat-fire-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.shipcombat-fire-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  object-fit: cover;
+  border: 1px solid rgba(255,255,255,0.15);
+}
+.shipcombat-fire-title {
+  display: flex;
+  flex-direction: column;
+}
+.shipcombat-fire-title strong { font-size: 0.85rem; }
+.shipcombat-fire-mode {
+  font-size: 0.7rem;
+  opacity: 0.6;
+}
+.shipcombat-fire-target-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+}
+.shipcombat-fire-target-row i { opacity: 0.5; }
+.shipcombat-fire-quadrant { opacity: 0.65; font-size: 0.75rem; }
+
+.shipcombat-fire-auto {
+  text-align: center;
+  padding: 0.4rem;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: #44ff88;
+  background: rgba(68,255,136,0.08);
+  border: 1px solid rgba(68,255,136,0.2);
+  border-radius: 4px;
+}
+.shipcombat-fire-auto i { margin-right: 0.3rem; }
+
+.shipcombat-fire-roll {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.35rem;
+  background: rgba(0,0,0,0.15);
+  border-radius: 4px;
+}
+.shipcombat-fire-comparison {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+.shipcombat-fire-vs {
+  opacity: 0.4;
+  font-size: 0.7rem;
+  font-weight: 400;
+  text-transform: uppercase;
+}
+.shipcombat-fire-tn { opacity: 0.75; }
+.shipcombat-fire-sl {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.shipcombat-fire-outcome {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.shipcombat-fire-success { color: #44ff88; }
+.shipcombat-fire-failure { color: #e74c3c; }
+
+.shipcombat-fire-details {
+  display: flex;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  opacity: 0.7;
+  justify-content: center;
+}
+.shipcombat-fire-detail i { margin-right: 0.15rem; }
+.shipcombat-fire-cost { color: #e8a33a; }
+
+
+/* ── Shields ── */
+.shipcombat-fire-shields {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  padding: 0.25rem 0;
+}
+.shipcombat-fire-shields i { color: #5b9bd5; }
+.shipcombat-shield-bypass { color: #e8a33a; font-style: italic; }
+.shipcombat-shield-through { font-weight: 600; color: #e74c3c; }
+
+/* ── Damage Breakdown ── */
+.shipcombat-fire-damage {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.3rem;
+  background: rgba(0,0,0,0.1);
+  border-radius: 4px;
+}
+.shipcombat-fire-damage-header {
+  display: flex;
+  justify-content: space-between;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+.shipcombat-fire-damage-header .shipcombat-dmg-total { color: #e74c3c; }
+.shipcombat-fire-armour-blocked {
+  color: rgba(255,255,255,0.5);
+  font-size: 0.8rem;
+}
+.shipcombat-fire-armour-blocked i { color: rgba(255,255,255,0.35); }
+.shipcombat-fire-damage-detail {
+  font-size: 0.7rem;
+  opacity: 0.7;
+}
+.shipcombat-fire-ap { color: #e8a33a; }
+
+/* ── Inline damage dice roll row ── */
+.shipcombat-fire-dmg-rolls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding: 0.15rem 0;
+}
+.shipcombat-dmg-die-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  opacity: 0.7;
+  margin-right: 2px;
+}
+.shipcombat-dmg-flat {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #e8a33a;
+  margin-left: 2px;
+}
+
+/* ── Dice breakdown collapsible ── */
+.shipcombat-dice-breakdown {
+  margin-top: 4px;
+  font-size: 0.68rem;
+}
+.shipcombat-dice-breakdown summary {
+  cursor: pointer;
+  user-select: none;
+  opacity: 0.65;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.shipcombat-dice-breakdown summary::-webkit-details-marker { display: none; }
+.shipcombat-dice-breakdown[open] summary { opacity: 0.9; }
+.shipcombat-dice-breakdown-pips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 4px;
+  padding: 3px 0 1px;
+}
+.shipcombat-die-pip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 3px;
+  background: rgba(68,255,136,0.06);
+  border: 1px solid rgba(68,255,136,0.22);
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #44ff88;
+}
+
+/* ── BDA Pending card ── */
+.shipcombat-bda-pending .shipcombat-bda-icon-wrap {
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  background: rgba(74, 255, 232, 0.1);
+  border: 1px solid rgba(74, 255, 232, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  color: #4affe8;
+  flex-shrink: 0;
+}
+
+.shipcombat-bda-pending-msg {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  padding: 0.2rem 0;
+  color: rgba(74, 255, 232, 0.75);
+  font-style: italic;
+}
+
+/* Weapon/fire-mode summary shown in BDA pre-roll state */
+.shipcombat-bda-weapon-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0 0.25rem;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  margin-top: 0.2rem;
+}
+.shipcombat-bda-weapon-icon {
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.shipcombat-bda-weapon-name {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #ddd;
+}
+.shipcombat-bda-fire-mode {
+  font-size: 0.68rem;
+  color: rgba(255,255,255,0.45);
+  margin-left: auto;
+}
+
+.shipcombat-bda-launch-btn {
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  margin-top: 0.2rem;
+  border: 1px solid rgba(74, 255, 232, 0.35);
+  border-radius: 4px;
+  background: rgba(74, 255, 232, 0.08);
+  color: #4affe8;
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  transition: background 0.15s, border-color 0.15s;
+}
+.shipcombat-bda-launch-btn:hover {
+  background: rgba(74, 255, 232, 0.18);
+  border-color: rgba(74, 255, 232, 0.55);
+}
+.shipcombat-bda-launch-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* ── BDA correction result block (post-assessment) ── */
+.shipcombat-bda-correction-result {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.3rem 0.4rem;
+  background: rgba(74, 255, 232, 0.06);
+  border: 1px solid rgba(74, 255, 232, 0.22);
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+.shipcombat-bda-correction-result > i {
+  color: #4affe8;
+  margin-top: 0.15rem;
+  flex-shrink: 0;
+  font-size: 0.9rem;
+}
+.shipcombat-bda-correction-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+.shipcombat-bda-correction-label {
+  font-weight: 700;
+  color: #4affe8;
+}
+.shipcombat-bda-correction-desc {
+  font-size: 0.7rem;
+  opacity: 0.7;
+}
+
+/* Subtle pending-state text (awaiting correction) */
+.shipcombat-bda-pending-msg--subtle {
+  color: rgba(74, 255, 232, 0.5);
+  font-size: 0.75rem;
+  font-style: italic;
+}
+
+/* ── BDA fire result divider ── */
+.shipcombat-bda-fire-result-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  opacity: 0.4;
+  margin: 0.25rem 0 0.1rem;
+}
+.shipcombat-bda-fire-result-divider::before,
+.shipcombat-bda-fire-result-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+}
+.shipcombat-bda-fire-result-divider span {
+  white-space: nowrap;
+}
+
+/* BDA complete failure notice */
+.shipcombat-bda-failed-notice {
+  font-size: 0.78rem;
+  font-style: italic;
+  color: rgba(231, 76, 60, 0.7);
+  text-align: center;
+  padding: 0.2rem 0;
+}
+
+/* ── Rend ── */
+.shipcombat-fire-rend {
+  font-size: 0.75rem;
+  color: #c0392b;
+  font-weight: 600;
+}
+
+/* ── Criticals ── */
+.shipcombat-fire-crits {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.3rem;
+  background: rgba(255,0,0,0.06);
+  border: 1px solid rgba(255,0,0,0.15);
+  border-radius: 4px;
+}
+.shipcombat-fire-crit-entry {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #e74c3c;
+}
+.shipcombat-fire-crit-entry i { color: #ffd700; }
+
+/* ── Embedded crit result in fire-result card ── */
+.shipcombat-fire-crit {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.4rem 0.5rem;
+  margin-top: 0.3rem;
+  background: rgba(180, 0, 0, 0.08);
+  border: 1px solid rgba(200, 0, 0, 0.25);
+  border-radius: 4px;
+}
+.shipcombat-fire-crit-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: #ffcccc;
+}
+.shipcombat-fire-crit-header i { color: #ffd700; }
+.shipcombat-crit-tier-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.05rem 0.4rem;
+  border-radius: 3px;
+  background: #555;
+  color: #eee;
+  border: 1px solid #888;
+  letter-spacing: 0.03em;
+}
+.shipcombat-crit-tier--low    { background: #7a5c00; color: #ffe680; border-color: #a07800; }
+.shipcombat-crit-tier--medium { background: #7a2e00; color: #ffb07a; border-color: #a04000; }
+.shipcombat-crit-tier--high   { background: #6b0000; color: #ff9999; border-color: #990000; }
+.shipcombat-fire-crit-detail {
+  font-size: 0.78rem;
+  color: #ccaaaa;
+}
+.shipcombat-fire-crit-note {
+  font-size: 0.73rem;
+  font-style: italic;
+  color: #b08080;
+}
+

@@ -1,0 +1,699 @@
+/* ── Sensors: BDA roll button (full-width) ─────────────────────────────── */
+.shipcombat-bda-roll-btn {
+  width: 100%;
+}
+
+/* ── Sensors: Data bar + action cost badge ─────────────────────────────── */
+.shipcombat-bar-data {
+  background: #7ec8e3;
+}
+.shipcombat-action-cost {
+  font-size: 0.7rem;
+  opacity: 0.65;
+  margin-left: 0.3rem;
+}
+
+/* ═══════ Sensors: Lock Reference Table ══════════════════════════════════ */
+.shipcombat-lock-ref-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.72rem;
+}
+.shipcombat-lock-ref-table thead {
+  background: rgba(0, 255, 136, 0.06);
+}
+.shipcombat-lock-ref-table th {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.65;
+  padding: 0.15rem 0.3rem;
+  text-align: left;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+.shipcombat-lock-ref-table td {
+  padding: 0.15rem 0.3rem;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  vertical-align: middle;
+}
+.shipcombat-lref-tier { width: 2rem; text-align: center; }
+.shipcombat-lref-cost { width: 2.5rem; text-align: center; font-family: monospace; }
+.shipcombat-lref-pip {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  line-height: 14px;
+  text-align: center;
+  font-size: 0.55rem;
+  font-weight: bold;
+  color: #000;
+}
+/* Tier pip colours  -  must match TIER_COLOUR in SensorRadar.js */
+.shipcombat-lref-pip--t0 { background: #666666; }
+.shipcombat-lref-pip--t1 { background: #ff4444; }
+.shipcombat-lref-pip--t2 { background: #e67e22; }
+.shipcombat-lref-pip--t3 { background: #22ccbb; }
+.shipcombat-lref-pip--t4 { background: #cc44cc; }
+.shipcombat-lref-info {
+  color: rgba(255,255,255,0.55);
+  font-size: 0.65rem;
+}
+
+/* ═══════ Augur Abilities Reference ══════════════════════════════════════ */
+.shipcombat-augur-abilities-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.68rem;
+}
+.shipcombat-augur-abilities-table th {
+  text-align: left;
+  padding: 3px 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.12);
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgba(255,255,255,0.4);
+}
+.shipcombat-augur-abilities-table td {
+  padding: 2px 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.shipcombat-abl-category-row td {
+  font-weight: 700;
+  font-size: 0.64rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #00ff88;
+  padding-top: 6px !important;
+  border-bottom: 1px solid rgba(0, 255, 136, 0.2) !important;
+}
+.shipcombat-abl-name {
+  white-space: nowrap;
+  font-weight: 600;
+  color: #ccc;
+}
+.shipcombat-abl-name i {
+  color: #00ff88;
+  margin-right: 4px;
+  width: 12px;
+  text-align: center;
+}
+.shipcombat-abl-name i.shipcombat-abl-icon--t0 { color: #666666; }
+.shipcombat-abl-name i.shipcombat-abl-icon--t1 { color: #ff4444; }
+.shipcombat-abl-name i.shipcombat-abl-icon--t2 { color: #e67e22; }
+.shipcombat-abl-name i.shipcombat-abl-icon--t3 { color: #22ccbb; }
+.shipcombat-abl-name i.shipcombat-abl-icon--t4 { color: #cc44cc; }
+.shipcombat-abl-cost {
+  white-space: nowrap;
+  color: #7ec8e3;
+  font-weight: 600;
+  text-align: center;
+}
+.shipcombat-abl-desc {
+  color: rgba(255,255,255,0.5);
+}
+.shipcombat-abl-meta {
+  margin-top: 2px;
+  font-size: 0.6rem;
+  color: rgba(255,255,255,0.38);
+}
+
+/* ═══════ Sensors: Sensor Radar ══════════════════════════════════════════ */
+
+/* ── Sensor-blind radar disable overlay (weaponsSensors Medium+) ─────────── */
+.shipcombat-radar-section.shipcombat-sensor-blind {
+  position: relative;
+  min-height: 100px; /* give room for the overlay label when canvas is hidden */
+  pointer-events: none; /* block all interaction with the radar when blind */
+}
+.shipcombat-radar-blind-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  font-weight: bold;
+  font-family: monospace;
+  color: rgba(220, 170, 170, 0.90);
+  text-shadow: 0 0 8px rgba(200, 50, 50, 0.65);
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 0)    0px,
+      rgba(0, 0, 0, 0)    2px,
+      rgba(0, 0, 0, 0.38) 2px,
+      rgba(0, 0, 0, 0.38) 3px
+    ),
+    linear-gradient(
+      rgba(130, 12, 12, 0.65),
+      rgba(80,  5,  5,  0.60)
+    );
+  border: 1px solid rgba(180, 18, 18, 0.50);
+  box-shadow: inset 0 0 20px rgba(140, 0, 0, 0.30);
+  border-radius: 4px;
+  pointer-events: none;
+  letter-spacing: 0.04em;
+}
+.shipcombat-radar-blind-overlay i {
+  font-size: 1.5rem;
+  color: rgba(220, 90, 90, 0.85);
+  text-shadow: 0 0 10px rgba(200, 40, 40, 0.75);
+  opacity: 1;
+}
+
+.shipcombat-bearing-toggle-btn {
+  background: none;
+  border: 1px solid rgba(0, 255, 136, 0.3);
+  color: rgba(0, 255, 136, 0.7);
+  border-radius: 3px;
+  padding: 0 6px;
+  cursor: pointer;
+  font-size: 0.65rem;
+  gap: 3px;
+  display: flex;
+  align-items: center;
+  line-height: 1;
+  font-family: monospace;
+  letter-spacing: 0.04em;
+  height: 1.4rem;
+}
+.shipcombat-bearing-toggle-btn:hover {
+  color: #00ff88;
+  border-color: #00ff88;
+}
+.shipcombat-bearing-toggle-btn.active {
+  color: #00ff88;
+  border-color: #00ff88;
+  background: rgba(0, 255, 136, 0.1);
+}
+
+/* Pop-out button  -  forced square */
+.shipcombat-radar-toolbar .shipcombat-popout-btn {
+  display: grid !important;
+  place-items: center !important;
+  width: 1.4rem !important;
+  min-width: 1.4rem !important;
+  max-width: 1.4rem !important;
+  height: 1.4rem !important;
+  min-height: unset !important;
+  padding: 0 !important;
+  line-height: 1 !important;
+  box-sizing: border-box !important;
+  flex-shrink: 0 !important;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  gap: 0;
+}
+.shipcombat-radar-toolbar .shipcombat-popout-btn i {
+  display: block;
+  margin: 0 !important;
+  line-height: 1 !important;
+  pointer-events: none;
+}
+
+.shipcombat-radar-section .list-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+}
+
+.shipcombat-radar-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 0 2px;
+  gap: 4px;
+}
+
+.shipcombat-radar-toolbar-bottom {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  width: 100%;
+  padding: 2px 2px 0;
+}
+
+.shipcombat-radar-zoom-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.62rem;
+  font-family: monospace;
+  color: rgba(0, 255, 136, 0.6);
+}
+.shipcombat-radar-zoom-wrap i {
+  font-size: 0.55rem;
+  opacity: 0.6;
+}
+.shipcombat-radar-zoom {
+  width: 80px;
+  height: 4px;
+  accent-color: #00ff88;
+  cursor: pointer;
+}
+.shipcombat-radar-zoom-label {
+  min-width: 2em;
+  text-align: center;
+  color: #00ff88;
+  font-weight: bold;
+}
+
+.shipcombat-radar-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  max-width: 100%;
+  border-radius: 50%;
+  overflow: visible;
+  border: 1px solid rgba(0, 255, 136, 0.30);
+}
+
+.shipcombat-radar-wrap canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+}
+
+/* CRT scanline overlay */
+.shipcombat-radar-wrap::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 2px,
+    rgba(0, 0, 0, 0.08) 2px,
+    rgba(0, 0, 0, 0.08) 4px
+  );
+  z-index: 1;
+}
+
+
+
+/* ── Sensors: Shield Arc Compass ─────────────────────────────────────────── */
+
+.shipcombat-shield-compass {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.6rem 0.5rem;
+}
+
+.shipcombat-compass-midrow {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.shipcombat-compass-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 5.5rem;
+}
+
+.shipcombat-compass-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 4rem;
+  text-align: center;
+}
+
+.shipcombat-compass-pool-val {
+  font-size: 1.4rem;
+  font-weight: bold;
+  color: #9b59b6;
+  line-height: 1;
+}
+
+.shipcombat-compass-dir-label {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.65;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* ═══════ Sensors: Status Bar ════════════════════════════════════════════ */
+
+.shipcombat-sensors-status-panel {
+  padding: 0.4rem 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.shipcombat-scan-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.shipcombat-scan-bar-label {
+  font-size: 0.71rem;
+  opacity: 0.70;
+  min-width: 4.8rem;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.shipcombat-scan-bar-value {
+  font-size: 0.82rem;
+  font-weight: bold;
+  min-width: 2.2rem;
+  color: #4affe8;
+}
+
+.shipcombat-scan-pips {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.shipcombat-scan-pip {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid rgba(74, 255, 232, 0.35);
+  background: var(--color-dark-6, #1a1a1a);
+  flex-shrink: 0;
+}
+
+.shipcombat-scan-pip--active {
+  background: #4affe8;
+  border-color: transparent;
+  box-shadow: 0 0 5px rgba(74, 255, 232, 0.65);
+}
+
+.shipcombat-lock-pips {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.shipcombat-lock-pip {
+  width: 14px;
+  height: 14px;
+  border-radius: 2px;
+  border: 1px solid rgba(243, 156, 18, 0.35);
+  background: var(--color-dark-6, #1a1a1a);
+  flex-shrink: 0;
+}
+
+.shipcombat-lock-pip--active {
+  background: #00ff88;
+  border-color: transparent;
+  box-shadow: 0 0 5px rgba(0, 255, 136, 0.55);
+}
+
+.shipcombat-lock-decaying {
+  color: #e74c3c;
+}
+
+/* ═══════ Sensors: Voidshield Arc Compass ════════════════════════════════ */
+
+.shipcombat-arc-compass-wrap {
+  position: relative;
+  width: 320px;
+  height: 320px;
+  margin: 0.5rem auto;
+}
+
+.shipcombat-arc-compass-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 320px;
+  height: 320px;
+  pointer-events: none;
+}
+
+/* Values: each sits exactly on its arc midpoint  -  translate centres them precisely */
+.shipcombat-arc-val {
+  position: absolute;
+  text-align: center;
+  font-size: 1rem;
+  font-weight: bold;
+  color: #00ff88;
+  padding: 2px 7px;
+  background: rgba(3, 12, 8, 0.95);
+  border: 1px solid rgba(0, 255, 136, 0.38);
+  border-radius: 4px;
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.8);
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s, color 0.1s;
+  user-select: none;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  white-space: nowrap;
+}
+
+.shipcombat-arc-val[data-sector]:hover {
+  background: #00ff88;
+  border-color: #00ff88;
+  color: rgba(0, 18, 10, 0.95);
+  box-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+}
+
+/* Arc midpoint = R67 SVG → 67/100 * 50% = 33.5% from centre → offset from 50% */
+.shipcombat-arc-val--bow       { top: 16.75%; left: 50%;   }
+.shipcombat-arc-val--starboard { top: 50%;   left: 83.5%; }
+.shipcombat-arc-val--stern     { top: 83.5%; left: 50%;   }
+.shipcombat-arc-val--port      { top: 50%;   left: 16.5%; }
+
+/* Over-threshold: blue tint to signal temporary overallocation */
+.shipcombat-arc-val--over {
+  color: #44aaff;
+  border-color: rgba(68, 170, 255, 0.6);
+  box-shadow: 0 0 8px rgba(68, 170, 255, 0.4);
+}
+
+.shipcombat-arc-val--over[data-sector]:hover {
+  background: #44aaff;
+  border-color: #44aaff;
+  color: rgba(0, 10, 20, 0.95);
+  box-shadow: 0 0 10px rgba(68, 170, 255, 0.6);
+}
+
+.shipcombat-arc-val[data-sector]:hover {
+  background: rgba(0, 255, 136, 0.12);
+  text-shadow: 0 0 14px rgba(0, 255, 136, 0.8);
+}
+
+/* Labels: outside the arc ring  -  white with black outline for dual-background readability */
+.shipcombat-arc-dir {
+  position: absolute;
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  text-align: center;
+  white-space: nowrap;
+  color: #ffffff;
+  text-shadow:
+    -1px -1px 0 rgba(0,0,0,0.95),
+     1px -1px 0 rgba(0,0,0,0.95),
+    -1px  1px 0 rgba(0,0,0,0.95),
+     1px  1px 0 rgba(0,0,0,0.95),
+     0    0   5px rgba(0,0,0,0.7);
+  user-select: none;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* Label ring = R88 SVG → 88/100 * 50% = 44% from centre */
+.shipcombat-arc-dir--bow       { top: 6%;  left: 50%;  }
+.shipcombat-arc-dir--starboard { top: 50%; left: 94%;  }
+.shipcombat-arc-dir--stern     { top: 94%; left: 50%;  }
+.shipcombat-arc-dir--port      { top: 50%; left: 6%;   }
+
+/* ── Shield allocation: sector list + compass + hint panel ─────────────────── */
+.shipcombat-shield-alloc-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 0.75rem;
+  justify-items: center;
+}
+
+.shipcombat-shield-sector-list {
+  justify-self: end;
+  align-self: center;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid rgba(0, 255, 136, 0.15);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.25);
+  min-width: 7rem;
+}
+
+.shipcombat-ssl-head {
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  opacity: 0.5;
+  margin-bottom: 0.2rem;
+  text-align: center;
+}
+
+.shipcombat-ssl-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.75rem;
+}
+
+.shipcombat-ssl-label {
+  opacity: 0.7;
+}
+
+.shipcombat-ssl-max {
+  font-weight: bold;
+  color: #00ff88;
+  min-width: 1.5rem;
+  text-align: right;
+}
+
+/* Controls panel (right side, mirrors sector list styling) */
+.shipcombat-arc-hint-panel {
+  justify-self: start;
+  align-self: center;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid rgba(0, 255, 136, 0.15);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.25);
+  min-width: 7rem;
+}
+
+.shipcombat-arc-hint-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.28);
+}
+
+.shipcombat-arc-hint-key {
+  opacity: 1;
+}
+
+.shipcombat-arc-hint-val {
+  font-weight: normal;
+  color: rgba(255, 255, 255, 0.28);
+  min-width: 1.5rem;
+  text-align: right;
+}
+
+/* Flux-to-Charge button inside Controls panel */
+.shipcombat-controls-flux-btn {
+  margin-top: 0.3rem;
+  width: 100%;
+  font-size: 0.65rem;
+  padding: 2px 6px;
+  line-height: 1.4;
+}
+
+.shipcombat-arc-hint {
+  text-align: center;
+  font-size: 0.58rem;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.22);
+  margin: 0.15rem 0 0;
+  user-select: none;
+}
+
+.shipcombat-arc-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  pointer-events: none;
+  width: 5rem;
+  text-align: center;
+}
+
+.shipcombat-arc-center .shipcombat-arc-dir {
+  position: static;
+  transform: none;
+  font-size: 0.55rem;
+  white-space: normal;
+  line-height: 1.2;
+  color: rgba(0, 255, 136, 0.7);
+  text-shadow: none;
+}
+
+.shipcombat-arc-pool-val {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #00ff88;
+  line-height: 1;
+  text-shadow: 0 0 10px rgba(0, 255, 136, 0.6);
+}
+
+/* Scan-cost label in section headers */
+.shipcombat-scan-cost-label {
+  font-size: 0.67rem;
+  opacity: 0.52;
+  font-weight: normal;
+  margin-left: 0.2rem;
+}
+
+/* ═══════ Sensors: EWAR two-option row ═══════════════════════════════════ */
+
+.shipcombat-ewar-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: stretch;
+  gap: 0.4rem;
+  padding: 0.3rem 0.5rem;
+}
+
+.shipcombat-ewar-option {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  align-items: center;
+  padding: 0.2rem 0;
+}
+
+.shipcombat-ewar-option--taken {
+  opacity: 0.30;
+  pointer-events: none;
+}
+
+.shipcombat-ewar-sep {
+  width: 1px;
+  background: rgba(255, 255, 255, 0.12);
+  margin: 0.2rem 0;
+  align-self: stretch;
+}
+

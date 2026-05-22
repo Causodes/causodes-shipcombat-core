@@ -1,0 +1,539 @@
+/* ── Overview Tab: fill available height and scroll ────────────────────── */
+/* Mirrors the mechanism used by other role tabs (captain, ordnance, etc.)  */
+/* Target by data-tab so it doesn't depend on the parent class chain.        */
+section.tab[data-tab="overview"] {
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden;
+}
+
+/* ── Overview Summary Row ────────────────────────────────────────────────── */
+.shipcombat-overview-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.shipcombat-overview-stat {
+  flex: 1 1 10rem;
+  min-width: 10rem;
+  background: var(--color-dark-1, #333);
+  border: 1px solid var(--color-border-light);
+  border-radius: 4px;
+  padding: 0.35rem 0.6rem;
+}
+
+.shipcombat-overview-stat-label {
+  font-size: 0.7rem;
+  opacity: 0.7;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 2px;
+}
+
+.shipcombat-overview-stat-value {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 1rem;
+  font-weight: bold;
+}
+
+/* ── Compact Crew Roster ─────────────────────────────────────────────────── */
+.shipcombat-crew-roster-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.shipcombat-crew-role-label {
+  flex: 0 0 9rem;
+  font-weight: bold;
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+
+.shipcombat-crew-actor {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.shipcombat-crew-portrait {
+  width: 28px;
+  height: 28px;
+  object-fit: cover;
+  border-radius: 3px;
+  border: 1px solid var(--color-border-light);
+}
+
+/* ── Crew Table ───────────────────────────────────────────────────────── */
+/* NOTE: crew rows deliberately do NOT use the warhammer `row-content` class
+   to avoid warhammer-lib's flex layout overriding this grid. */
+.shipcombat-crew-header,
+.shipcombat-crew-row {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1.5fr) 3.5rem minmax(0, 2fr);
+  gap: 0.35rem;
+  align-items: center;
+  padding: 0 0.25rem;
+}
+
+.shipcombat-crew-header {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.shipcombat-crew-header .shipcombat-crew-col-name {
+  font-size: var(--font-size-18, 1rem);
+  font-weight: bold;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.shipcombat-full-reset-link {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  opacity: 0.3;
+  color: inherit;
+  line-height: 1;
+}
+.shipcombat-full-reset-link:hover {
+  opacity: 0.8;
+  color: var(--color-level-warning, #e67e22);
+}
+
+.shipcombat-crew-col-name {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding-right: 0.3rem;
+}
+
+.shipcombat-crew-col-name > span {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 0.15em;
+}
+
+.shipcombat-crew-col-role,
+.shipcombat-crew-col-action {
+  white-space: nowrap;
+  overflow: visible;
+  text-align: center;
+}
+
+.shipcombat-crew-col-skill {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  overflow: hidden;
+}
+
+.shipcombat-skill-override-select {
+  width: 100%;
+  font-family: var(--font-primary);
+  font-size: 0.75rem;
+  padding: 1px 2px;
+  height: auto;
+  line-height: 1.2;
+  border: 1px solid var(--color-border-light-tertiary);
+  background: var(--color-bg);
+  color: var(--color-text-primary);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.shipcombat-role-title-input {
+  width: 100%;
+  font-family: var(--font-primary);
+  font-size: 0.8rem;
+  padding: 0 2px;
+  height: auto;
+  line-height: 1.3;
+  border: none;
+  border-bottom: 1px dashed rgba(255,255,255,0.2);
+  background: transparent;
+  color: inherit;
+  outline: none;
+}
+
+.shipcombat-role-title-input:focus {
+  border-bottom-color: rgba(255,255,255,0.5);
+  background: rgba(255,255,255,0.05);
+}
+
+.shipcombat-crew-col-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.shipcombat-crew-portrait {
+  width: 28px;
+  height: 28px;
+  object-fit: cover;
+  border-radius: 3px;
+  border: 1px solid var(--color-border-light);
+  flex-shrink: 0;
+}
+
+.shipcombat-crew-empty {
+  opacity: 0.6;
+}
+
+.shipcombat-yes {
+  color: #7fcf8a;
+}
+
+.shipcombat-no {
+  color: #d98686;
+}
+
+/* ── Crew claim button in overview ────────────────────────────────────── */
+.shipcombat-claim-btn {
+  font-size: 0.65rem;
+  padding: 1px 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.shipcombat-release-btn {
+  margin-left: auto;
+  flex-shrink: 0;
+  opacity: 0.6;
+  color: #d98686;
+}
+.shipcombat-release-btn:hover {
+  opacity: 1;
+}
+
+/* ── Internal Fire active state ────────────────────────────────────────── */
+.shipcombat-fire-active {
+  color: #e74c3c;
+}
+
+/* ── Ship Conditions strip ──────────────────────────────────────────────── */
+.shipcombat-overview-conditions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.5rem;
+}
+
+.shipcombat-overview-cond-pill {
+  flex: 1 1 9rem;
+  min-width: 9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0.3rem 0.5rem;
+  border-radius: 4px;
+  border: 1px solid var(--color-border-light, #444);
+  background: var(--color-dark-1, #333);
+  opacity: 0.65;
+}
+
+.shipcombat-overview-cond-pill--low {
+  border-color: #e6b800;
+  opacity: 1;
+}
+
+.shipcombat-overview-cond-pill--medium {
+  border-color: #e67e22;
+  opacity: 1;
+}
+
+.shipcombat-overview-cond-pill--high {
+  border-color: #c0392b;
+  opacity: 1;
+}
+
+.shipcombat-overview-cond-loc {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.75;
+}
+
+.shipcombat-overview-cond-name {
+  font-size: 0.8rem;
+  font-weight: bold;
+}
+
+.shipcombat-overview-cond-pill--low    .shipcombat-overview-cond-name { color: #e6b800; }
+.shipcombat-overview-cond-pill--medium .shipcombat-overview-cond-name { color: #e67e22; }
+.shipcombat-overview-cond-pill--high   .shipcombat-overview-cond-name { color: #c0392b; }
+
+
+/* ── End Turn button ────────────────────────────────────────────────────── */
+.shipcombat-end-turn-row {
+  padding: 0.4rem 0.25rem 0.25rem;
+}
+
+.shipcombat-end-turn-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  width: 100%;
+  padding: 0.3rem 0.8rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.shipcombat-end-turn-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+
+/* ── Installed Components Summary ────────────────────────────────────────── */
+.shipcombat-ov-components {
+  margin-top: 0.4rem;
+  border: 1px solid var(--color-border-light);
+  border-radius: 4px;
+}
+
+.shipcombat-ov-comp-header {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.7;
+  padding: 0.2rem 0.5rem;
+  background: rgba(0,0,0,0.2);
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.shipcombat-ov-comp-section {
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+
+.shipcombat-ov-comp-section:first-child {
+  border-top: none;
+}
+
+/* ── Weapon Battery 2×2 position grid ────────────────────────────────────── */
+.shipcombat-ov-weapon-section-label {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.5;
+  padding: 0.2rem 0.5rem 0;
+}
+
+.shipcombat-ov-weapon-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem 0.35rem;
+}
+
+.shipcombat-ov-weapon-cell {
+  background: rgba(0,0,0,0.15);
+  border-radius: 3px;
+  padding: 0.2rem 0.35rem;
+  min-height: 2rem;
+}
+
+.shipcombat-ov-weapon-pos {
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.45;
+  margin-bottom: 0.15rem;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.shipcombat-ov-weapon-slots {
+  margin-left: auto;
+  opacity: 0.7;
+  font-size: 0.65rem;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.shipcombat-ov-empty {
+  font-size: 0.75rem;
+  opacity: 0.3;
+}
+
+/* ── Equipment slot rows (2-col grid for equipment section) ──────────────── */
+.shipcombat-ov-comp-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+}
+
+.shipcombat-ov-slot-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.18rem 0.5rem;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.shipcombat-ov-slot-row:nth-child(odd) {
+  border-right: 1px solid rgba(255,255,255,0.05);
+}
+
+.shipcombat-ov-slot-label {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.5;
+  flex: 0 0 5.5rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shipcombat-ov-slot-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.shipcombat-ov-ordnance-count {
+  display: flex;
+  align-items: baseline;
+  gap: 0.15rem;
+  font-size: 0.85rem;
+}
+
+.shipcombat-ov-count-armed {
+  font-weight: bold;
+  color: #00ff88;
+}
+
+.shipcombat-ov-count-sep {
+  opacity: 0.4;
+  font-size: 0.75rem;
+}
+
+.shipcombat-ov-count-cap {
+  opacity: 0.55;
+  font-size: 0.75rem;
+}
+
+.shipcombat-ov-comp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.72rem;
+  padding: 0.05rem 0.3rem;
+  background: rgba(255,255,255,0.07);
+  border-radius: 3px;
+  cursor: pointer;
+  white-space: nowrap;
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shipcombat-ov-comp-chip:hover {
+  background: rgba(255,255,255,0.14);
+  text-decoration: none;
+}
+
+.shipcombat-ov-comp-chip img {
+  width: 1rem;
+  height: 1rem;
+  object-fit: cover;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.shipcombat-ov-comp-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Weapon/equipment chip rows ─────────────────────────────────────────── */
+.shipcombat-ov-comp-row {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin-bottom: 0.1rem;
+}
+
+.shipcombat-ov-unassign {
+  margin-left: auto;
+  opacity: 0.35;
+  font-size: 0.6rem;
+  cursor: pointer;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.shipcombat-ov-unassign:hover {
+  opacity: 1;
+}
+
+.shipcombat-ov-weapon-add {
+  width: 100%;
+  font-size: 0.65rem;
+  margin-top: 0.2rem;
+  opacity: 0.65;
+}
+
+/* ── Ordnance big-box layout ─────────────────────────────────────────────── */
+.shipcombat-ov-ordnance-box {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.2rem;
+  padding: 0.25rem 0.5rem 0.35rem;
+}
+
+.shipcombat-ov-ordnance-box .shipcombat-ov-comp-row {
+  background: rgba(0,0,0,0.15);
+  border-radius: 3px;
+  padding: 0.15rem 0.3rem;
+  min-height: 1.8rem;
+  margin-bottom: 0;
+}
+
+.shipcombat-ov-ordnance-add {
+  grid-column: 1 / -1;
+  margin-top: 0.05rem;
+}
+
+/* ── Equipment slot icon picker (legacy/unused) ──────────────────────────── */
+.shipcombat-ov-equip-picker {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.shipcombat-ov-equip-preview {
+  flex: 0 0 1.25rem;
+  height: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.shipcombat-ov-equip-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  object-fit: cover;
+  border-radius: 2px;
+}
+
+.shipcombat-ov-equip-picker .shipcombat-ov-equip-select {
+  flex: 1;
+  min-width: 0;
+}

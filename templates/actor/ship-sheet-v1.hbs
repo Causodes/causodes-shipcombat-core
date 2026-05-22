@@ -1,0 +1,40 @@
+{{!--
+  modules/causodes-shipcombat-core/templates/actor/ship-sheet-v1.hbs
+  System-agnostic AppV1 wrapper template for the ship actor sheet.
+
+  System-specific adapter modules should override the `template` path in their
+  own ShipSheet.defaultOptions rather than modifying this file.
+
+  Context keys from ShipSheetV1Mixin.getData():
+    cssClass      – Foundry-supplied class string
+    tabs          – array of { id, group, label } objects
+    partsArray    – string[] of allowed part ids in canonical order
+    partTemplates – { [partId]: templatePath } lookup map
+--}}
+<form class="{{cssClass}} shipcombat-v1" autocomplete="off">
+
+  {{!-- Header partial (system modules may override "ship-header" partial) --}}
+  {{> "ship-header"}}
+
+  {{!-- Tab navigation --}}
+  <nav class="sheet-navigation tabs" data-group="primary">
+    {{#each tabs as |tab|}}
+      <a class="item" data-tab="{{tab.id}}" data-group="{{tab.group}}">
+        {{localize tab.label}}
+      </a>
+    {{/each}}
+  </nav>
+
+  {{!-- Tab content — partials are self-wrapping (<section class="tab" data-tab="{{tab.id}}">).
+       Pass tab context objects via tabsById so {{tab.id}} renders the correct
+       value instead of empty string (which would be permanently hidden by
+       Foundry's global .tab[data-tab]:not(.active) rule). --}}
+  <section class="sheet-body sheet-content">
+    {{#each partsArray as |partId|}}
+      {{#unless (or (eq partId "header") (eq partId "tabs"))}}
+        {{> (lookup ../partTemplates partId) tab=(lookup ../tabsById partId)}}
+      {{/unless}}
+    {{/each}}
+  </section>
+
+</form>

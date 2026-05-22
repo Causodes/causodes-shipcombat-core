@@ -10,7 +10,7 @@
  * system-specific CSS classes.
  */
 
-import { MODULE_ID, CORE_MODULE_ID, MACRO_FIRE_TIERS, LANCE_CHARGE_TIERS, SHIP_CLASSIFICATIONS, buildChargeTiers, CRIT_CONDITIONS, CRIT_LOCATIONS } from "../../constants.js";
+import { MODULE_ID, CORE_MODULE_ID, MACRO_FIRE_TIERS, LANCE_CHARGE_TIERS, SHIP_CLASSIFICATIONS, buildChargeTiers, CRIT_CONDITIONS, CRIT_LOCATIONS, hullDisplay } from "../../constants.js";
 import { isTorpedo, isStrikeCraft } from "../ordnance/ordnance-types.js";
 import { ShipCombatState } from "../../state/ShipCombatState.js";
 import { HelmPreview } from "../../canvas/HelmPreview.js";
@@ -101,7 +101,7 @@ export const NpcShipSheetMixin = (BaseClass) => {
 
     async _preparePartContext(partId, context) {
       context = await super._preparePartContext(partId, context);
-      const sys = this.actor.system;
+      const sys = SystemAdapter.current.getShipData(this.actor);
 
       const shields = {};
       for (const s of SECTORS) {
@@ -110,9 +110,11 @@ export const NpcShipSheetMixin = (BaseClass) => {
         shields[s] = { val, max, pct: max > 0 ? Math.round((val / max) * 100) : 0, over: val > max };
       }
 
-      const hullPct = sys.hull.max > 0
-        ? Math.round(((sys.hull.max - sys.hull.value) / sys.hull.max) * 100)
-        : 100;
+      const _hullDisp = hullDisplay(sys.hull.value, sys.hull.max);
+      const hullPct    = _hullDisp.pct;
+      const hullBarLabel = _hullDisp.isDamageTaken
+        ? game.i18n.localize("SHIPCOMBAT.Label.HullDamage")
+        : game.i18n.localize("SHIPCOMBAT.Label.HullIntegrity");
 
       const components = this.actor.items.filter(i => i.type === `${MODULE_ID}.component`);
       const weaponComponents = components.filter(c => c.system.slot === "weapon");
@@ -153,50 +155,12 @@ export const NpcShipSheetMixin = (BaseClass) => {
         velocityBearingMode: this._velocityBearingMode ?? "relative",
         shipRotation: npcShipToken?.document?.rotation ?? 0,
       });
-      helm.hasRamTargets = (() => {
-        if (!canvas?.ready) return false;
-        const token = this.actor.getActiveTokens()?.[0];
-        if (!token) return false;
-        const isRealistic  = game.settings.get(MODULE_ID, "movementMode") === "realistic";
-        const fuelBurned   = sys.resources?.pilot?.fuelBurned ?? 0;
-        const baseSpeed    = sys.movement?.speed ?? 6;
-        const allocSpeed   = sys.resources?.pilot?.allocSpeed ?? 0;
-        const effSpeed     = Math.max(0, baseSpeed + allocSpeed);
-        const overdrive    = sys.resources?.pilot?.overdrive ?? false;
-        const apBonus      = sys.resources?.pilot?.apThrustBonus ?? 0;
-        const powerMax     = (overdrive ? 200 : 100) + apBonus;
-        const powerRemaining = Math.max(0, powerMax - fuelBurned);
-        const baseMano     = sys.movement?.maneuverability ?? 2;
-        const allocMano    = sys.resources?.pilot?.allocMano ?? 0;
-        const maxBearingDeg = Math.max(0, baseMano + allocMano) * 15;
-        const vx = isRealistic ? (sys.resources?.pilot?.velocityX ?? 0) : 0;
-        const vy = isRealistic ? (sys.resources?.pilot?.velocityY ?? 0) : 0;
-        const prevTurnMove = sys.resources?.pilot?.prevTurnMove ?? 0;
-        const minMove      = Math.ceil(prevTurnMove / 2);
-        const minMovePx    = (!isRealistic && fuelBurned === 0) ? minMove : 0;
-        const shipBasis    = HelmPreview._tokenBasis(token);
-        const gridSize     = canvas.grid.size;
-        return canvas.tokens.placeables.some(t => {
-          if (t === token || t.document.hidden || !t.document.actor) return false;
-          const tW = t.document.width  * gridSize;
-          const tH = t.document.height * gridSize;
-          const tx = t.document.x + tW / 2;
-          const ty = t.document.y + tH / 2;
-          const reach = isRealistic
-            ? HelmPreview.canReachRealistic(shipBasis, tx, ty, effSpeed, maxBearingDeg, powerRemaining, powerMax, vx, vy, 0)
-            : HelmPreview.canReach(shipBasis, tx, ty, effSpeed, maxBearingDeg, powerRemaining, powerMax, minMovePx);
-          if (!reach) return false;
-          const cx = token.document.x + token.document.width  * gridSize / 2;
-          const cy = token.document.y + token.document.height * gridSize / 2;
-          const dist = Math.hypot((tx - cx) / gridSize, (ty - cy) / gridSize);
-          return ShipCombatState.getEffectiveLockTier(t.id, dist) >= 1;
-        });
-      })();
 
       Object.assign(context, {
         sys,
         shields,
         hullPct,
+        hullBarLabel,
         weaponSections,
         ammoTracks,
         effects,
@@ -270,13 +234,13 @@ export const NpcShipSheetMixin = (BaseClass) => {
           deployedTorpedoes: deployedTorpedoes.map(t => ({
             tokenId:      t.id, name: t.name, img: t.actor?.img,
             turnComplete: t.actor?.system?.turnComplete ?? false,
-            hull:         t.actor?.system?.hull ?? { value: 1, max: 1 },
+            hull:         (() => { const h = t.actor?.system?.hull ?? { value: 1, max: 1 }; return { ...h, displayValue: hullDisplay(h.value, h.max).displayValue }; })(),
           })),
           deployedCraft: deployedCraft.map(t => ({
             tokenId:      t.id, name: t.name, img: t.actor?.img,
             turnComplete: t.actor?.system?.turnComplete ?? false,
             rtb:          t.actor?.system?.rtb ?? false,
-            hull:         t.actor?.system?.hull ?? { value: 0, max: 0 },
+            hull:         (() => { const h = t.actor?.system?.hull ?? { value: 0, max: 0 }; return { ...h, displayValue: hullDisplay(h.value, h.max).displayValue }; })(),
           })),
           deployedCount: deployedTorpedoes.length + deployedCraft.length,
         });
@@ -295,7 +259,7 @@ export const NpcShipSheetMixin = (BaseClass) => {
           const side = ev.currentTarget.dataset.launchSide;
           const dir  = ev.currentTarget.dataset.launchDir;
           await this.actor.update({
-            [`system.ordnanceLaunchSides.${side}.${dir}`]: ev.currentTarget.checked,
+            [SystemAdapter.current.systemPath(`ordnanceLaunchSides.${side}.${dir}`)]: ev.currentTarget.checked,
           });
         });
       });
@@ -341,6 +305,7 @@ export const NpcShipSheetMixin = (BaseClass) => {
         const hitVal    = card?.querySelector("[data-macro-stat-display='hit'] .shipcombat-battery-stat-value");
         const salvoVal  = card?.querySelector("[data-macro-stat-display='salvo'] .shipcombat-battery-stat-value");
         const fireLabel = fireBtn?.querySelector(".shipcombat-macro-fire-label");
+        const dmgEl     = card?.querySelector("[data-macro-stat-display='damage'] .shipcombat-battery-stat-value");
         const pips      = [...picker.querySelectorAll(".shipcombat-macro-tier-pip")];
 
         function selectTier(pip) {
@@ -355,7 +320,14 @@ export const NpcShipSheetMixin = (BaseClass) => {
             fireBtn.dataset.fireMode    = pip.dataset.tierId;
             fireBtn.dataset.weaponId    = card.dataset.id;
             fireBtn.disabled            = pip.dataset.canAfford !== "true";
-            if (fireLabel) fireLabel.textContent = pip.querySelector(".shipcombat-macro-pip-label")?.textContent?.trim() ?? "";
+            if (fireLabel) {
+              const tierLabel = pip.querySelector(".shipcombat-macro-pip-label")?.textContent?.trim() ?? "";
+              const dmg   = dmgEl?.textContent?.trim();
+              const salvo = parseInt(pip.dataset.tierSalvo) || 1;
+              let label = tierLabel;
+              if (dmg) { label += ` ${dmg} Damage`; if (salvo > 1) label += ` \u00d7${salvo}`; }
+              fireLabel.textContent = label;
+            }
           }
         }
 
@@ -483,7 +455,7 @@ export const NpcShipSheetMixin = (BaseClass) => {
       if (!actor) return;
       const expectedType = slotType === "strikeCraft" ? `${MODULE_ID}.strikeCraft` : `${MODULE_ID}.torpedo`;
       const isValidDrop = actor.type === expectedType
-        || (actor.type === `${MODULE_ID}.shipOrdnance` && actor.system?.subtype === slotType);
+        || (actor.type === `${MODULE_ID}.shipOrdnance` && SystemAdapter.current.getShipData(actor)?.subtype === slotType);
       if (!isValidDrop) {
         return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.WrongOrdnanceType"));
       }
@@ -495,14 +467,22 @@ export const NpcShipSheetMixin = (BaseClass) => {
         img: actor.img,
         actorData,
       };
-      const existing = this.actor.system.ordnanceActors?.[slotType] ?? [];
-      await this.actor.update({ [`system.ordnanceActors.${slotType}`]: [...existing, ref] });
+      const existing = SystemAdapter.current.getShipData(this.actor).ordnanceActors?.[slotType] ?? [];
+      await this.actor.update({ [SystemAdapter.current.systemPath(`ordnanceActors.${slotType}`)]: [...existing, ref] });
     }
 
     close(options) {
       HelmPreview.hide();
       WeaponArcOverlay.deactivate();
       return super.close(options);
+    }
+
+    async _onChangeInput(event) {
+      const input = event.currentTarget;
+      if (input.name?.startsWith("system.")) {
+        input.name = SystemAdapter.current.systemPath(input.name.slice("system.".length));
+      }
+      return super._onChangeInput(event);
     }
   }
 
@@ -567,7 +547,7 @@ function _buildNpcGunnerContext(sys) {
 // ══════════════════════════════════════════════════════════════════════════════
 
 function _npcHelmOnRender(sheet) {
-  const sys          = sheet.actor.system;
+  const sys          = SystemAdapter.current.getShipData(sheet.actor);
   const fuelBurned   = sys.resources?.pilot?.fuelBurned ?? 0;
   const currentRound = sys.round ?? 0;
   const helmResetId  = sys.resources?.pilot?.helmResetId ?? 0;
@@ -697,7 +677,7 @@ function _npcHelmOnRender(sheet) {
       sheet._updateHelmPreview();
       clearTimeout(sheet._bearingDebounce);
       sheet._bearingDebounce = setTimeout(() => {
-        sheet.actor.update({ "system.resources.pilot.bearing": val });
+        sheet.actor.update({ [SystemAdapter.current.systemPath("resources.pilot.bearing")]: val });
       }, 300);
     });
   }
@@ -745,7 +725,7 @@ function _npcHelmOnRender(sheet) {
 // ══════════════════════════════════════════════════════════════════════════════
 
 async function _onNpcRollPiloting() {
-  const sys     = this.actor.system;
+  const sys     = SystemAdapter.current.getShipData(this.actor);
   const adapter = SystemAdapter.current;
   const target  = sys.attributes?.piloting ?? 40;
   const roll    = await new Roll(adapter.getRollFormula()).evaluate();
@@ -754,13 +734,13 @@ async function _onNpcRollPiloting() {
     flavor: `${game.i18n.localize("SHIPCOMBAT.Helm.RollPiloting")} (${target})`,
   });
   await this.actor.update({
-    "system.resources.pilot.pilotingSL": Math.max(0, sl),
-    "system.resources.pilot.pilotingMessageId": msg.id,
+    [SystemAdapter.current.systemPath("resources.pilot.pilotingSL")]: Math.max(0, sl),
+    [SystemAdapter.current.systemPath("resources.pilot.pilotingMessageId")]: msg.id,
   });
 }
 
 async function _onNpcRollInitiative() {
-  const sys     = this.actor.system;
+  const sys     = SystemAdapter.current.getShipData(this.actor);
   const adapter = SystemAdapter.current;
   const piloting = sys.attributes?.piloting ?? 40;
   const { total, roll } = await adapter.rollShipInitiativeFromAttribute(
@@ -781,7 +761,7 @@ async function _onNpcRollInitiative() {
 function _onNpcAllocBonus(event, target) {
   const stat  = target.dataset.stat;
   const delta = parseInt(target.dataset.delta) || 0;
-  const sys   = this.actor.system;
+  const sys   = SystemAdapter.current.getShipData(this.actor);
   const pilot = sys.resources?.pilot ?? {};
   const pilotingSL   = pilot.pilotingSL   ?? 0;
   const allocSpeed   = pilot.allocSpeed   ?? 0;
@@ -792,16 +772,16 @@ function _onNpcAllocBonus(event, target) {
     if (totalAlloc >= pilotingSL) return;
   }
   if (stat === "speed") {
-    this.actor.update({ "system.resources.pilot.allocSpeed":   Math.max(0, allocSpeed + delta) });
+    this.actor.update({ [SystemAdapter.current.systemPath("resources.pilot.allocSpeed")]:   Math.max(0, allocSpeed + delta) });
   } else if (stat === "mano") {
-    this.actor.update({ "system.resources.pilot.allocMano":    Math.max(0, allocMano + delta) });
+    this.actor.update({ [SystemAdapter.current.systemPath("resources.pilot.allocMano")]:    Math.max(0, allocMano + delta) });
   } else if (stat === "evasion") {
-    this.actor.update({ "system.resources.pilot.allocEvasion": Math.max(0, allocEvasion + delta) });
+    this.actor.update({ [SystemAdapter.current.systemPath("resources.pilot.allocEvasion")]: Math.max(0, allocEvasion + delta) });
   }
 }
 
 async function _onNpcConfirmHelm() {
-  const sys        = this.actor.system;
+  const sys        = SystemAdapter.current.getShipData(this.actor);
   const fuelBurned = sys.resources?.pilot?.fuelBurned ?? 0;
   const fuelSlider = this._helmState?.fuelSlider ?? fuelBurned;
   const bearing    = this._helmState?.bearing ?? 0;
@@ -839,13 +819,13 @@ async function _onNpcConfirmHelm() {
     const newVy = vy + Math.sin(thrustDir) * thrustMag;
     const totalMoved = Math.round(Math.hypot(newVx, newVy));
     await this.actor.update({
-      "system.resources.pilot.fuelBurned":   fuelSlider,
-      "system.resources.pilot.prevTurnMove": totalMoved,
-      "system.resources.pilot.bearing":      bearing,
-      "system.resources.pilot.velocityX":    newVx,
-      "system.resources.pilot.velocityY":    newVy,
-      "system.resources.pilot.bearingUsed":  (sys.resources?.pilot?.bearingUsed ?? 0) + Math.abs(bearing),
-      "system.resources.pilot.momentumUsed": carryPct,
+      [SystemAdapter.current.systemPath("resources.pilot.fuelBurned")]:   fuelSlider,
+      [SystemAdapter.current.systemPath("resources.pilot.prevTurnMove")]: totalMoved,
+      [SystemAdapter.current.systemPath("resources.pilot.bearing")]:      bearing,
+      [SystemAdapter.current.systemPath("resources.pilot.velocityX")]:    newVx,
+      [SystemAdapter.current.systemPath("resources.pilot.velocityY")]:    newVy,
+      [SystemAdapter.current.systemPath("resources.pilot.bearingUsed")]:  (sys.resources?.pilot?.bearingUsed ?? 0) + Math.abs(bearing),
+      [SystemAdapter.current.systemPath("resources.pilot.momentumUsed")]: carryPct,
     });
     HelmPreview.hide();
     return;
@@ -857,9 +837,9 @@ async function _onNpcConfirmHelm() {
 
   const prevTurnMove = sys.resources?.pilot?.prevTurnMove ?? 0;
   const minMove      = Math.ceil(prevTurnMove / 2);
-  const isFirstCommit = fuelBurned === 0;
-  const thrustPct     = fuelSlider - fuelBurned;
-  const driftUnits    = isFirstCommit ? minMove : 0;
+  const thrustPct    = fuelSlider - fuelBurned;
+  // driftUnits always uses minMove — every piecemeal commit must use the same arc circle.
+  const driftUnits   = minMove;
 
   const token = this.actor.getActiveTokens()?.[0];
   if (token && canvas?.ready) {
@@ -877,11 +857,12 @@ async function _onNpcConfirmHelm() {
     }
   }
 
-  const totalMoved = Math.round((fuelSlider / 100) * (speed + driftUnits));
+  // prevTurnMove is NOT updated here — it is computed at turn-start in the NPC helm reset
+  // (causodes-shipcombat-core.js) from fuelBurned before zeroing, keeping it stable
+  // throughout the turn even with piecemeal commits.
   await this.actor.update({
-    "system.resources.pilot.fuelBurned": fuelSlider,
-    "system.resources.pilot.prevTurnMove": totalMoved,
-    "system.resources.pilot.bearing": bearing,
+    [SystemAdapter.current.systemPath("resources.pilot.fuelBurned")]: fuelSlider,
+    [SystemAdapter.current.systemPath("resources.pilot.bearing")]: bearing,
   });
 
   HelmPreview.hide();
@@ -890,7 +871,7 @@ async function _onNpcConfirmHelm() {
 async function _onNpcRam() {
   const token = this.actor.getActiveTokens()?.[0];
   if (!token || !canvas?.ready) return;
-  const sys = this.actor.system;
+  const sys = SystemAdapter.current.getShipData(this.actor);
   const fuelBurned       = sys.resources?.pilot?.fuelBurned ?? 0;
   const prevTurnMove     = sys.resources?.pilot?.prevTurnMove ?? 0;
   const minMoveGridUnits = fuelBurned === 0 ? Math.ceil(prevTurnMove / 2) : 0;
@@ -903,16 +884,23 @@ async function _onNpcRam() {
   const allocMano   = sys.resources?.pilot?.allocMano ?? 0;
   const maxBearingDeg = Math.max(0, baseMano + allocMano) * 15;
   const shipBasis   = HelmPreview._tokenBasis(token);
-  const popup = new RamTargetPopup({
+
+  const isRealistic = game.settings.get(MODULE_ID, "movementMode") === "realistic";
+  const velocityX   = isRealistic ? (sys.resources?.pilot?.velocityX ?? 0) : 0;
+  const velocityY   = isRealistic ? (sys.resources?.pilot?.velocityY ?? 0) : 0;
+
+  const RamTargetPopupClass = ShipCombat._popupClass("ramTarget", RamTargetPopup);
+  const popup = new RamTargetPopupClass({
     ship: this.actor,
     effSpeed, powerMax, powerRemaining,
     maxBearingDeg, minMoveGridUnits, fuelBurned, shipBasis,
+    isRealistic, velocityX, velocityY, carryPct: 0,
   });
   popup.render(true);
 }
 
 async function _onNpcRollOrdnance() {
-  const sys = this.actor.system;
+  const sys = SystemAdapter.current.getShipData(this.actor);
   if (sys.resources?.gunner?.ordnanceRolled) {
     return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.AlreadyRolledOrdnance"));
   }
@@ -920,22 +908,23 @@ async function _onNpcRollOrdnance() {
   const adapter = SystemAdapter.current;
   const roll    = await new Roll(adapter.getRollFormula()).evaluate();
   const sl      = Math.max(0, adapter.computeSuccessLevel(roll, gunnery));
+  const baseFlavor = `${game.i18n.localize("SHIPCOMBAT.NpcShip.Gunnery")} (${gunnery})`;
   await roll.toMessage({
-    flavor:  `${game.i18n.localize("SHIPCOMBAT.NpcShip.Gunnery")} (${gunnery})`,
+    flavor:  adapter.buildSkillRollFlavor(baseFlavor, roll, sl),
     speaker: ChatMessage.getSpeaker({ actor: this.actor }),
   });
   await this.actor.update({
-    "system.resources.gunner.ordnanceSL":       sl,
-    "system.resources.gunner.ordnanceRolled":   true,
-    "system.resources.gunner.allocAccuracy":    0,
-    "system.resources.gunner.allocPenetration": 0,
-    "system.resources.gunner.allocFirepower":   0,
-    "system.resources.gunner.slLocked":         false,
+    [SystemAdapter.current.systemPath("resources.gunner.ordnanceSL")]:       sl,
+    [SystemAdapter.current.systemPath("resources.gunner.ordnanceRolled")]:   true,
+    [SystemAdapter.current.systemPath("resources.gunner.allocAccuracy")]:    0,
+    [SystemAdapter.current.systemPath("resources.gunner.allocPenetration")]: 0,
+    [SystemAdapter.current.systemPath("resources.gunner.allocFirepower")]:   0,
+    [SystemAdapter.current.systemPath("resources.gunner.slLocked")]:         false,
   });
 }
 
 async function _onNpcAllocGunnerSL(event, target) {
-  const sys    = this.actor.system;
+  const sys    = SystemAdapter.current.getShipData(this.actor);
   const gunner = sys.resources?.gunner ?? {};
   if (gunner.slLocked || !gunner.ordnanceRolled) return;
   const stat  = target.dataset.stat;
@@ -950,7 +939,7 @@ async function _onNpcAllocGunnerSL(event, target) {
   if (stat === "firepower")   newFp  = Math.max(0, fp  + delta);
   if (newAcc + newPen + newFp > pool) return;
   const keyMap = { accuracy: "allocAccuracy", penetration: "allocPenetration", firepower: "allocFirepower" };
-  await this.actor.update({ [`system.resources.gunner.${keyMap[stat]}`]: stat === "accuracy" ? newAcc : stat === "penetration" ? newPen : newFp });
+  await this.actor.update({ [SystemAdapter.current.systemPath(`resources.gunner.${keyMap[stat]}`)]: stat === "accuracy" ? newAcc : stat === "penetration" ? newPen : newFp });
 }
 
 async function _onNpcFireWeapon(event, target) {
@@ -959,7 +948,7 @@ async function _onNpcFireWeapon(event, target) {
   if (!weaponId || !fireMode) return;
   const weapon = this.actor.items.get(weaponId);
   if (!weapon) return;
-  const sys = this.actor.system;
+  const sys = SystemAdapter.current.getShipData(this.actor);
   const weaponType = weapon.system.resourceType;
   if (weaponType === "ammo") {
     const tier = MACRO_FIRE_TIERS.find(t => t.id === fireMode);
@@ -977,19 +966,20 @@ async function _onNpcFireWeapon(event, target) {
       return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.InsufficientAP"));
     }
   }
-  const popup = new TargetingPopup({ weapon, fireMode });
+  const TargetingPopupClass = ShipCombat._popupClass("targeting", TargetingPopup);
+  const popup = new TargetingPopupClass({ weapon, fireMode });
   popup.render(true);
 }
 
 function _adjustShieldSector(sheet, sector, delta) {
-  const sys = sheet.actor.system;
+  const sys = SystemAdapter.current.getShipData(sheet.actor);
   const cur = sys.shields?.[sector] ?? 0;
   const newVal = Math.max(0, cur + delta);
   const actualDelta = newVal - cur;
   if (actualDelta === 0) return;
   const updates = {
-    [`system.shields.${sector}`]: newVal,
-    "system.voidshieldFluxRemaining": (sys.voidshieldFluxRemaining ?? 0) - actualDelta,
+    [SystemAdapter.current.systemPath(`shields.${sector}`)]: newVal,
+    [SystemAdapter.current.systemPath("voidshieldFluxRemaining")]: (sys.voidshieldFluxRemaining ?? 0) - actualDelta,
   };
   sheet.actor.update(updates);
 }
@@ -1002,7 +992,7 @@ async function _onNpcStepCondition(event, target) {
     : cond.tier === "medium" ? "low"
     : null;
   await this.actor.update({
-    [`system.conditions.${locId}`]: nextTier ? { ...cond, tier: nextTier } : { tier: null },
+    [SystemAdapter.current.systemPath(`conditions.${locId}`)]: nextTier ? { ...cond, tier: nextTier } : { tier: null },
   });
 }
 
@@ -1010,19 +1000,19 @@ function _onAdjustShield(event, target) {
   const sector = target.dataset.sector;
   const delta  = parseInt(target.dataset.delta) || 0;
   if (!sector || !delta) return;
-  const sys = this.actor.system;
+  const sys = SystemAdapter.current.getShipData(this.actor);
   const cur = sys.shields?.[sector] ?? 0;
   const newVal = Math.max(0, cur + delta);
   const actualDelta = newVal - cur;
-  const updates = { [`system.shields.${sector}`]: newVal };
+  const updates = { [SystemAdapter.current.systemPath(`shields.${sector}`)]: newVal };
   if (actualDelta !== 0) {
-    updates["system.voidshieldFluxRemaining"] = (sys.voidshieldFluxRemaining ?? 0) - actualDelta;
+    updates[SystemAdapter.current.systemPath("voidshieldFluxRemaining")]   = (sys.voidshieldFluxRemaining ?? 0) - actualDelta;
   }
   this.actor.update(updates);
 }
 
 async function _onSuppressFire() {
-  const sys = this.actor.system;
+  const sys = SystemAdapter.current.getShipData(this.actor);
   if (sys.engActionUsed) return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.NpcShip.EngActionUsed"));
   if ((sys.internalFire ?? 0) <= 0) return;
   const target  = sys.attributes?.tech ?? 40;
@@ -1031,11 +1021,11 @@ async function _onSuppressFire() {
   const sl      = adapter.computeSuccessLevel(roll, target);
   const newFire = Math.max(0, (sys.internalFire ?? 0) - Math.max(0, 5 + sl));
   await roll.toMessage({ flavor: `${game.i18n.localize("SHIPCOMBAT.NpcShip.SuppressFire")} (${game.i18n.localize("SHIPCOMBAT.NpcShip.Tech")} ${target})` });
-  await this.actor.update({ "system.internalFire": newFire, "system.engActionUsed": true });
+  await this.actor.update({ [SystemAdapter.current.systemPath("internalFire")]: newFire, [SystemAdapter.current.systemPath("engActionUsed")]: true });
 }
 
 async function _onReduceHeat() {
-  const sys = this.actor.system;
+  const sys = SystemAdapter.current.getShipData(this.actor);
   if (sys.engActionUsed) return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.NpcShip.EngActionUsed"));
   if ((sys.heat ?? 0) <= 0) return;
   const target  = sys.attributes?.tech ?? 40;
@@ -1044,61 +1034,64 @@ async function _onReduceHeat() {
   const sl      = adapter.computeSuccessLevel(roll, target);
   const newHeat = Math.max(0, (sys.heat ?? 0) - Math.max(0, 5 + sl));
   await roll.toMessage({ flavor: `${game.i18n.localize("SHIPCOMBAT.NpcShip.ReduceHeat")} (${game.i18n.localize("SHIPCOMBAT.NpcShip.Tech")} ${target})` });
-  await this.actor.update({ "system.heat": newHeat, "system.engActionUsed": true });
+  await this.actor.update({ [SystemAdapter.current.systemPath("heat")]: newHeat, [SystemAdapter.current.systemPath("engActionUsed")]: true });
 }
 
 async function _onFullReset() {
-  const sys = this.actor.system;
+  const sys = SystemAdapter.current.getShipData(this.actor);
   const helmResetId = (sys.resources?.pilot?.helmResetId ?? 0) + 1;
   const isRealistic = game.settings?.get(MODULE_ID, "movementMode") === "realistic";
   const baseSpeed   = sys.movement?.baseSpeed ?? sys.movement?.speed ?? 6;
   const updates = {
-    "system.active": false,
-    "system.round": 0,
-    "system.hull.value": 0,
-    "system.internalFire": 0,
-    "system.engActionUsed": false,
-    "system.resources.pilot.pilotingSL": 0,
-    "system.resources.pilot.allocSpeed": 0,
-    "system.resources.pilot.allocMano": 0,
-    "system.resources.pilot.allocEvasion": 0,
-    "system.resources.pilot.fuelBurned": 0,
-    "system.resources.pilot.bearing": 0,
-    "system.resources.pilot.overdrive": false,
-    "system.resources.pilot.helmResetId": helmResetId,
-    "system.resources.pilot.pilotingMessageId": "",
-    "system.resources.pilot.bearingUsed": 0,
-    "system.resources.pilot.momentumUsed": 0,
-    "system.resources.gunner.ammo": Math.round((sys.resources?.gunner?.ammoMax ?? 20) * 0.25),
-    "system.resources.gunner.power": Math.round((sys.resources?.gunner?.powerMax ?? 20) * 0.5),
-    "system.resources.gunner.ordnanceSL":       0,
-    "system.resources.gunner.ordnanceRolled":   false,
-    "system.resources.gunner.allocAccuracy":    0,
-    "system.resources.gunner.allocPenetration": 0,
-    "system.resources.gunner.allocFirepower":   0,
-    "system.resources.gunner.slLocked":         false,
-    "system.heat": 0,
+    [SystemAdapter.current.systemPath("active")]: false,
+    [SystemAdapter.current.systemPath("round")]: 0,
+    [SystemAdapter.current.systemPath("hull.value")]: SystemAdapter.current.hullDisplayMode === "hpRemaining"
+      ? (sys.hull?.max ?? 0)
+      : 0,
+    [SystemAdapter.current.systemPath("internalFire")]: 0,
+    [SystemAdapter.current.systemPath("engActionUsed")]: false,
+    [SystemAdapter.current.systemPath("resources.pilot.pilotingSL")]: 0,
+    [SystemAdapter.current.systemPath("resources.pilot.allocSpeed")]: 0,
+    [SystemAdapter.current.systemPath("resources.pilot.allocMano")]: 0,
+    [SystemAdapter.current.systemPath("resources.pilot.allocEvasion")]: 0,
+    [SystemAdapter.current.systemPath("resources.pilot.fuelBurned")]: 0,
+    [SystemAdapter.current.systemPath("resources.pilot.bearing")]: 0,
+    [SystemAdapter.current.systemPath("resources.pilot.overdrive")]: false,
+    [SystemAdapter.current.systemPath("resources.pilot.helmResetId")]: helmResetId,
+    [SystemAdapter.current.systemPath("resources.pilot.pilotingMessageId")]: "",
+    [SystemAdapter.current.systemPath("resources.pilot.bearingUsed")]: 0,
+    [SystemAdapter.current.systemPath("resources.pilot.momentumUsed")]: 0,
+    [SystemAdapter.current.systemPath("resources.gunner.ammo")]: Math.round((sys.resources?.gunner?.ammoMax ?? 20) * 0.25),
+    [SystemAdapter.current.systemPath("resources.gunner.power")]: Math.round((sys.resources?.gunner?.powerMax ?? 20) * 0.5),
+    [SystemAdapter.current.systemPath("resources.gunner.ordnanceSL")]:       0,
+    [SystemAdapter.current.systemPath("resources.gunner.ordnanceRolled")]:   false,
+    [SystemAdapter.current.systemPath("resources.gunner.allocAccuracy")]:    0,
+    [SystemAdapter.current.systemPath("resources.gunner.allocPenetration")]: 0,
+    [SystemAdapter.current.systemPath("resources.gunner.allocFirepower")]:   0,
+    [SystemAdapter.current.systemPath("resources.gunner.slLocked")]:         false,
+    [SystemAdapter.current.systemPath("resources.gunner.firedWeaponIds")]:   [],
+    [SystemAdapter.current.systemPath("heat")]: 0,
   };
   if (isRealistic) {
     const token    = this.actor.getActiveTokens()?.[0];
     const rotation = token?.document?.rotation ?? 0;
     const θ = rotation * Math.PI / 180;
-    updates["system.resources.pilot.velocityX"] = Math.sin(θ) * (baseSpeed / 2);
-    updates["system.resources.pilot.velocityY"] = -Math.cos(θ) * (baseSpeed / 2);
+    updates[SystemAdapter.current.systemPath("resources.pilot.velocityX")]   = Math.sin(θ) * (baseSpeed / 2);
+    updates[SystemAdapter.current.systemPath("resources.pilot.velocityY")]   = -Math.cos(θ) * (baseSpeed / 2);
   } else {
-    updates["system.resources.pilot.prevTurnMove"] = baseSpeed;
+    updates[SystemAdapter.current.systemPath("resources.pilot.prevTurnMove")]   = baseSpeed;
   }
-  for (const s of SECTORS) updates[`system.shields.${s}`] = sys.shieldMax?.[s] ?? 0;
-  for (const s of SECTORS) updates[`system.armour.${s}`] = sys.armourBase?.[s] ?? 0;
-  for (const s of SECTORS) updates[`system.armourRend.${s}`] = 0;
-  for (const k of ["a", "b", "c"]) updates[`system.ammoTracks.${k}.value`] = sys.ammoTracks?.[k]?.max ?? 10;
-  updates["system.voidshieldFluxRemaining"] = sys.voidshieldFlux ?? 0;
+  for (const s of SECTORS) updates[SystemAdapter.current.systemPath(`shields.${s}`)] = sys.shieldMax?.[s] ?? 0;
+  for (const s of SECTORS) updates[SystemAdapter.current.systemPath(`armour.${s}`)] = sys.armourBase?.[s] ?? 0;
+  for (const s of SECTORS) updates[SystemAdapter.current.systemPath(`armourRend.${s}`)] = 0;
+  for (const k of ["a", "b", "c"]) updates[SystemAdapter.current.systemPath(`ammoTracks.${k}.value`)] = sys.ammoTracks?.[k]?.max ?? 10;
+  updates[SystemAdapter.current.systemPath("voidshieldFluxRemaining")]   = sys.voidshieldFlux ?? 0;
   const condClear = { tier: null, lockedRole: null, blindedSectionId: null };
-  updates["system.conditions.hull"]           = { ...condClear };
-  updates["system.conditions.engines"]        = { ...condClear };
-  updates["system.conditions.manoeuvring"]    = { ...condClear };
-  updates["system.conditions.coreSystems"]    = { ...condClear };
-  updates["system.conditions.weaponsSensors"] = { ...condClear };
+  updates[SystemAdapter.current.systemPath("conditions.hull")]             = { ...condClear };
+  updates[SystemAdapter.current.systemPath("conditions.engines")]          = { ...condClear };
+  updates[SystemAdapter.current.systemPath("conditions.manoeuvring")]      = { ...condClear };
+  updates[SystemAdapter.current.systemPath("conditions.coreSystems")]      = { ...condClear };
+  updates[SystemAdapter.current.systemPath("conditions.weaponsSensors")]   = { ...condClear };
   await this.actor.update(updates);
   HelmPreview.hide();
   if (canvas?.scene) {
@@ -1116,29 +1109,29 @@ async function _onFullReset() {
 }
 
 function _onRefillShields() {
-  const sys = this.actor.system;
+  const sys = SystemAdapter.current.getShipData(this.actor);
   const updates = {};
   let totalAdded = 0;
   for (const s of SECTORS) {
     const cur = sys.shields?.[s] ?? 0;
     const max = sys.shieldMax?.[s] ?? 0;
-    updates[`system.shields.${s}`] = max;
+    updates[SystemAdapter.current.systemPath(`shields.${s}`)] = max;
     totalAdded += Math.max(0, max - cur);
   }
   if (totalAdded > 0) {
-    updates["system.voidshieldFluxRemaining"] = (sys.voidshieldFluxRemaining ?? 0) - totalAdded;
+    updates[SystemAdapter.current.systemPath("voidshieldFluxRemaining")]   = (sys.voidshieldFluxRemaining ?? 0) - totalAdded;
   }
   this.actor.update(updates);
 }
 
 function _onFluxToCharge() {
-  const sys = this.actor.system;
+  const sys = SystemAdapter.current.getShipData(this.actor);
   const flux = sys.voidshieldFluxRemaining ?? 0;
   if (flux <= 0) return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.NpcShip.NoFluxRemaining"));
   const power = sys.resources?.gunner?.power ?? 0;
   this.actor.update({
-    "system.voidshieldFluxRemaining":   flux - 1,
-    "system.resources.gunner.power":  power + 1,
+    [SystemAdapter.current.systemPath("voidshieldFluxRemaining")]:   flux - 1,
+    [SystemAdapter.current.systemPath("resources.gunner.power")]:  power + 1,
   });
 }
 
@@ -1268,7 +1261,8 @@ async function _onNpcRTB() {
     return;
   }
   const shipPos = { x: shipCx, y: shipCy };
-  const popup = new RecoverCraftPopup({ nearbyCraft, shipPos });
+  const RecoverCraftPopupClass = ShipCombat._popupClass("recoverCraft", RecoverCraftPopup);
+  const popup = new RecoverCraftPopupClass({ nearbyCraft, shipPos });
   const selectedTokenId = await popup.show();
   if (!selectedTokenId) return;
   const tokenDoc = canvas.scene.tokens.get(selectedTokenId);
@@ -1280,9 +1274,9 @@ async function _onNpcRTB() {
 
 async function _npcLaunchOrdnance(type) {
   const slotKey   = type === "strikeCraft" ? "strikeCraft" : "torpedo";
-  const templates = this.actor.system.ordnanceActors?.[slotKey] ?? [];
+  const templates = SystemAdapter.current.getShipData(this.actor).ordnanceActors?.[slotKey] ?? [];
   const tmpl      = templates[0];
-  if (this.actor.system.resources?.pilot?.prowGunLocked) {
+  if (SystemAdapter.current.getShipData(this.actor).resources?.pilot?.prowGunLocked) {
     return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Ram.BowLaunchLocked"));
   }
   if (!tmpl) {
@@ -1293,7 +1287,7 @@ async function _npcLaunchOrdnance(type) {
     return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.NpcShip.NoTokenFound"));
   }
   const parentShipTokenId = shipToken.id;
-  const allowedSides = this.actor.system.ordnanceLaunchSides?.[type === "strikeCraft" ? "strikeCraft" : "torpedo"];
+  const allowedSides = SystemAdapter.current.getShipData(this.actor).ordnanceLaunchSides?.[type === "strikeCraft" ? "strikeCraft" : "torpedo"];
   const side = await _promptNpcSide(allowedSides);
   if (!side) return;
   const spawn = side === "bow" ? _npcComputeBowSpawn(shipToken)
@@ -1302,17 +1296,20 @@ async function _npcLaunchOrdnance(type) {
   const actorData = foundry.utils.deepClone(tmpl.actorData);
   delete actorData._id;
   foundry.utils.setProperty(actorData, `flags.${MODULE_ID}.fromOrdnanceMaster`, true);
-  foundry.utils.setProperty(actorData, "system.parentShipTokenId", parentShipTokenId);
+  foundry.utils.setProperty(actorData, SystemAdapter.current.systemPath("parentShipTokenId"), parentShipTokenId);
   if (actorData.system) actorData.system.turnComplete = (type === "torpedo");
-  if (actorData.system?.hull) actorData.system.hull.value = 0;
+  if (actorData.system?.hull) {
+    const _isHP = SystemAdapter.current.hullDisplayMode === "hpRemaining";
+    actorData.system.hull.value = _isHP ? (actorData.system.hull.max ?? 0) : 0;
+  }
   if (game.settings?.get(MODULE_ID, "movementMode") === "realistic") {
-    const launchSys  = this.actor.system;
+    const launchSys  = SystemAdapter.current.getShipData(this.actor);
     const shipVx     = launchSys.resources?.pilot?.velocityX ?? 0;
     const shipVy     = launchSys.resources?.pilot?.velocityY ?? 0;
     const ownSpeed   = actorData.system?.movement?.speed ?? 0;
     const headingRad = (spawn.rotation - 90) * (Math.PI / 180);
-    foundry.utils.setProperty(actorData, "system.helm.velocityX", shipVx + Math.cos(headingRad) * (ownSpeed / 2));
-    foundry.utils.setProperty(actorData, "system.helm.velocityY", shipVy + Math.sin(headingRad) * (ownSpeed / 2));
+    foundry.utils.setProperty(actorData, SystemAdapter.current.systemPath("helm.velocityX"), shipVx + Math.cos(headingRad) * (ownSpeed / 2));
+    foundry.utils.setProperty(actorData, SystemAdapter.current.systemPath("helm.velocityY"), shipVy + Math.sin(headingRad) * (ownSpeed / 2));
   }
   const actor = await Actor.create(actorData);
   if (!actor) return;
@@ -1334,7 +1331,7 @@ async function _onNpcOpenOrdTemplate(event, target) {
   const slotType   = row?.dataset?.ordnanceSlot;
   const templateId = row?.dataset?.templateId;
   if (!slotType || !templateId) return;
-  const templates = this.actor.system.ordnanceActors?.[slotType] ?? [];
+  const templates = SystemAdapter.current.getShipData(this.actor).ordnanceActors?.[slotType] ?? [];
   const ref       = templates.find(e => e.id === templateId);
   if (!ref?.actorData) return;
   const editData = foundry.utils.deepClone(ref.actorData);
@@ -1359,7 +1356,7 @@ async function _onNpcOpenOrdTemplate(event, target) {
         ? { ...e, actorData: updatedData, name: updatedData.name, img: updatedData.img }
         : e,
     );
-    await shipActor.update({ [`system.ordnanceActors.${slotType}`]: newTemplates });
+    await shipActor.update({ [SystemAdapter.current.systemPath(`ordnanceActors.${slotType}`)]: newTemplates });
     if (game.actors.has(editActor.id)) await editActor.delete();
     return origClose(options);
   };
@@ -1370,8 +1367,480 @@ async function _onNpcRemoveOrdTemplate(event, target) {
   const slotType   = row?.dataset?.ordnanceSlot;
   const templateId = row?.dataset?.templateId;
   if (!slotType || !templateId) return;
-  const existing = this.actor.system.ordnanceActors?.[slotType] ?? [];
+  const existing = SystemAdapter.current.getShipData(this.actor).ordnanceActors?.[slotType] ?? [];
   await this.actor.update({
-    [`system.ordnanceActors.${slotType}`]: existing.filter(e => e.id !== templateId),
+    [SystemAdapter.current.systemPath(`ordnanceActors.${slotType}`)]: existing.filter(e => e.id !== templateId),
   });
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Action dispatch map (shared by AppV2 DEFAULT_OPTIONS.actions and AppV1 click handler)
+// ══════════════════════════════════════════════════════════════════════════════
+
+const NPC_ACTIONS = {
+  npcAdjustShield:      _onAdjustShield,
+  npcSuppressFire:      _onSuppressFire,
+  npcReduceHeat:        _onReduceHeat,
+  npcFullReset:         _onFullReset,
+  npcRefillShields:     _onRefillShields,
+  npcFluxToCharge:      _onFluxToCharge,
+  npcRollPiloting:      _onNpcRollPiloting,
+  npcRollInitiative:    _onNpcRollInitiative,
+  npcAllocBonus:        _onNpcAllocBonus,
+  npcConfirmHelm:       _onNpcConfirmHelm,
+  npcRam:               _onNpcRam,
+  npcRollOrdnance:      _onNpcRollOrdnance,
+  npcAllocGunnerSL:     _onNpcAllocGunnerSL,
+  npcFireWeapon:        _onNpcFireWeapon,
+  npcLaunchTorpedo:     _onNpcLaunchTorpedo,
+  npcLaunchStrikeCraft: _onNpcLaunchStrikeCraft,
+  npcOpenOrdTemplate:   _onNpcOpenOrdTemplate,
+  npcRemoveOrdTemplate: _onNpcRemoveOrdTemplate,
+  panToOrdnance:        _onNpcPanToOrdnance,
+  npcRTB:               _onNpcRTB,
+  npcStepCondition:     _onNpcStepCondition,
+};
+
+// ══════════════════════════════════════════════════════════════════════════════
+// AppV1 NPC ship sheet mixin
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * AppV1 (legacy ActorSheet) variant of NpcShipSheetMixin.
+ * Wraps the same standalone action functions and helpers but adapts the
+ * lifecycle to AppV1: getData / activateListeners / _updateObject / _onDropX.
+ */
+export const NpcShipSheetV1Mixin = (BaseClass) => {
+  class NpcShipSheetV1Base extends BaseClass {
+
+    static get defaultOptions() {
+      return foundry.utils.mergeObject(super.defaultOptions, {
+        classes:        [],
+        width:          640,
+        height:         720,
+        template:       `modules/${CORE_MODULE_ID}/templates/actor/npc-ship-v1.hbs`,
+        tabs:           [{ navSelector: ".npc-sheet-tabs", contentSelector: ".npc-sheet-body", initial: "main" }],
+        scrollY:        [".tab.active"],
+        submitOnChange: true,
+        closeOnSubmit:  false,
+        dragDrop:       [{ dragSelector: null, dropSelector: "[data-component-slot], [data-ordnance-drop]" }],
+      });
+    }
+
+    get isEditable() { return true; }
+
+    async getData(options = {}) {
+      const base = await super.getData(options);
+      const sys  = SystemAdapter.current.getShipData(this.actor);
+
+      const shields = {};
+      for (const s of SECTORS) {
+        const val = sys.shields?.[s] ?? 0;
+        const max = sys.shieldMax?.[s] ?? 0;
+        shields[s] = { val, max, pct: max > 0 ? Math.round((val / max) * 100) : 0, over: val > max };
+      }
+
+      const _hullDisp1 = hullDisplay(sys.hull.value, sys.hull.max);
+      const hullPct     = _hullDisp1.pct;
+      const hullBarLabel = _hullDisp1.isDamageTaken
+        ? game.i18n.localize("SHIPCOMBAT.Label.HullDamage")
+        : game.i18n.localize("SHIPCOMBAT.Label.HullIntegrity");
+
+      const components       = this.actor.items.filter(i => i.type === `${MODULE_ID}.component`);
+      const weaponComponents = components.filter(c => c.system.slot === "weapon");
+      const gunnerCtx        = _buildNpcGunnerContext(sys);
+
+      const weaponSections = WEAPON_SECTIONS.map(def => {
+        const sectionItems = weaponComponents.filter(item => {
+          const pos = item.system?.weaponPosition ?? "prow";
+          return pos === "flank" ? (item.system?.weaponBay ?? "port") === def.id : pos === def.id;
+        });
+        const slotCount = Math.max(0, Number(sys.weaponSlots?.[def.id] ?? 0));
+        return {
+          ...def,
+          labelLocalized: game.i18n.localize(def.label),
+          slotCount,
+          emptySlots: Math.max(0, slotCount - sectionItems.length),
+          items: sectionItems.map(item => enrichWeaponForGunner(item, gunnerCtx)),
+        };
+      });
+
+      const ammoTracks = ["a", "b", "c"].map(k => ({
+        key: k,
+        ...(sys.ammoTracks?.[k] ?? { label: "", value: 0, max: 10 }),
+        pct: (sys.ammoTracks?.[k]?.max ?? 10) > 0
+          ? Math.round(((sys.ammoTracks?.[k]?.value ?? 0) / (sys.ammoTracks?.[k]?.max ?? 10)) * 100)
+          : 0,
+      }));
+
+      const allEffects = Array.from(this.actor.effects ?? []);
+      const effects = {
+        temporary: allEffects.filter(e => !e.disabled && e.isTemporary),
+        passive:   allEffects.filter(e => !e.disabled && !e.isTemporary),
+        disabled:  allEffects.filter(e => e.disabled),
+      };
+
+      const npcShipToken = this.actor.getActiveTokens()?.[0];
+      const helm = buildHelmContext(sys, {
+        velocityBearingMode: this._velocityBearingMode ?? "relative",
+        shipRotation: npcShipToken?.document?.rotation ?? 0,
+      });
+
+      const SIDE_LABELS = {
+        bow:       game.i18n.localize("SHIPCOMBAT.Sector.Bow"),
+        port:      game.i18n.localize("SHIPCOMBAT.Sector.Port"),
+        starboard: game.i18n.localize("SHIPCOMBAT.Sector.Starboard"),
+        stern:     game.i18n.localize("SHIPCOMBAT.Sector.Stern"),
+      };
+      const SIDE_ICONS = { bow: "fa-arrow-up", port: "fa-arrow-left", starboard: "fa-arrow-right", stern: "fa-arrow-down" };
+      const toArr = src => Object.entries(SIDE_LABELS).map(([key, label]) => ({
+        key, label, icon: SIDE_ICONS[key], value: src?.[key] ?? true,
+      }));
+
+      const shipToken         = canvas?.scene?.tokens?.find(t => t.actor?.id === this.actor.id);
+      const parentShipTokenId = shipToken?.id ?? null;
+      const allTokens         = parentShipTokenId ? [...(canvas.scene.tokens ?? [])] : [];
+      const deployedTorpedoes = allTokens.filter(t =>
+        isTorpedo(t.actor) && t.actor?.system?.parentShipTokenId === parentShipTokenId);
+      const deployedCraft     = allTokens.filter(t =>
+        isStrikeCraft(t.actor) && t.actor?.system?.parentShipTokenId === parentShipTokenId);
+
+      return Object.assign({}, base, {
+        actor: this.actor,
+        sys,
+        shields,
+        hullPct,
+        hullBarLabel,
+        weaponSections,
+        ammoTracks,
+        effects,
+        helm,
+        // tabsById: provides {id, cssClass} objects for each AppV1 tab so that
+        // the self-wrapping tab partials render with the correct data-tab value.
+        tabsById: {
+          main:     { id: "main",     cssClass: "" },
+          movement: { id: "movement", cssClass: "" },
+          gunner:   { id: "gunner",   cssClass: "" },
+          ordnance: { id: "ordnance", cssClass: "" },
+        },
+        gunnerCtx,
+        sectors: SECTORS.map(s => ({
+          id:         s,
+          abbr:       SECTOR_ABBR[s] ?? s.toUpperCase(),
+          label:      game.i18n.localize(`SHIPCOMBAT.Sector.${s[0].toUpperCase() + s.slice(1)}`),
+          shield:     sys.shields?.[s]    ?? 0,
+          shieldMax:  sys.shieldMax?.[s]  ?? 0,
+          armour:     sys.armour?.[s]     ?? 0,
+          armourBase: sys.armourBase?.[s] ?? 0,
+        })),
+        conditionsList: CRIT_LOCATIONS.map(loc => {
+          const cond = sys.conditions?.[loc.id] ?? {};
+          const tier = cond.tier ?? null;
+          return {
+            locId:           loc.id,
+            tier,
+            hasCondition:    !!tier,
+            locLabel:        game.i18n.localize(`SHIPCOMBAT.Crit.Location.${loc.id}`),
+            conditionName:   tier ? game.i18n.localize(`SHIPCOMBAT.Crit.Condition.${loc.id}.${tier}`) : "",
+            conditionEffect: tier ? game.i18n.localize(`SHIPCOMBAT.Crit.Effect.${loc.id}.${tier}`) : "",
+            tierLabel:       tier ? game.i18n.localize(`SHIPCOMBAT.Crit.Tier.${tier.charAt(0).toUpperCase() + tier.slice(1)}`) : "",
+            tierClass:       tier ? `shipcombat-crit-tier--${tier}` : "",
+          };
+        }),
+        hasAnyCondition:     CRIT_LOCATIONS.some(loc => !!(sys.conditions?.[loc.id]?.tier)),
+        shipClassifications: SHIP_CLASSIFICATIONS,
+        useStrikeCraft:      true,
+        ordnanceLaunchSides: {
+          torpedo:    toArr(sys.ordnanceLaunchSides?.torpedo),
+          strikeCraft: toArr(sys.ordnanceLaunchSides?.strikeCraft),
+        },
+        torpedoTemplates: (sys.ordnanceActors?.torpedo ?? []).map(t => ({
+          ...t, torpedoCount: t.actorData?.system?.hull?.max ?? 1,
+        })),
+        craftTemplates: (sys.ordnanceActors?.strikeCraft ?? []).map(t => ({
+          ...t, squadronSize: t.actorData?.system?.hull?.max ?? 1,
+        })),
+        deployedTorpedoes: deployedTorpedoes.map(t => ({
+          tokenId:      t.id,
+          name:         t.name,
+          img:          t.actor?.img,
+          turnComplete: t.actor?.system?.turnComplete ?? false,
+          hull:         (() => { const h = t.actor?.system?.hull ?? { value: 1, max: 1 }; return { ...h, displayValue: hullDisplay(h.value, h.max).displayValue }; })(),
+        })),
+        deployedCraft: deployedCraft.map(t => ({
+          tokenId:      t.id,
+          name:         t.name,
+          img:          t.actor?.img,
+          turnComplete: t.actor?.system?.turnComplete ?? false,
+          rtb:          t.actor?.system?.rtb ?? false,
+          hull:         (() => { const h = t.actor?.system?.hull ?? { value: 0, max: 0 }; return { ...h, displayValue: hullDisplay(h.value, h.max).displayValue }; })(),
+        })),
+        deployedCount: deployedTorpedoes.length + deployedCraft.length,
+      });
+    }
+
+    activateListeners($html) {
+      super.activateListeners($html);
+      const el    = $html[0];
+      const sheet = this;
+
+      // Click dispatch to standalone action functions
+      $html.on("click", "[data-action]", async (ev) => {
+        const target  = ev.currentTarget;
+        const action  = target.dataset.action;
+        const handler = NPC_ACTIONS[action];
+        if (handler) await handler.call(sheet, ev, target);
+      });
+
+      // Launch side checkboxes
+      el.querySelectorAll("[data-launch-side][data-launch-dir]").forEach(cb => {
+        cb.addEventListener("change", async ev => {
+          const side = ev.currentTarget.dataset.launchSide;
+          const dir  = ev.currentTarget.dataset.launchDir;
+          await sheet.actor.update({
+            [SystemAdapter.current.systemPath(`ordnanceLaunchSides.${side}.${dir}`)]: ev.currentTarget.checked,
+          });
+        });
+      });
+
+      // Shield sector click / contextmenu / wheel
+      el.querySelectorAll(".shipcombat-arc-val[data-sector]").forEach(arcEl => {
+        arcEl.addEventListener("click", ev => {
+          ev.preventDefault(); ev.stopPropagation();
+          _adjustShieldSector(sheet, arcEl.dataset.sector, 1);
+        });
+        arcEl.addEventListener("contextmenu", ev => {
+          ev.preventDefault(); ev.stopPropagation();
+          _adjustShieldSector(sheet, arcEl.dataset.sector, -1);
+        });
+        arcEl.addEventListener("wheel", ev => {
+          ev.preventDefault(); ev.stopPropagation();
+          _adjustShieldSector(sheet, arcEl.dataset.sector, ev.deltaY < 0 ? 1 : -1);
+        }, { passive: false });
+      });
+
+      // Weapon arc hover / pin
+      el.querySelectorAll("[data-weapon-arc]").forEach(row => {
+        row.addEventListener("mouseenter", () => {
+          // Re-activate if the overlay is off OR if another sheet (e.g. the
+          // player ship) stole it with a different actor.  If _actor is the
+          // player-ship actor while _active is true, items.get(npcWeaponId)
+          // returns null in _draw() and the arc silently clears.
+          if (!WeaponArcOverlay._active || WeaponArcOverlay._actor !== sheet.actor) {
+            WeaponArcOverlay.activate(sheet.actor);
+          }
+          WeaponArcOverlay.showHover(row.dataset.weaponArc);
+        });
+        row.addEventListener("mouseleave", () => WeaponArcOverlay.hideHover());
+      });
+      el.querySelectorAll("[data-pin-weapon]").forEach(btn => {
+        btn.addEventListener("click", ev => {
+          ev.preventDefault(); ev.stopPropagation();
+          const pinned = WeaponArcOverlay.togglePin(btn.dataset.pinWeapon);
+          btn.classList.toggle("shipcombat-pin-active", pinned);
+        });
+        if (WeaponArcOverlay.isPinned(btn.dataset.pinWeapon)) btn.classList.add("shipcombat-pin-active");
+      });
+
+      // Macro tier picker
+      el.querySelectorAll(".shipcombat-macro-tier-picker").forEach(picker => {
+        const card      = picker.closest(".shipcombat-battery-card");
+        const fireBtn   = card?.querySelector(".shipcombat-fire--macro");
+        const ammoVal   = card?.querySelector("[data-macro-stat-display='ammo'] .shipcombat-battery-stat-value");
+        const hitVal    = card?.querySelector("[data-macro-stat-display='hit'] .shipcombat-battery-stat-value");
+        const salvoVal  = card?.querySelector("[data-macro-stat-display='salvo'] .shipcombat-battery-stat-value");
+        const fireLabel = fireBtn?.querySelector(".shipcombat-macro-fire-label");
+        const dmgEl     = card?.querySelector("[data-macro-stat-display='damage'] .shipcombat-battery-stat-value");
+        const pips      = [...picker.querySelectorAll(".shipcombat-macro-tier-pip")];
+        function selectTier(pip) {
+          pips.forEach(p => p.classList.remove("shipcombat-macro-pip-selected"));
+          pip.classList.add("shipcombat-macro-pip-selected");
+          const hit    = parseInt(pip.dataset.tierHit) || 0;
+          const hitStr = hit > 0 ? `+${hit}` : hit < 0 ? String(hit) : " - ";
+          if (ammoVal)  ammoVal.textContent  = pip.dataset.tierAmmo;
+          if (hitVal)   hitVal.textContent   = hitStr;
+          if (salvoVal) salvoVal.textContent = pip.dataset.tierSalvo;
+          if (fireBtn) {
+            fireBtn.dataset.fireMode = pip.dataset.tierId;
+            fireBtn.dataset.weaponId = card.dataset.id;
+            fireBtn.disabled         = pip.dataset.canAfford !== "true";
+            if (fireLabel) {
+              const tierLabel = pip.querySelector(".shipcombat-macro-pip-label")?.textContent?.trim() ?? "";
+              const dmg   = dmgEl?.textContent?.trim();
+              const salvo = parseInt(pip.dataset.tierSalvo) || 1;
+              let label = tierLabel;
+              if (dmg) { label += ` ${dmg} Damage`; if (salvo > 1) label += ` \u00d7${salvo}`; }
+              fireLabel.textContent = label;
+            }
+          }
+        }
+        pips.forEach(pip => pip.addEventListener("click", () => {
+          if (pip.dataset.canAfford !== "true") return;
+          selectTier(pip);
+        }));
+        const firstAffordable = pips.find(p => p.dataset.canAfford === "true");
+        if (firstAffordable) selectTier(firstAffordable);
+      });
+
+      WeaponArcOverlay.activate(this.actor);
+
+      // Strike craft stat inputs (live-edit token actor data)
+      el.querySelectorAll(".shipcombat-craft-stat-input").forEach(input => {
+        input.addEventListener("change", async () => {
+          const tokenId  = input.dataset.craftTokenId;
+          const field    = input.dataset.field;
+          const value    = parseInt(input.value) || 0;
+          const tokenDoc = canvas.scene?.tokens.get(tokenId);
+          if (!tokenDoc?.actor) return;
+          await tokenDoc.actor.update({ [field]: value });
+        });
+      });
+
+      // RTB range graphic on hover
+      el.querySelectorAll("[data-action='npcRTB']").forEach(btn => {
+        btn.addEventListener("mouseenter", () => {
+          const shipToken = sheet.actor.getActiveTokens()?.[0];
+          if (!shipToken || !canvas.stage) return;
+          const gs = canvas.grid.size;
+          const cx = shipToken.center?.x ?? (shipToken.x + gs / 2);
+          const cy = shipToken.center?.y ?? (shipToken.y + gs / 2);
+          if (sheet._rtbRangeGfx) sheet._rtbRangeGfx.destroy();
+          const g = new PIXI.Graphics();
+          g.beginFill(0x00ff88, 0.04);
+          g.lineStyle(2, 0x00ff88, 0.5);
+          g.drawCircle(cx, cy, 3 * gs);
+          g.endFill();
+          canvas.stage.addChild(g);
+          sheet._rtbRangeGfx = g;
+        });
+        btn.addEventListener("mouseleave", () => {
+          if (sheet._rtbRangeGfx) { sheet._rtbRangeGfx.destroy(); sheet._rtbRangeGfx = null; }
+        });
+      });
+
+      // Helm wiring — proxy so _npcHelmOnRender sees the raw DOM form element
+      // as sheet.element instead of the jQuery-wrapped AppV1 window element.
+      const sheetProxy = new Proxy(this, {
+        get(target, prop, receiver) {
+          if (prop === "element") return el;
+          const val = Reflect.get(target, prop, receiver);
+          return typeof val === "function" ? val.bind(target) : val;
+        },
+      });
+      _npcHelmOnRender(sheetProxy);
+    }
+
+    _onChangeTab(event, tabs, active) {
+      super._onChangeTab?.(event, tabs, active);
+      // Re-activate when switching TO the gunner tab, even if _active is
+      // already true — another sheet (player ship) may have taken over the
+      // singleton with a different actor.
+      // Deactivate when leaving the gunner tab so the overlay doesn't linger
+      // (matches what ShipSheetV1Mixin does).
+      if (active === "gunner") WeaponArcOverlay.activate(this.actor);
+      else WeaponArcOverlay.deactivate();
+    }
+
+    // V1 drop order is (event, data) — opposite of AppV2's (data, event).
+    async _onDropItem(event, data) {
+      const dropZone = event?.target?.closest?.("[data-component-slot]");
+      const item = await Item.fromDropData(data);
+      if (!item) return;
+      if (item.type !== `${MODULE_ID}.component`) {
+        return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.OnlyComponents"));
+      }
+      const targetSlot     = dropZone?.dataset.componentSlot;
+      const targetPosition = dropZone?.dataset.componentPosition;
+      if (targetSlot === "weapon" && targetPosition) {
+        const itemPos       = item.system?.weaponPosition ?? "prow";
+        const isFlank       = itemPos === "flank";
+        const positionValid = isFlank
+          ? (targetPosition === "port" || targetPosition === "starboard")
+          : itemPos === targetPosition;
+        if (!positionValid) {
+          return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.WrongWeaponSlot"));
+        }
+      }
+      const sameItem = this.actor.items.get(item.id);
+      if (sameItem) {
+        if (targetSlot) {
+          const update = { "system.slot": targetSlot };
+          if (targetSlot === "weapon" && targetPosition) {
+            if (targetPosition === "port" || targetPosition === "starboard") {
+              update["system.weaponPosition"] = "flank";
+              update["system.weaponBay"]      = targetPosition;
+            } else {
+              update["system.weaponPosition"] = targetPosition;
+            }
+          }
+          await sameItem.update(update);
+        }
+        return;
+      }
+      const createData = item.toObject();
+      delete createData._id;
+      if (targetSlot) {
+        createData.system.slot = targetSlot;
+        if (targetSlot === "weapon" && targetPosition) {
+          if (targetPosition === "port" || targetPosition === "starboard") {
+            createData.system.weaponPosition = "flank";
+            createData.system.weaponBay      = targetPosition;
+          } else {
+            createData.system.weaponPosition = targetPosition;
+          }
+        }
+      }
+      await this.actor.createEmbeddedDocuments("Item", [createData]);
+    }
+
+    async _onDropActor(event, data) {
+      const dropZone = event?.target?.closest?.("[data-ordnance-drop]");
+      if (!dropZone) return;
+      const slotType = dropZone.dataset.ordnanceSlot;
+      if (!slotType) return;
+      const actor = await Actor.fromDropData(data);
+      if (!actor) return;
+      const expectedType = slotType === "strikeCraft" ? `${MODULE_ID}.strikeCraft` : `${MODULE_ID}.torpedo`;
+      const isValidDrop  = actor.type === expectedType
+        || (actor.type === `${MODULE_ID}.shipOrdnance` && SystemAdapter.current.getShipData(actor)?.subtype === slotType);
+      if (!isValidDrop) {
+        return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.WrongOrdnanceType"));
+      }
+      const actorData = actor.toObject();
+      const ref = {
+        id:        foundry.utils.randomID(),
+        uuid:      actor.uuid,
+        name:      actor.name,
+        img:       actor.img,
+        actorData,
+      };
+      const existing = SystemAdapter.current.getShipData(this.actor).ordnanceActors?.[slotType] ?? [];
+      await this.actor.update({ [SystemAdapter.current.systemPath(`ordnanceActors.${slotType}`)]: [...existing, ref] });
+    }
+
+    async _updateObject(event, formData) {
+      const keysToRemap = Object.keys(formData).filter(k => k.startsWith("system."));
+      for (const key of keysToRemap) {
+        const newKey = SystemAdapter.current.systemPath(key.slice("system.".length));
+        if (newKey !== key) {
+          formData[newKey] = formData[key];
+          delete formData[key];
+        }
+      }
+      return super._updateObject(event, formData);
+    }
+
+    _updateHelmPreview() {
+      helmUpdatePreview(this);
+    }
+
+    close(options) {
+      if (this._rtbRangeGfx) { this._rtbRangeGfx.destroy(); this._rtbRangeGfx = null; }
+      HelmPreview.hide();
+      WeaponArcOverlay.deactivate();
+      return super.close(options);
+    }
+  }
+
+  return NpcShipSheetV1Base;
+};

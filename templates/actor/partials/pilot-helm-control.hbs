@@ -22,56 +22,12 @@
         {{/if}}
     </div>
     <div class="list-content shipcombat-helm-panel">
-
-        <div class="shipcombat-helm-stats">
-            <div class="shipcombat-helm-stat" data-tooltip="{{helm.helmSLTooltip}}">
-                <span class="shipcombat-helm-stat-label">{{helm.helmSLLabel}}</span>
-                {{#if helm.hasRolledPiloting}}
-                    <span class="shipcombat-helm-stat-value shipcombat-sl-badge">{{helm.remainingSL}}</span>
-                {{else}}
-                    <button class="shipcombat-roll-piloting-btn" data-action="rollPiloting"
-                            {{#if helm.allocLocked}}disabled{{/if}}>
-                        <i class="fa-solid fa-dice"></i> {{helm.helmRollLabel}}
-                    </button>
-                {{/if}}
-            </div>
-            <div class="shipcombat-helm-stat" data-tooltip="{{helm.speedTooltip}}">
-                <span class="shipcombat-helm-stat-label">{{localize "SHIPCOMBAT.Helm.Speed"}}</span>
-                <div class="shipcombat-alloc-row">
-                    <button class="shipcombat-alloc-btn" data-action="allocBonus" data-stat="speed" data-delta="-1"
-                            {{#if helm.allocLocked}}disabled{{/if}}>&minus;</button>
-                    <span class="shipcombat-helm-stat-value">{{helm.effectiveSpeed}}</span>
-                    <button class="shipcombat-alloc-btn" data-action="allocBonus" data-stat="speed" data-delta="1"
-                            {{#if helm.allocLocked}}disabled{{/if}}>+</button>
-                </div>
-            </div>
-            <div class="shipcombat-helm-stat" data-tooltip="{{helm.manoTooltip}}">
-                <span class="shipcombat-helm-stat-label">{{localize "SHIPCOMBAT.Helm.Maneuverability"}}</span>
-                <div class="shipcombat-alloc-row">
-                    <button class="shipcombat-alloc-btn" data-action="allocBonus" data-stat="mano" data-delta="-1"
-                            {{#if helm.allocLocked}}disabled{{/if}}>&minus;</button>
-                    <span class="shipcombat-helm-stat-value">{{helm.effectiveMano}}</span>
-                    <button class="shipcombat-alloc-btn" data-action="allocBonus" data-stat="mano" data-delta="1"
-                            {{#if helm.allocLocked}}disabled{{/if}}>+</button>
-                </div>
-            </div>
-            <div class="shipcombat-helm-stat" data-tooltip="{{localize "SHIPCOMBAT.Helm.EvasionTooltip"}}">
-                <span class="shipcombat-helm-stat-label">{{localize "SHIPCOMBAT.Helm.Evasion"}}</span>
-                <div class="shipcombat-alloc-row">
-                    <button class="shipcombat-alloc-btn" data-action="allocBonus" data-stat="evasion" data-delta="-1"
-                            {{#if helm.allocLocked}}disabled{{/if}}>&minus;</button>
-                    <span class="shipcombat-helm-stat-value">{{helm.allocEvasion}}</span>
-                    <button class="shipcombat-alloc-btn" data-action="allocBonus" data-stat="evasion" data-delta="1"
-                            {{#if helm.allocLocked}}disabled{{/if}}>+</button>
-                </div>
-            </div>
+        <div class="shipcombat-helm-stats shipcombat-helm-stats--minmove">
             <div class="shipcombat-helm-stat" data-tooltip="{{#if helm.isRealistic}}{{helm.velocityTooltip}}{{else}}{{helm.minMoveTooltip}}{{/if}}">
                 <span class="shipcombat-helm-stat-label">{{localize "SHIPCOMBAT.Helm.MinMove"}}</span>
                 <span class="shipcombat-helm-stat-value">{{helm.minMove}}</span>
             </div>
-
         </div>
-
         <div class="shipcombat-helm-control-block">
             <label class="shipcombat-helm-section-label">{{localize "SHIPCOMBAT.Helm.Bearing"}}</label>
             <div class="shipcombat-helm-bearing">
@@ -145,7 +101,7 @@
             </button>
             <span class="shipcombat-helm-note">{{localize "SHIPCOMBAT.Helm.ConfirmNote"}}</span>
             <button type="button" class="shipcombat-helm-confirm shipcombat-ram-btn" data-action="pilotRam"
-                    data-tooltip="{{localize "SHIPCOMBAT.Helm.RamTooltip"}}" {{#unless helm.hasRamTargets}}disabled{{/unless}}>
+                    data-tooltip="{{localize "SHIPCOMBAT.Helm.RamTooltip"}}">
                 <i class="fa-solid fa-burst"></i> {{localize "SHIPCOMBAT.Helm.Ram"}}
             </button>
         </div>

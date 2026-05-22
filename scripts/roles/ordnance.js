@@ -47,7 +47,7 @@ function _getActiveTemplates(sys) {
 }
 
 async function _resolveOrdnanceActor(sheet) {
-  const sys = sheet.actor.system;
+  const sys = SystemAdapter.current.getShipData(sheet.actor);
   const ref = sys.crewActors?.ordnance;
   if (ref?.uuid) {
     try { return await fromUuid(ref.uuid); } catch { /* ignore */ }
@@ -196,7 +196,8 @@ export function buildOrdnanceContext(sys, opts = {}) {
   // Ship state for action criteria
   const internalFire    = sys.internalFire ?? 0;
   const hullValue       = opts.shipActor?.system?.hull?.value ?? 0;
-  const hullDamaged     = hullValue > 0;
+  const hullMax         = opts.shipActor?.system?.hull?.max ?? Infinity;
+  const hullDamaged     = hullValue > 0 && hullValue < hullMax;
   const prowGunLocked   = sys.resources?.pilot?.prowGunLocked ?? false;
 
   // In 4-man mode the Gunner handles ordnance with no Bosun SL for allocation,
@@ -281,6 +282,11 @@ export function buildOrdnanceContext(sys, opts = {}) {
     let descLocalized = game.i18n.localize(a.desc);
     if (a.id === "rapidRearm" && crewSize < 6) {
       descLocalized = game.i18n.localize("SHIPCOMBAT.Ordnance.RapidRearmDescSmallCrew");
+    }
+    // generatePower: append the live AP-per-core value from the reactor component
+    if (a.id === "generatePower") {
+      const apValue = opts.reactorStats?.reserveMultiplier ?? 0;
+      descLocalized = descLocalized.replace(/\.$/, "") + ` (${apValue}).`;
     }
 
     return {
@@ -545,7 +551,7 @@ async function _promptCraftSelection(nearbyCraft) {
  * SL becomes a shared discount pool for crew costs this turn.
  */
 async function _onRollOrdnanceMaster(event, target) {
-  const sys = this.actor.system;
+  const sys = SystemAdapter.current.getShipData(this.actor);
   if (sys.resources?.ordnance?.bosunRolled) {
     ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Ordnance.AlreadyRolled"));
     return;
@@ -571,7 +577,7 @@ async function _onRollOrdnanceMaster(event, target) {
  * data-delta="-1" or "+1"
  */
 async function _onAllocOrdnanceSL(event, target) {
-  const sys = this.actor.system;
+  const sys = SystemAdapter.current.getShipData(this.actor);
   const stat = target.dataset.stat;
   const delta = Number(target.dataset.delta);
 
@@ -609,7 +615,7 @@ async function _onAllocOrdnanceSL(event, target) {
  * data-action-id identifies which ORDNANCE_MASTER_ACTIONS entry.
  */
 async function _onOrdnanceMasterAction(event, target) {
-  const sys      = this.actor.system;
+  const sys      = SystemAdapter.current.getShipData(this.actor);
   const actionId = target.dataset.actionId;
   const entry    = ORDNANCE_MASTER_ACTIONS[actionId];
   if (!entry) return;
@@ -793,7 +799,7 @@ async function _onOrdnanceMasterAction(event, target) {
  * No manpower cost; requires a core to be assigned.
  */
 async function _onOrdnanceMasterCoreAction(event, target) {
-  const sys      = this.actor.system;
+  const sys      = SystemAdapter.current.getShipData(this.actor);
   const actionId = target.dataset.coreAction;
 
   const ordCoreCount = sys.resources?.ordnance?.coreCount ?? 0;
@@ -936,14 +942,14 @@ async function _onOrdnanceMasterCoreAction(event, target) {
         break;
       }
       case "hullRepairParty": {
-        const hullDmg = this.actor.system?.hull?.value ?? 0;
+        const hullDmg = SystemAdapter.current.getShipData(this.actor)?.hull?.value ?? 0;
         if (hullDmg > 0) emitToGM("updateResource", { roleId: "hull", key: "value", value: Math.max(0, hullDmg - 2) });
         break;
       }
       case "loadAmmo": {
         const gunAmmo  = sys.resources?.gunner?.ammo ?? 0;
         const weapBay  = this.actor.items.find(i => i.system?.slot === "weaponsBay");
-        const ammoCap  = weapBay?.system?.bayAmmoCapacity ?? 20;
+        const ammoCap  = weapBay?.system?.bayAmmoCapacity ?? 0;
         emitToGM("updateResource", { roleId: "gunner", key: "ammo", value: Math.min(ammoCap, gunAmmo + Math.ceil(ammoCap * 0.2)) });
         break;
       }
@@ -1107,7 +1113,7 @@ function _applyImmediatePayloadEffect(sys, payloadId, { heatCapacity = 0 } = {})
  * Decrements availablePayloads counter.
  */
 async function _onSendPayload(event, target) {
-  const sys = this.actor.system;
+  const sys = SystemAdapter.current.getShipData(this.actor);
   const payloadId = target.dataset.payloadId;
   const pDef = PAYLOAD_TYPES[payloadId];
   if (!pDef) return;
@@ -1324,12 +1330,14 @@ async function _onMarkOrdnanceDone(event, target) {
   const token = canvas.tokens.get(tokenId);
   if (!token?.actor) return;
 
-  const done = !token.actor.system.turnComplete;
+  const done = !SystemAdapter.current.getShipData(token.actor).turnComplete;
   emitToGM("setOrdnanceTurnDone", { tokenId, done });
 
   // Optimistically update the DOM; the ship sheet does not auto-re-render
   // when a foreign (ordnance) actor is updated via socket.
-  const row = this.element.querySelector(`.shipcombat-deployed-row[data-token-id="${tokenId}"]`);
+  // AppV1 exposes this.element as a jQuery object; normalise to a raw DOM element.
+  const _root = this.element instanceof jQuery ? this.element[0] : this.element;
+  const row = _root?.querySelector(`.shipcombat-deployed-row[data-token-id="${tokenId}"]`);
   if (row) {
     row.classList.toggle("shipcombat-deployed--done", done);
     target.classList.toggle("active", done);
@@ -1346,7 +1354,7 @@ async function _onMarkOrdnanceDone(event, target) {
  * data-index = commitment array index
  */
 async function _onCancelCommitment(event, target) {
-  const sys   = this.actor.system;
+  const sys   = SystemAdapter.current.getShipData(this.actor);
   const index = Number(target.dataset.index);
   const commitments = [...(sys.resources?.ordnance?.commitments ?? [])];
   if (index < 0 || index >= commitments.length) return;
@@ -1384,8 +1392,8 @@ async function _onViewOrdnanceActor(event, target) {
   // Prefer inline actorData so we can apply the bay hull override for correct preview values.
   if (actorId && this.actor) {
     const allRefs = [
-      ...(this.actor.system.ordnanceActors?.torpedo     ?? []),
-      ...(this.actor.system.ordnanceActors?.strikeCraft ?? []),
+      ...(SystemAdapter.current.getShipData(this.actor).ordnanceActors?.torpedo     ?? []),
+      ...(SystemAdapter.current.getShipData(this.actor).ordnanceActors?.strikeCraft ?? []),
     ];
     const ref = allRefs.find(r => r.id === actorId);
     if (ref?.actorData) {
@@ -1397,12 +1405,13 @@ async function _onViewOrdnanceActor(event, target) {
         i => i.type === `${MODULE_ID}.component` && i.system?.slot === "weaponsBay"
       );
       const actorSubtype = ordnanceSubtype({ type: actorData.type, system: actorData.system }) ?? actorData.type;
+      const isHP = SystemAdapter.current.hullDisplayMode === "hpRemaining";
       if (actorSubtype === "torpedo") {
         const hullOverride = bay?.system?.bayTorpedoSalvoSize ?? 1;
-        actorData.system.hull = { value: 0, max: hullOverride };
+        actorData.system.hull = { value: isHP ? hullOverride : 0, max: hullOverride };
       } else if (actorSubtype === "strikeCraft") {
         const hullOverride = bay?.system?.bayStrikeCraftFlightSize ?? 1;
-        actorData.system.hull = { value: 0, max: hullOverride };
+        actorData.system.hull = { value: isHP ? hullOverride : 0, max: hullOverride };
       }
 
       const tempActor = new CONFIG.Actor.documentClass(actorData);

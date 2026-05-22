@@ -23,7 +23,7 @@
                         data-tooltip="{{tooltip}}">
                     <i class="{{icon}}"></i>
                     <span>{{labelLocalized}}</span>
-                    <small>{{effectiveCrew}} crew / {{effectiveDuration}}T</small>
+                    <small>{{effectiveCrew}} {{#if @root.crewScaleSmallCraft}}load{{else}}crew{{/if}} / {{effectiveDuration}}T</small>
                 </button>
                 {{/unless}}
                 {{/each}}

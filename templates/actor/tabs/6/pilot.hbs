@@ -6,6 +6,7 @@
     {{#if (or isGM (lookup (lookup roles "pilot") "isMyRole"))}}
     {{> "pilot-captain-boost"}}
     {{> "pilot-status-bar"}}
+    {{> "pilot-helm-sl-alloc"}}
     {{> "pilot-helm-control"}}
     {{> "pilot-overcharged-actions"}}
     {{/if}}
