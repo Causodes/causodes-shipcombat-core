@@ -2,10 +2,10 @@
   "id": "causodes-shipcombat-core",
   "title": "Causodes's Ship Combat (Core)",
   "description": "<p>System-agnostic ship combat engine for Foundry VTT. Provides the bridge-crew framework, socket protocol, canvas overlays, and template infrastructure. Requires a system-specific companion module (e.g. Causodes's Ship Combat (Imperium Maledictum)) to activate.</p>",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "compatibility": {
     "minimum": "13",
-    "verified": "14",
+    "verified": "14.361",
     "maximum": "14"
   },
   "authors": [
@@ -57,7 +57,7 @@
     }
   },
   "url": "https://github.com/Causodes/causodes-shipcombat-core",
-  "download": "https://github.com/Causodes/causodes-shipcombat-core/archive/refs/tags/v2.0.0.zip",
+  "download": "https://github.com/Causodes/causodes-shipcombat-core/archive/refs/tags/v2.1.0.zip",
   "manifest": "https://github.com/Causodes/causodes-shipcombat-core/releases/latest/download/module.json",
   "readme": "https://github.com/Causodes/causodes-shipcombat-core/blob/main/README.md",
   "changelog": "https://github.com/Causodes/causodes-shipcombat-core/blob/main/CHANGELOG.md",

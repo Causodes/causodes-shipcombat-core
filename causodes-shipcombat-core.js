@@ -40,6 +40,7 @@ import { BattleClarityPopupV1 }
   from "./scripts/apps/BattleClarityPopupV1.js";
 import { StrikeCraftAttackPopupV1, RecoverCraftPopupV1 }
   from "./scripts/apps/StrikeCraftPopupsV1.js";
+import * as _compApi from "./scripts/companion-api.js";
 
 // ── Public configuration API ────────────────────────────────────────────────
 // A system module MUST call ShipCombat.configure() before Foundry fires "init".
@@ -118,6 +119,9 @@ globalThis.ShipCombat = {
     if (SystemAdapter._current?.useApplicationV1) return _POPUP_V1_DEFAULTS[key] ?? DefaultClass;
     return DefaultClass;
   },
+
+  /** Companion module API — access via globalThis.ShipCombat._api, never via ES imports. */
+  _api: _compApi,
 };
 
 // ── Lang token substitution ────────────────────────────────────────────────

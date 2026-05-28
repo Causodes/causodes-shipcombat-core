@@ -20,6 +20,26 @@ A companion module MUST do four things:
    neutral default strings with system-flavoured terminology.
 4. Optionally, register Handlebars partial overrides during its own `init`
    hook to swap out specific UI panels.
+5. **Never import core files directly via ES `import` statements.** Hosting
+   platforms such as [The Forge](https://forge-vtt.com) serve each module's
+   scripts from its own CDN base URL. A companion's ES import of a core file
+   (whether relative or absolute `/modules/` path) resolves to a different URL
+   than core's own internal import of the same file; the browser loads two
+   separate module instances, breaking `instanceof` checks inside
+   `SystemAdapter.register()` and producing a
+   `"… is not a registered game setting"` error at startup.
+
+   Instead, access all core APIs through **`globalThis.ShipCombat._api`**,
+   which core populates at evaluation time (before any companion loads):
+
+   ```js
+   // ✗  Breaks on The Forge (ES import — different URL per module on CDN)
+   import { SystemAdapter } from "/modules/causodes-shipcombat-core/scripts/systems/SystemAdapter.js";
+
+   // ✓  Always correct (runtime global — same object reference everywhere)
+   const { SystemAdapter, emitToGM } = globalThis.ShipCombat._api;
+   export class MyAdapter extends SystemAdapter { ... }
+   ```
 
 If `ShipCombat.configure()` is not called by the time `init` fires, core
 logs a warning and disables itself.
