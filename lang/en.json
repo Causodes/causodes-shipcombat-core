@@ -203,6 +203,9 @@
       "HeatMaxed": "Ship heat is at maximum - cannot fire main weapon.",
       "NoShipToken": "Place this ship on the scene before performing this action."
     },
+    "Notification": {
+      "ComponentChanged": "Ship component changed; please click the Reset Button on the ship sheet to see updated stats!"
+    },
     "Ram": {
       "NoTargets": "No valid ram targets in range.",
       "PopupHint": "Hover to preview ram trajectory. Click Ram to confirm.",

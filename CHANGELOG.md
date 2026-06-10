@@ -1,3 +1,6 @@
+## v2.1.2
+- Add a notification informing users to use the refresh button to propagate item component updates
+
 ## v2.1.1
 - Add missing hull damage ramming path for HP-based systems (SF2e); hull value will now correctly be decremented instead of incremented
 

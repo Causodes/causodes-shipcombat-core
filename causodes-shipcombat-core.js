@@ -488,6 +488,30 @@ Hooks.on("deleteToken", (tokenDoc) => {
   }
 });
 
+// ── Ship component change notification ──────────────────────────────────────
+// Certain stats derived from components (shield pool, power cores, manpower)
+// are only fully written to the actor database when the sheet is reloaded.
+// Notify all clients so they know to reopen the sheet after config changes.
+
+const _isShipComponent = (item) =>
+  item.type === `${MODULE_ID}.component` &&
+  (item.parent?.type === `${MODULE_ID}.ship` || item.parent?.type === `${MODULE_ID}.npcShip`);
+
+Hooks.on("createItem", (item) => {
+  if (_isShipComponent(item))
+    ui.notifications.info(game.i18n.localize("SHIPCOMBAT.Notification.ComponentChanged"));
+});
+
+Hooks.on("updateItem", (item) => {
+  if (_isShipComponent(item))
+    ui.notifications.info(game.i18n.localize("SHIPCOMBAT.Notification.ComponentChanged"));
+});
+
+Hooks.on("deleteItem", (item) => {
+  if (_isShipComponent(item))
+    ui.notifications.info(game.i18n.localize("SHIPCOMBAT.Notification.ComponentChanged"));
+});
+
 // ── Reroll detection: if a tracked piloting message is updated, sync new SL ──
 
 Hooks.on("updateChatMessage", (message, changes) => {
