@@ -1,3 +1,6 @@
+## v2.1.1
+- Add missing hull damage ramming path for HP-based systems (SF2e); hull value will now correctly be decremented instead of incremented
+
 ## v2.1.0
 - Expose companion API via `globalThis.ShipCombat._api` to eliminate cross-module ES import issues on hosting platforms (e.g. The Forge) where each module's scripts are served from a separate CDN base URL, causing duplicate module instances and broken `instanceof` checks
 

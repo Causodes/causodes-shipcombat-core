@@ -325,16 +325,21 @@ export async function pilotRam(
   const damageToRamming     = Math.max(0, rawDamageToRamming - rammingBowArmour);
 
   // ── 9. Apply hull damage to rammed ship (bypasses shields and armour) ──────
+  const isHpRemaining = SystemAdapter.current.hullDisplayMode === "hpRemaining";
   const rammedHullCur = rammedSys?.hull?.value ?? 0;
   const rammedHullMax = rammedSys?.hull?.max ?? 50;
   await rammedActor.update({
-    [SystemAdapter.current.systemPath("hull.value")]: Math.min(rammedHullMax, rammedHullCur + damageToRammed),
+    [SystemAdapter.current.systemPath("hull.value")]: isHpRemaining
+      ? Math.max(0, rammedHullCur - damageToRammed)
+      : Math.min(rammedHullMax, rammedHullCur + damageToRammed),
   });
 
   // ── 10. Apply hull damage to ramming ship ─────────────────────────────────
   const rammingHullCur = rammingSys?.hull?.value ?? 0;
   await rammingActor.update({
-    [SystemAdapter.current.systemPath("hull.value")]: Math.min(rammingHullMax, rammingHullCur + damageToRamming),
+    [SystemAdapter.current.systemPath("hull.value")]: isHpRemaining
+      ? Math.max(0, rammingHullCur - damageToRamming)
+      : Math.min(rammingHullMax, rammingHullCur + damageToRamming),
   });
 
   // ── 11. Crit rolls for both ships ─────────────────────────────────────────
