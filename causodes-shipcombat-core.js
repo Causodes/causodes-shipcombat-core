@@ -269,82 +269,6 @@ Hooks.once("ready", async () => {
   await Actor.deleteDocuments(orphans.map(a => a.id));
 });
 
-// ── shipOrdnance migration ────────────────────────────────────────────
-// Converts legacy torpedo/strikeCraft actors and embedded ordnanceActors
-// template data to the unified shipOrdnance type.  Runs once; GM-only.
-const MIGRATION_VERSION = "1.0.0-shipOrdnance";
-Hooks.once("ready", async () => {
-  if (!game.user.isGM) return;
-  const alreadyRan = game.settings.get(MODULE_ID, "migrationVersion") === MIGRATION_VERSION;
-  if (alreadyRan) return;
-
-  const legacyTorpedo    = `${MODULE_ID}.torpedo`;
-  const legacyStrikeCraft = `${MODULE_ID}.strikeCraft`;
-  const unified          = `${MODULE_ID}.shipOrdnance`;
-
-  // ── World actors ──
-  const worldActors = game.actors.filter(
-    a => a.type === legacyTorpedo || a.type === legacyStrikeCraft,
-  );
-  if (worldActors.length) {
-    console.log(`causodes-shipcombat-core | Migrating ${worldActors.length} world ordnance actor(s) to shipOrdnance.`);
-    for (const actor of worldActors) {
-      const subtype = actor.type === legacyTorpedo ? "torpedo" : "strikeCraft";
-      await actor.update({ type: unified, "system.subtype": subtype });
-    }
-  }
-
-  // ── Embedded ordnanceActors template data stored on ships (actorData blobs) ──
-  const shipTypes = [`${MODULE_ID}.ship`, `${MODULE_ID}.npcShip`];
-  const ships = game.actors.filter(a => shipTypes.includes(a.type));
-  for (const ship of ships) {
-    const slots = ship.system?.ordnanceActors ?? {};
-    const updates = {};
-    for (const slotKey of ["torpedo", "strikeCraft"]) {
-      const templates = slots[slotKey] ?? [];
-      let changed = false;
-      const updated = templates.map(ref => {
-        if (!ref?.actorData) return ref;
-        if (ref.actorData.type !== legacyTorpedo && ref.actorData.type !== legacyStrikeCraft) return ref;
-        const subtype = ref.actorData.type === legacyTorpedo ? "torpedo" : "strikeCraft";
-        changed = true;
-        return {
-          ...ref,
-          actorData: {
-            ...ref.actorData,
-            type: unified,
-            system: { ...(ref.actorData.system ?? {}), subtype },
-          },
-        };
-      });
-      if (changed) updates[`system.ordnanceActors.${slotKey}`] = updated;
-    }
-    if (Object.keys(updates).length) {
-      console.log(`causodes-shipcombat-core | Updating embedded ordnance templates on ship "${ship.name}".`);
-      await ship.update(updates);
-    }
-  }
-
-  // ── Scene tokens ── (update actorData overrides on unlinked tokens if any)
-  for (const scene of game.scenes) {
-    const tokens = scene.tokens.filter(
-      td => td.actorData?.type === legacyTorpedo || td.actorData?.type === legacyStrikeCraft,
-    );
-    for (const td of tokens) {
-      const subtype = td.actorData.type === legacyTorpedo ? "torpedo" : "strikeCraft";
-      await td.update({
-        "actorData.type": unified,
-        "actorData.system.subtype": subtype,
-      });
-    }
-  }
-
-  // Record completion
-  await game.settings.set(MODULE_ID, "migrationVersion", MIGRATION_VERSION);
-  console.log(`causodes-shipcombat-core | shipOrdnance migration complete.`);
-  ui.notifications.info("Ship Combat: ordnance migration to shipOrdnance complete. Please refresh if sheets look wrong.");
-});
-
 // ── Ghost cleanup on canvas teardown ──────────────────────────────────────
 
 Hooks.on("canvasTearDown", () => {
@@ -384,9 +308,11 @@ Hooks.on("preCreateActor", (actor, data) => {
       "prototypeToken.actorLink":     true,
       "prototypeToken.texture.src":   actor.img,
     });
-    // When created manually (not from Ordnance Master), set sane hull defaults
+    // When created manually (not from Ordnance Master), set sane hull defaults.
+    // Use hullDisplayMode: hpRemaining starts full (value = max); damageTaken starts at 0.
     if (!data.flags?.[MODULE_ID]?.fromOrdnanceMaster) {
-      actor.updateSource({ "system.hull": { value: 0, max: 1 } });
+      const isHP = SystemAdapter.current.hullDisplayMode === "hpRemaining";
+      actor.updateSource({ "system.hull": { value: isHP ? 1 : 0, max: 1 } });
     }
   }
 });

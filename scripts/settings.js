@@ -43,11 +43,4 @@ export function registerSettings() {
     },
   });
 
-  // Internal — tracks completed data migrations so they run only once.
-  game.settings.register(MODULE_ID, "migrationVersion", {
-    scope: "world",
-    config: false,
-    type: String,
-    default: "",
-  });
 }

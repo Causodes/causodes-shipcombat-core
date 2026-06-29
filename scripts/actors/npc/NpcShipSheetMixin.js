@@ -730,8 +730,9 @@ async function _onNpcRollPiloting() {
   const target  = sys.attributes?.piloting ?? 40;
   const roll    = await new Roll(adapter.getRollFormula()).evaluate();
   const sl      = adapter.computeSuccessLevel(roll, target);
+  const baseFlavor = `${game.i18n.localize("SHIPCOMBAT.Helm.RollPiloting")} (${target})`;
   const msg = await roll.toMessage({
-    flavor: `${game.i18n.localize("SHIPCOMBAT.Helm.RollPiloting")} (${target})`,
+    flavor: adapter.buildSkillRollFlavor(baseFlavor, roll, sl),
   });
   await this.actor.update({
     [SystemAdapter.current.systemPath("resources.pilot.pilotingSL")]: Math.max(0, sl),
@@ -1020,7 +1021,8 @@ async function _onSuppressFire() {
   const roll    = await new Roll(adapter.getRollFormula()).evaluate();
   const sl      = adapter.computeSuccessLevel(roll, target);
   const newFire = Math.max(0, (sys.internalFire ?? 0) - Math.max(0, 5 + sl));
-  await roll.toMessage({ flavor: `${game.i18n.localize("SHIPCOMBAT.NpcShip.SuppressFire")} (${game.i18n.localize("SHIPCOMBAT.NpcShip.Tech")} ${target})` });
+  const suppressBaseFlavor = `${game.i18n.localize("SHIPCOMBAT.NpcShip.SuppressFire")} (${game.i18n.localize("SHIPCOMBAT.NpcShip.Tech")} ${target})`;
+  await roll.toMessage({ flavor: adapter.buildSkillRollFlavor(suppressBaseFlavor, roll, sl) });
   await this.actor.update({ [SystemAdapter.current.systemPath("internalFire")]: newFire, [SystemAdapter.current.systemPath("engActionUsed")]: true });
 }
 
@@ -1033,7 +1035,8 @@ async function _onReduceHeat() {
   const roll    = await new Roll(adapter.getRollFormula()).evaluate();
   const sl      = adapter.computeSuccessLevel(roll, target);
   const newHeat = Math.max(0, (sys.heat ?? 0) - Math.max(0, 5 + sl));
-  await roll.toMessage({ flavor: `${game.i18n.localize("SHIPCOMBAT.NpcShip.ReduceHeat")} (${game.i18n.localize("SHIPCOMBAT.NpcShip.Tech")} ${target})` });
+  const reduceBaseFlavor = `${game.i18n.localize("SHIPCOMBAT.NpcShip.ReduceHeat")} (${game.i18n.localize("SHIPCOMBAT.NpcShip.Tech")} ${target})`;
+  await roll.toMessage({ flavor: adapter.buildSkillRollFlavor(reduceBaseFlavor, roll, sl) });
   await this.actor.update({ [SystemAdapter.current.systemPath("heat")]: newHeat, [SystemAdapter.current.systemPath("engActionUsed")]: true });
 }
 

@@ -108,7 +108,7 @@ export const ShipSheetV2Mixin = (BaseClass) => {
       const row    = target.closest("[data-id]");
       const itemId = row?.dataset?.id;
       if (!itemId) return;
-      this.actor.items.get(itemId)?.sheet?.render(true);
+      this.actor.items.get(itemId)?.sheet?.render({ force: true });
     }
 
     static async _onOpenOrdnanceActor(event, target) {
@@ -234,13 +234,13 @@ export const ShipSheetV2Mixin = (BaseClass) => {
 
     // ── Drop handling ──────────────────────────────────────────────────────
 
-    async _onDropActor(data, event) {
+    async _onDropActor(event, data) {
       const result = await this.controller.onDropActor(data, event);
-      if (result === ShipController.DELEGATE_TO_SUPER) return super._onDropActor?.(data, event);
+      if (result === ShipController.DELEGATE_TO_SUPER) return super._onDropActor?.(event, data);
       return result;
     }
 
-    async _onDropItem(data, event) {
+    async _onDropItem(event, data) {
       return this.controller.onDropItem(data, event);
     }
 

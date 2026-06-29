@@ -21,6 +21,8 @@ import { SystemAdapter } from "./systems/SystemAdapter.js";
 const _BRITISH_TO_AMERICAN = [
   [/Armour/g,          "Armor"],
   [/armour/g,          "armor"],
+  [/Flavour/g,         "Flavor"],
+  [/flavour/g,         "flavor"],
   [/Manoeuvrability/g, "Maneuverability"],
   [/manoeuvrability/g, "maneuverability"],
   [/Manoeuvring/g,     "Maneuvering"],

@@ -1,3 +1,8 @@
+## v2.1.3
+- Remove legacy data migration code
+- Add flavour/flavor language keys
+- Fix NPC ship skill checks for non d100/roll-under systems
+
 ## v2.1.2
 - Add a notification informing users to use the refresh button to propagate item component updates
 
