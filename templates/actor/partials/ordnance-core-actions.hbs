@@ -14,7 +14,7 @@
     <div class="list-content">
         {{#each ordnanceCtx.coreActions}}
         <div class="shipcombat-core-action-card">
-            <button class="shipcombat-core-action-btn" data-action="ordnanceMasterCoreAction" data-core-action="{{id}}"
+            <button type="button" class="shipcombat-core-action-btn" data-action="ordnanceMasterCoreAction" data-core-action="{{id}}"
                     {{#unless canAfford}}disabled{{/unless}}
                     data-tooltip="{{descLocalized}}">
                 <i class="{{icon}}"></i>

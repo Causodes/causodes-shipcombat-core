@@ -6,7 +6,7 @@
     <div class="list-content">
         {{#each captainCtx.coreActions}}
         <div class="shipcombat-core-action-card">
-            <button class="shipcombat-core-action-btn" data-action="captainCoreAction" data-core-action="{{id}}"
+            <button type="button" class="shipcombat-core-action-btn" data-action="captainCoreAction" data-core-action="{{id}}"
                     {{#unless canAfford}}disabled{{/unless}}
                     data-tooltip="{{descLocalized}}">
                 <i class="{{icon}}"></i>
@@ -18,7 +18,7 @@
         {{#each ordnanceCtx.coreActions}}
         {{#unless (shipcombatEq id "magazineCrossfeed")}}
         <div class="shipcombat-core-action-card">
-            <button class="shipcombat-core-action-btn" data-action="ordnanceMasterCoreAction" data-core-action="{{id}}"
+            <button type="button" class="shipcombat-core-action-btn" data-action="ordnanceMasterCoreAction" data-core-action="{{id}}"
                     {{#unless canAfford}}disabled{{/unless}}
                     data-tooltip="{{descLocalized}}">
                 <i class="{{icon}}"></i>

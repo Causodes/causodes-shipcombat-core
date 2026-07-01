@@ -24,7 +24,7 @@
             <div class="shipcombat-ordnance-action-grid">
                 {{#each ordnanceCtx.actions}}
                 {{#unless (shipcombatEq id "loadPayload")}}
-                <button class="shipcombat-ordnance-action-btn" data-action="ordnanceMasterAction" data-action-id="{{id}}"
+                <button type="button" class="shipcombat-ordnance-action-btn" data-action="ordnanceMasterAction" data-action-id="{{id}}"
                         {{#unless canAfford}}disabled{{/unless}}
                         data-tooltip="{{tooltip}}">
                     <i class="{{icon}}"></i>

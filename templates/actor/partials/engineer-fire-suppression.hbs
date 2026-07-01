@@ -14,7 +14,7 @@
                 <span>{{localize "SHIPCOMBAT.Engineer.ActionTakenDesc"}}</span>
             </div>
         {{else}}
-        <button class="shipcombat-section-overlay-btn" data-action="selectAction" data-action-type="fire">
+        <button type="button" class="shipcombat-section-overlay-btn" data-action="selectAction" data-action-type="fire">
             {{localize "SHIPCOMBAT.Engineer.FireSuppression"}}
         </button>
         {{/if}}
@@ -28,10 +28,10 @@
         <div class="shipcombat-eng-action-row">
             <p class="shipcombat-eng-action-desc">{{localize "SHIPCOMBAT.Engineer.SuppressFireDesc"}}</p>
             <div class="shipcombat-eng-action-ctrl">
-                <button class="shipcombat-alloc-btn" data-action="adjustFireCores" data-delta="-1"
+                <button type="button" class="shipcombat-alloc-btn" data-action="adjustFireCores" data-delta="-1"
                         {{#if (shipcombatOr (shipcombatNot engineerCtx.hasInternalFire) (shipcombatNot engineerCtx.hasBankedCores))}}disabled{{/if}}>&minus;</button>
                 <span class="shipcombat-core-alloc-count">{{engineerCtx.fireCoresStaged}}</span>
-                <button class="shipcombat-alloc-btn" data-action="adjustFireCores" data-delta="1"
+                <button type="button" class="shipcombat-alloc-btn" data-action="adjustFireCores" data-delta="1"
                         {{#if (shipcombatOr (shipcombatNot engineerCtx.hasInternalFire) (shipcombatNot engineerCtx.hasBankedCores))}}disabled{{/if}}>+</button>
             </div>
             <button type="button" class="shipcombat-eng-confirm" data-action="suppressFire"

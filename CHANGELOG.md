@@ -1,3 +1,7 @@
+## v2.1.5
+- Explicitly classify buttons as type `button` in handlebars templates to prevent unintended form submission behavior
+- Add handling for scaling DC for Overclock checks in systems like SF2e or D&D5e
+
 ## v2.1.4
 - Fix all AppV2 ship sheets throwing `DataModelValidationError` ("must be a number") when a number field is cleared
   - Applies to NPC ship, player ship, ship component items, and ordnance sheets

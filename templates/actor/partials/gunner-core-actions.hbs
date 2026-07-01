@@ -15,7 +15,7 @@
     <div class="list-content">
         {{#each gunnerCtx.coreActions}}
         <div class="shipcombat-core-action-card">
-            <button class="shipcombat-core-action-btn" data-action="gunnerCoreAction" data-core-action="{{id}}"
+            <button type="button" class="shipcombat-core-action-btn" data-action="gunnerCoreAction" data-core-action="{{id}}"
                     {{#unless canAfford}}disabled{{/unless}}
                     data-tooltip="{{descLocalized}}">
                 <i class="{{icon}}"></i>

@@ -97,14 +97,20 @@ async function _onOverclock() {
     return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoEngineer"));
   }
 
-  const tier = _getOverclockModifier(heat);
-  const result = await SystemAdapter.current.rollSkillTest(crewActor, sys.roleSkillOverrides?.engineer ?? "engineering", { modifier: tier.modifier });
+  const overclockDC = SystemAdapter.current.getOverclockDC(heat, heatMax);
+  let result;
+  if (overclockDC !== null) {
+    result = await SystemAdapter.current.rollSkillTest(crewActor, sys.roleSkillOverrides?.engineer ?? "engineering", { dc: overclockDC });
+  } else {
+    const tier = _getOverclockModifier(heat);
+    result = await SystemAdapter.current.rollSkillTest(crewActor, sys.roleSkillOverrides?.engineer ?? "engineering", { modifier: tier.modifier });
+  }
   if (!result) return;
 
   // Heat always increases regardless of result
   emitToGM("updateResource", { roleId: "engineer", key: "heat", value: heat + 1 });
 
-  const succeeded = result.SL >= 0;
+  const succeeded = overclockDC !== null ? result.roll.total >= overclockDC : result.SL >= 0;
   if (succeeded) {
     const available = sys.resources?.engineer?.powerCores ?? 0;
     emitToGM("updateResource", { roleId: "engineer", key: "powerCores", value: available + 1 });
@@ -375,6 +381,15 @@ export function buildEngineerContext(sys, opts = {}) {
   const projectedAuxGain = (stagedAuxCores + committedAuxCores) * reserveMultiplier;
 
   const overclockTier = _getOverclockModifier(heat);
+  const overclockDC   = SystemAdapter.current.getOverclockDC(heat, heatMax);
+  let overclockTooltip;
+  if (overclockDC !== null) {
+    const engineerSkillKey   = SystemAdapter.current.resolveSkill(sys.roleSkillOverrides?.engineer ?? "engineering").key;
+    const engineerSkillLabel = SystemAdapter.current.getSkillLabel(engineerSkillKey);
+    overclockTooltip = game.i18n.format("SHIPCOMBAT.Tooltip.OverclockDC", { dc: overclockDC, skill: engineerSkillLabel });
+  } else {
+    overclockTooltip = `${game.i18n.localize("SHIPCOMBAT.Tooltip.Overclock")} (${overclockTier.label} ${overclockTier.modifier})`;
+  }
 
   return {
     heat,
@@ -416,6 +431,7 @@ export function buildEngineerContext(sys, opts = {}) {
     repairPlasmaStaged,
     overclockTier:     overclockTier.label,
     overclockModifier: overclockTier.modifier,
+    overclockTooltip,
     hull:              sys.hull?.value ?? 0,
     hullMax:           sys.hull?.max ?? 50,
     hullPct:           hullDisplay(sys.hull?.value ?? 0, sys.hull?.max ?? 50).pct,

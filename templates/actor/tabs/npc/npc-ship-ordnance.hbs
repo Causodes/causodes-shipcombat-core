@@ -35,7 +35,7 @@
                    data-template-id="{{torpedoTemplates.[0].id}}"
                    value="{{torpedoTemplates.[0].torpedoCount}}"
                    min="1" max="20">
-            <button class="shipcombat-battery-fire-btn" data-action="npcLaunchTorpedo">
+            <button type="button" class="shipcombat-battery-fire-btn" data-action="npcLaunchTorpedo">
                 <i class="fa-solid fa-rocket"></i> {{localize "SHIPCOMBAT.NpcShip.LaunchTorpedo"}}
             </button>
         </div>
@@ -77,7 +77,7 @@
                    data-template-id="{{craftTemplates.[0].id}}"
                    value="{{craftTemplates.[0].squadronSize}}"
                    min="1" max="20">
-            <button class="shipcombat-battery-fire-btn" data-action="npcLaunchStrikeCraft">
+            <button type="button" class="shipcombat-battery-fire-btn" data-action="npcLaunchStrikeCraft">
                 <i class="fa-solid fa-jet-fighter"></i> {{localize "SHIPCOMBAT.NpcShip.LaunchStrikeCraft"}}
             </button>
         </div>
@@ -108,7 +108,7 @@
                     <span class="shipcombat-hull-label">hp</span>
                 </div>
                 <div class="shipcombat-deployed-controls">
-                    <button data-action="panToOrdnance" data-token-id="{{tokenId}}"
+                    <button type="button" data-action="panToOrdnance" data-token-id="{{tokenId}}"
                             data-tooltip="{{localize 'SHIPCOMBAT.Ordnance.PanTo'}}">
                         <i class="fa-solid fa-eye"></i>
                     </button>
@@ -131,7 +131,7 @@
                     <span class="shipcombat-hull-label">losses</span>
                 </div>
                 <div class="shipcombat-deployed-controls">
-                    <button data-action="panToOrdnance" data-token-id="{{tokenId}}"
+                    <button type="button" data-action="panToOrdnance" data-token-id="{{tokenId}}"
                             data-tooltip="{{localize 'SHIPCOMBAT.Ordnance.PanTo'}}">
                         <i class="fa-solid fa-eye"></i>
                     </button>
@@ -141,7 +141,7 @@
         </div>
         {{#if deployedCraft.length}}
         <div class="shipcombat-battery-actions">
-            <button class="shipcombat-battery-fire-btn" data-action="npcRTB"
+            <button type="button" class="shipcombat-battery-fire-btn" data-action="npcRTB"
                     data-tooltip="{{localize 'SHIPCOMBAT.Ordnance.RecallCraftRange'}}">
                 <i class="fa-solid fa-plane-arrival"></i> {{localize "SHIPCOMBAT.NpcShip.RTBCraft"}}
             </button>

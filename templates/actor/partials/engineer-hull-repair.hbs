@@ -24,7 +24,7 @@
                 <span>{{localize "SHIPCOMBAT.Engineer.ActionTakenDesc"}}</span>
             </div>
         {{else}}
-        <button class="shipcombat-section-overlay-btn" data-action="selectAction" data-action-type="repair">
+        <button type="button" class="shipcombat-section-overlay-btn" data-action="selectAction" data-action-type="repair">
             {{localize "SHIPCOMBAT.Engineer.HullRepair"}}
         </button>
         {{/if}}
@@ -44,10 +44,10 @@
         <div class="shipcombat-eng-action-row">
             <p class="shipcombat-eng-action-desc">{{localize "SHIPCOMBAT.Engineer.HullRepairDesc"}}</p>
             <div class="shipcombat-eng-action-ctrl">
-                <button class="shipcombat-alloc-btn" data-action="adjustRepairPlasma" data-delta="-1"
+                <button type="button" class="shipcombat-alloc-btn" data-action="adjustRepairPlasma" data-delta="-1"
                         {{#unless engineerCtx.canRepairHull}}disabled{{/unless}}>&minus;</button>
                 <span class="shipcombat-core-alloc-count">{{engineerCtx.repairPlasmaStaged}}</span>
-                <button class="shipcombat-alloc-btn" data-action="adjustRepairPlasma" data-delta="1"
+                <button type="button" class="shipcombat-alloc-btn" data-action="adjustRepairPlasma" data-delta="1"
                         {{#unless engineerCtx.canRepairHull}}disabled{{/unless}}>+</button>
             </div>
             <button type="button" class="shipcombat-eng-confirm" data-action="repairHull"

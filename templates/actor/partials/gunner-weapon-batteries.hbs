@@ -95,7 +95,7 @@
                         {{#if this.isAlreadyFired}}
                         <span class="shipcombat-fire-blocked"><i class="fa-solid fa-ban"></i> {{localize "SHIPCOMBAT.Warning.AlreadyFiredShort"}}</span>
                         {{else}}
-                        <button class="shipcombat-battery-fire-btn shipcombat-fire--macro" data-action="fireWeapon"
+                        <button type="button" class="shipcombat-battery-fire-btn shipcombat-fire--macro" data-action="fireWeapon"
                                 data-weapon-id="{{this.id}}" data-fire-mode="" disabled>
                             <i class="fa-solid fa-crosshairs"></i>
                             <span class="shipcombat-macro-fire-label">{{localize "SHIPCOMBAT.Gunner.SelectFireMode"}}</span>
@@ -142,7 +142,7 @@
                         {{#if this.isAlreadyFired}}
                         <span class="shipcombat-fire-blocked"><i class="fa-solid fa-ban"></i> {{localize "SHIPCOMBAT.Warning.AlreadyFiredShort"}}</span>
                         {{else if this.plasma.canFire}}
-                        <button class="shipcombat-battery-fire-btn shipcombat-fire--plasma" data-action="fireWeapon" data-fire-mode="plasmaShot" data-weapon-id="{{this.id}}">
+                        <button type="button" class="shipcombat-battery-fire-btn shipcombat-fire--plasma" data-action="fireWeapon" data-fire-mode="plasmaShot" data-weapon-id="{{this.id}}">
                             <i class="fa-solid fa-fire"></i> {{localize "SHIPCOMBAT.Gunner.EnergyDischarge"}} {{this.plasma.totalDamage}} Damage{{#if (gt this.plasma.salvoSize 1)}} ×{{this.plasma.salvoSize}}{{/if}}
                         </button>
                         {{else}}
@@ -184,7 +184,7 @@
                         {{#if this.isAlreadyFired}}
                         <span class="shipcombat-fire-blocked"><i class="fa-solid fa-ban"></i> {{localize "SHIPCOMBAT.Warning.AlreadyFiredShort"}}</span>
                         {{else if this.lance.canFire}}
-                        <button class="shipcombat-battery-fire-btn shipcombat-fire--lance" data-action="fireWeapon" data-fire-mode="lanceFire" data-weapon-id="{{this.id}}">
+                        <button type="button" class="shipcombat-battery-fire-btn shipcombat-fire--lance" data-action="fireWeapon" data-fire-mode="lanceFire" data-weapon-id="{{this.id}}">
                             <i class="fa-solid fa-bolt-lightning"></i>
                             {{#if this.lance.activeTierLabel}}
                                 {{this.lance.activeTierLabel}} {{this.lance.activeDamageLabel}}
@@ -218,7 +218,7 @@
                         {{#if this.isAlreadyFired}}
                         <span class="shipcombat-fire-blocked"><i class="fa-solid fa-ban"></i> {{localize "SHIPCOMBAT.Warning.AlreadyFiredShort"}}</span>
                         {{else}}
-                        <button class="shipcombat-battery-fire-btn shipcombat-fire--pd" data-action="fireWeapon" data-fire-mode="pointDefense" data-weapon-id="{{this.id}}">
+                        <button type="button" class="shipcombat-battery-fire-btn shipcombat-fire--pd" data-action="fireWeapon" data-fire-mode="pointDefense" data-weapon-id="{{this.id}}">
                             <i class="fa-solid fa-shield-halved"></i> {{localize "SHIPCOMBAT.Gunner.Fire"}}
                         </button>
                         {{/if}}

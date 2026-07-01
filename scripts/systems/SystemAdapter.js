@@ -110,7 +110,15 @@ export class SystemAdapter {
    * @returns {Promise<{SL: number, succeeded: boolean, roll: Roll}>}
    */
   async rollSkillTest(crewActor, roleSkill, options = {}) { throw new Error("Not implemented"); }
-
+  /**
+   * Return the overclock DC for the current heat level, scaling from DC 10
+   * (no heat) to DC 20 (full heat), or null to use the ImpMal modifier-based
+   * tier system instead.
+   * @param {number} heat
+   * @param {number} heatMax
+   * @returns {number|null}
+   */
+  getOverclockDC(_heat, _heatMax) { return null; }
   /* ── Initiative rolls ──────────────────────────────────────────────────── */
 
   /**

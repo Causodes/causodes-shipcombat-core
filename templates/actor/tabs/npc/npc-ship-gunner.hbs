@@ -60,7 +60,7 @@
                     {{#if gunnerCtx.ordnanceRolled}}
                         <span class="shipcombat-helm-stat-value shipcombat-sl-badge">{{gunnerCtx.remainingSL}}</span>
                     {{else}}
-                        <button class="shipcombat-roll-piloting-btn" data-action="npcRollOrdnance">
+                        <button type="button" class="shipcombat-roll-piloting-btn" data-action="npcRollOrdnance">
                             <i class="fa-solid fa-dice"></i> {{gunnerCtx.rollLabel}}
                         </button>
                     {{/if}}
@@ -68,30 +68,30 @@
                 <div class="shipcombat-helm-stat" data-tooltip="{{localize 'SHIPCOMBAT.Gunner.AccuracyTooltip'}}">
                     <span class="shipcombat-helm-stat-label">{{localize "SHIPCOMBAT.Gunner.Accuracy"}}</span>
                     <div class="shipcombat-alloc-row">
-                        <button class="shipcombat-alloc-btn" data-action="npcAllocGunnerSL" data-stat="accuracy" data-delta="-1"
+                        <button type="button" class="shipcombat-alloc-btn" data-action="npcAllocGunnerSL" data-stat="accuracy" data-delta="-1"
                                 {{#if gunnerCtx.allocLocked}}disabled{{/if}}>&minus;</button>
                         <span class="shipcombat-helm-stat-value">{{gunnerCtx.allocAccuracy}}</span>
-                        <button class="shipcombat-alloc-btn" data-action="npcAllocGunnerSL" data-stat="accuracy" data-delta="1"
+                        <button type="button" class="shipcombat-alloc-btn" data-action="npcAllocGunnerSL" data-stat="accuracy" data-delta="1"
                                 {{#if gunnerCtx.allocLocked}}disabled{{/if}}>+</button>
                     </div>
                 </div>
                 <div class="shipcombat-helm-stat" data-tooltip="{{localize 'SHIPCOMBAT.Gunner.PenetrationTooltip'}}">
                     <span class="shipcombat-helm-stat-label">{{localize "SHIPCOMBAT.Gunner.Penetration"}}</span>
                     <div class="shipcombat-alloc-row">
-                        <button class="shipcombat-alloc-btn" data-action="npcAllocGunnerSL" data-stat="penetration" data-delta="-1"
+                        <button type="button" class="shipcombat-alloc-btn" data-action="npcAllocGunnerSL" data-stat="penetration" data-delta="-1"
                                 {{#if gunnerCtx.allocLocked}}disabled{{/if}}>&minus;</button>
                         <span class="shipcombat-helm-stat-value">{{gunnerCtx.allocPenetration}}</span>
-                        <button class="shipcombat-alloc-btn" data-action="npcAllocGunnerSL" data-stat="penetration" data-delta="1"
+                        <button type="button" class="shipcombat-alloc-btn" data-action="npcAllocGunnerSL" data-stat="penetration" data-delta="1"
                                 {{#if gunnerCtx.allocLocked}}disabled{{/if}}>+</button>
                     </div>
                 </div>
                 <div class="shipcombat-helm-stat" data-tooltip="{{localize 'SHIPCOMBAT.Gunner.FirepowerTooltip'}}">
                     <span class="shipcombat-helm-stat-label">{{localize "SHIPCOMBAT.Gunner.Firepower"}}</span>
                     <div class="shipcombat-alloc-row">
-                        <button class="shipcombat-alloc-btn" data-action="npcAllocGunnerSL" data-stat="firepower" data-delta="-1"
+                        <button type="button" class="shipcombat-alloc-btn" data-action="npcAllocGunnerSL" data-stat="firepower" data-delta="-1"
                                 {{#if gunnerCtx.allocLocked}}disabled{{/if}}>&minus;</button>
                         <span class="shipcombat-helm-stat-value">{{gunnerCtx.allocFirepower}}</span>
-                        <button class="shipcombat-alloc-btn" data-action="npcAllocGunnerSL" data-stat="firepower" data-delta="1"
+                        <button type="button" class="shipcombat-alloc-btn" data-action="npcAllocGunnerSL" data-stat="firepower" data-delta="1"
                                 {{#if gunnerCtx.allocLocked}}disabled{{/if}}>+</button>
                     </div>
                 </div>
@@ -184,7 +184,7 @@
                             {{/each}}
                         </div>
                         <div class="shipcombat-battery-actions">
-                            <button class="shipcombat-battery-fire-btn shipcombat-fire--macro" data-action="npcFireWeapon"
+                            <button type="button" class="shipcombat-battery-fire-btn shipcombat-fire--macro" data-action="npcFireWeapon"
                                     data-weapon-id="{{this.id}}" data-fire-mode="" disabled>
                                 <i class="fa-solid fa-crosshairs"></i>
                                 <span class="shipcombat-macro-fire-label">{{localize "SHIPCOMBAT.Gunner.SelectFireMode"}}</span>
@@ -216,7 +216,7 @@
                         </div>
                         <div class="shipcombat-battery-actions">
                             {{#if this.plasma.canFire}}
-                            <button class="shipcombat-battery-fire-btn shipcombat-fire--plasma" data-action="npcFireWeapon" data-fire-mode="plasmaShot" data-weapon-id="{{this.id}}">
+                            <button type="button" class="shipcombat-battery-fire-btn shipcombat-fire--plasma" data-action="npcFireWeapon" data-fire-mode="plasmaShot" data-weapon-id="{{this.id}}">
                                 <i class="fa-solid fa-bolt"></i> {{localize "SHIPCOMBAT.Gunner.EnergyDischarge"}} {{this.plasma.totalDamage}} Damage{{#if (gt this.plasma.salvoSize 1)}} ×{{this.plasma.salvoSize}}{{/if}}
                             </button>
                             {{/if}}
@@ -251,7 +251,7 @@
                         </div>
                         <div class="shipcombat-battery-actions">
                             {{#if this.lance.canFire}}
-                            <button class="shipcombat-battery-fire-btn shipcombat-fire--lance" data-action="npcFireWeapon" data-fire-mode="lanceFire" data-weapon-id="{{this.id}}">
+                            <button type="button" class="shipcombat-battery-fire-btn shipcombat-fire--lance" data-action="npcFireWeapon" data-fire-mode="lanceFire" data-weapon-id="{{this.id}}">
                                 <i class="fa-solid fa-bolt-lightning"></i>
                                 {{#if this.lance.activeTierLabel}}
                                     {{this.lance.activeTierLabel}} {{this.lance.activeDamageLabel}} Damage
@@ -278,7 +278,7 @@
                             </div>
                         </div>
                         <div class="shipcombat-battery-actions">
-                            <button class="shipcombat-battery-fire-btn shipcombat-fire--pd" data-action="npcFireWeapon" data-fire-mode="pointDefense" data-weapon-id="{{this.id}}">
+                            <button type="button" class="shipcombat-battery-fire-btn shipcombat-fire--pd" data-action="npcFireWeapon" data-fire-mode="pointDefense" data-weapon-id="{{this.id}}">
                                 <i class="fa-solid fa-shield-halved"></i> {{localize "SHIPCOMBAT.Gunner.Fire"}}
                             </button>
                         </div>

@@ -18,7 +18,7 @@
             <div class="shipcombat-ordnance-action-grid">
                 {{#each ordnanceCtx.actions}}
                 {{#unless (shipcombatEq id "loadPayload")}}
-                <button class="shipcombat-ordnance-action-btn" data-action="ordnanceMasterAction" data-action-id="{{id}}"
+                <button type="button" class="shipcombat-ordnance-action-btn" data-action="ordnanceMasterAction" data-action-id="{{id}}"
                         {{#unless canAfford}}disabled{{/unless}}
                         data-tooltip="{{tooltip}}">
                     <i class="{{icon}}"></i>
@@ -47,7 +47,7 @@
         <div class="list-content">
             {{#each gunnerCtx.coreActions}}
             <div class="shipcombat-core-action-card">
-                <button class="shipcombat-core-action-btn" data-action="gunnerCoreAction" data-core-action="{{id}}"
+                <button type="button" class="shipcombat-core-action-btn" data-action="gunnerCoreAction" data-core-action="{{id}}"
                         {{#unless canAfford}}disabled{{/unless}}
                         data-tooltip="{{descLocalized}}">
                     <i class="{{icon}}"></i>
@@ -59,7 +59,7 @@
             {{#each ordnanceCtx.coreActions}}
             {{#unless (shipcombatEq id "magazineCrossfeed")}}
             <div class="shipcombat-core-action-card">
-                <button class="shipcombat-core-action-btn" data-action="ordnanceMasterCoreAction" data-core-action="{{id}}"
+                <button type="button" class="shipcombat-core-action-btn" data-action="ordnanceMasterCoreAction" data-core-action="{{id}}"
                         {{#unless canAfford}}disabled{{/unless}}
                         data-tooltip="{{descLocalized}}">
                     <i class="{{icon}}"></i>

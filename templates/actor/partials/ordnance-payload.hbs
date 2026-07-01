@@ -9,7 +9,7 @@
             <span class="shipcombat-payload-role-label">{{roleLabel}}</span>
             <div class="shipcombat-payload-buttons">
                 {{#each items}}
-                <button class="shipcombat-payload-btn"
+                <button type="button" class="shipcombat-payload-btn"
                         data-action="sendPayload" data-payload-id="{{id}}"
                         {{#unless canSend}}disabled{{/unless}}
                         data-tooltip="{{descLocalized}}">

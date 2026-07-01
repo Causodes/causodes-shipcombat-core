@@ -11,12 +11,12 @@
     <div class="list-content">
         {{#unless sensorsCtx.sensorBlind}}
         <div class="shipcombat-radar-toolbar">
-            <button class="shipcombat-bearing-toggle-btn {{#if sensorsCtx.isTrueBearing}}active{{/if}}" data-action="toggleBearing"
+            <button type="button" class="shipcombat-bearing-toggle-btn {{#if sensorsCtx.isTrueBearing}}active{{/if}}" data-action="toggleBearing"
                     data-tooltip="{{localize 'SHIPCOMBAT.Sensors.BearingToggle'}}">
                 <i class="fa-solid fa-compass-drafting"></i>
                 {{#if sensorsCtx.isTrueBearing}}TRUE{{else}}REL{{/if}}
             </button>
-            <button class="shipcombat-bearing-toggle-btn shipcombat-popout-btn" data-action="popOutRadar"
+            <button type="button" class="shipcombat-bearing-toggle-btn shipcombat-popout-btn" data-action="popOutRadar"
                     data-tooltip="{{localize 'SHIPCOMBAT.Sensors.PopOutRadar'}}">
                 <i class="fa-solid fa-up-right-from-square"></i>
             </button>

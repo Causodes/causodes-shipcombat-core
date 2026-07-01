@@ -65,21 +65,21 @@
 
     {{!-- ═══════ Action Buttons ═══════ --}}
     <div class="shipcombat-npc-actions-grid">
-        <button class="shipcombat-npc-action-pill" data-action="npcRollInitiative">
+        <button type="button" class="shipcombat-npc-action-pill" data-action="npcRollInitiative">
             <i class="fa-solid fa-dice"></i> {{localize "SHIPCOMBAT.NpcShip.RollInitiative"}}
         </button>
-        <button class="shipcombat-npc-action-pill" data-action="npcReduceHeat"
+        <button type="button" class="shipcombat-npc-action-pill" data-action="npcReduceHeat"
                 {{#if sys.engActionUsed}}disabled{{/if}}>
             <i class="fa-solid fa-temperature-arrow-down"></i> {{localize "SHIPCOMBAT.NpcShip.ReduceHeat"}}
         </button>
-        <button class="shipcombat-npc-action-pill" data-action="npcSuppressFire"
+        <button type="button" class="shipcombat-npc-action-pill" data-action="npcSuppressFire"
                 {{#if sys.engActionUsed}}disabled{{/if}}>
             <i class="fa-solid fa-fire-extinguisher"></i> {{localize "SHIPCOMBAT.NpcShip.SuppressFire"}}
         </button>
-        <button class="shipcombat-npc-action-pill" data-action="npcRefillShields">
+        <button type="button" class="shipcombat-npc-action-pill" data-action="npcRefillShields">
             <i class="fa-solid fa-shield-halved"></i> {{localize "SHIPCOMBAT.NpcShip.RefillShields"}}
         </button>
-        <button class="shipcombat-npc-action-pill shipcombat-npc-danger-btn" data-action="npcFullReset">
+        <button type="button" class="shipcombat-npc-action-pill shipcombat-npc-danger-btn" data-action="npcFullReset">
             <i class="fa-solid fa-trash-can"></i> {{localize "SHIPCOMBAT.NpcShip.FullReset"}}
         </button>
     </div>

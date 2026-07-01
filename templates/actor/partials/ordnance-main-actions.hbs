@@ -6,7 +6,7 @@
     <div class="list-content">
         <div class="shipcombat-ordnance-action-grid shipcombat-action-grid-2col">
             {{#each ordnanceCtx.actions}}
-            <button class="shipcombat-ordnance-action-btn" data-action="ordnanceMasterAction" data-action-id="{{id}}"
+            <button type="button" class="shipcombat-ordnance-action-btn" data-action="ordnanceMasterAction" data-action-id="{{id}}"
                     {{#unless canAfford}}disabled{{/unless}}
                     data-tooltip="{{tooltip}}">
                 <i class="{{icon}}"></i>

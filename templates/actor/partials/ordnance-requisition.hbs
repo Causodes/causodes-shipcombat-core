@@ -10,7 +10,7 @@
                 {{#if ordnanceCtx.bosunRolled}}
                     <span class="shipcombat-helm-stat-value shipcombat-sl-badge">{{ordnanceCtx.slRemaining}}</span>
                 {{else}}
-                    <button class="shipcombat-roll-piloting-btn" data-action="rollOrdnanceMaster">
+                    <button type="button" class="shipcombat-roll-piloting-btn" data-action="rollOrdnanceMaster">
                         <i class="fa-solid fa-dice"></i> {{ordnanceCtx.rollLabel}}
                     </button>
                 {{/if}}
@@ -18,14 +18,14 @@
             <div class="shipcombat-helm-stat" data-tooltip="{{localize 'SHIPCOMBAT.Ordnance.EfficiencyTooltip'}}">
                 <span class="shipcombat-helm-stat-label">{{localize "SHIPCOMBAT.Ordnance.Efficiency"}}</span>
                 <div class="shipcombat-alloc-row">
-                    <button class="shipcombat-alloc-btn" data-action="allocOrdnanceSL" data-stat="efficiency" data-delta="-1"
+                    <button type="button" class="shipcombat-alloc-btn" data-action="allocOrdnanceSL" data-stat="efficiency" data-delta="-1"
                             {{#unless ordnanceCtx.bosunRolled}}disabled{{/unless}}
                             {{#if ordnanceCtx.actionUsed}}disabled{{/if}}
                             {{#unless ordnanceCtx.allocEfficiency}}disabled{{/unless}}>
                         &minus;
                     </button>
                     <span class="shipcombat-helm-stat-value">{{ordnanceCtx.allocEfficiency}}</span>
-                    <button class="shipcombat-alloc-btn" data-action="allocOrdnanceSL" data-stat="efficiency" data-delta="1"
+                    <button type="button" class="shipcombat-alloc-btn" data-action="allocOrdnanceSL" data-stat="efficiency" data-delta="1"
                             {{#unless ordnanceCtx.bosunRolled}}disabled{{/unless}}
                             {{#if ordnanceCtx.actionUsed}}disabled{{/if}}
                             {{#if (gte (add ordnanceCtx.allocEfficiency ordnanceCtx.allocExpedience) ordnanceCtx.bosunSL)}}disabled{{/if}}>
@@ -36,14 +36,14 @@
             <div class="shipcombat-helm-stat" data-tooltip="{{localize 'SHIPCOMBAT.Ordnance.ExpedienceTooltip'}}">
                 <span class="shipcombat-helm-stat-label">{{localize "SHIPCOMBAT.Ordnance.Expedience"}}</span>
                 <div class="shipcombat-alloc-row">
-                    <button class="shipcombat-alloc-btn" data-action="allocOrdnanceSL" data-stat="expedience" data-delta="-1"
+                    <button type="button" class="shipcombat-alloc-btn" data-action="allocOrdnanceSL" data-stat="expedience" data-delta="-1"
                             {{#unless ordnanceCtx.bosunRolled}}disabled{{/unless}}
                             {{#if ordnanceCtx.actionUsed}}disabled{{/if}}
                             {{#unless ordnanceCtx.allocExpedience}}disabled{{/unless}}>
                         &minus;
                     </button>
                     <span class="shipcombat-helm-stat-value">{{ordnanceCtx.allocExpedience}}</span>
-                    <button class="shipcombat-alloc-btn" data-action="allocOrdnanceSL" data-stat="expedience" data-delta="1"
+                    <button type="button" class="shipcombat-alloc-btn" data-action="allocOrdnanceSL" data-stat="expedience" data-delta="1"
                             {{#unless ordnanceCtx.bosunRolled}}disabled{{/unless}}
                             {{#if ordnanceCtx.actionUsed}}disabled{{/if}}
                             {{#if (gte (add ordnanceCtx.allocEfficiency ordnanceCtx.allocExpedience) ordnanceCtx.bosunSL)}}disabled{{/if}}>

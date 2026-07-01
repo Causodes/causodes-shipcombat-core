@@ -77,10 +77,10 @@
                     <div class="list-name">{{locLabel}}</div>
                     <div class="shipcombat-debug-tier-label">{{#if conditionName}}{{conditionName}}{{else}}&mdash;{{/if}}</div>
                     <div class="shipcombat-debug-tier-btns">
-                        <button class="shipcombat-debug-btn{{#unless tier}} shipcombat-debug-btn--active{{/unless}}" data-action="npcDebugSetCondition" data-loc-id="{{locId}}" data-tier="">None</button>
-                        <button class="shipcombat-debug-btn{{#if (shipcombatEq tier 'low')}} shipcombat-debug-btn--active{{/if}}" data-action="npcDebugSetCondition" data-loc-id="{{locId}}" data-tier="low">Low</button>
-                        <button class="shipcombat-debug-btn{{#if (shipcombatEq tier 'medium')}} shipcombat-debug-btn--active{{/if}}" data-action="npcDebugSetCondition" data-loc-id="{{locId}}" data-tier="medium">Med</button>
-                        <button class="shipcombat-debug-btn{{#if (shipcombatEq tier 'high')}} shipcombat-debug-btn--active{{/if}}" data-action="npcDebugSetCondition" data-loc-id="{{locId}}" data-tier="high">High</button>
+                        <button type="button" class="shipcombat-debug-btn{{#unless tier}} shipcombat-debug-btn--active{{/unless}}" data-action="npcDebugSetCondition" data-loc-id="{{locId}}" data-tier="">None</button>
+                        <button type="button" class="shipcombat-debug-btn{{#if (shipcombatEq tier 'low')}} shipcombat-debug-btn--active{{/if}}" data-action="npcDebugSetCondition" data-loc-id="{{locId}}" data-tier="low">Low</button>
+                        <button type="button" class="shipcombat-debug-btn{{#if (shipcombatEq tier 'medium')}} shipcombat-debug-btn--active{{/if}}" data-action="npcDebugSetCondition" data-loc-id="{{locId}}" data-tier="medium">Med</button>
+                        <button type="button" class="shipcombat-debug-btn{{#if (shipcombatEq tier 'high')}} shipcombat-debug-btn--active{{/if}}" data-action="npcDebugSetCondition" data-loc-id="{{locId}}" data-tier="high">High</button>
                     </div>
                 </div>
             </div>

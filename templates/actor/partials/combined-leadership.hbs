@@ -16,7 +16,7 @@
                 {{#if captainCtx.leadershipRolled}}
                     <span class="shipcombat-helm-stat-value shipcombat-sl-badge">{{captainCtx.remainingLeadershipSL}}</span>
                 {{else}}
-                    <button class="shipcombat-roll-piloting-btn" data-action="rollLeadershipSL">
+                    <button type="button" class="shipcombat-roll-piloting-btn" data-action="rollLeadershipSL">
                         <i class="fa-solid fa-dice"></i> {{captainCtx.rollLabel}}
                     </button>
                 {{/if}}
@@ -26,7 +26,7 @@
             <div class="shipcombat-helm-stat" data-tooltip="{{localize 'SHIPCOMBAT.Captain.ResolveTooltip'}}">
                 <span class="shipcombat-helm-stat-label">{{localize "SHIPCOMBAT.Captain.Resolve"}}</span>
                 <div class="shipcombat-alloc-row">
-                    <button class="shipcombat-alloc-btn" data-action="allocLeadershipSL" data-stat="resolve" data-delta="-1"
+                    <button type="button" class="shipcombat-alloc-btn" data-action="allocLeadershipSL" data-stat="resolve" data-delta="-1"
                             {{#unless captainCtx.leadershipRolled}}disabled{{/unless}}
                             {{#if captainCtx.hasPlayedCards}}disabled{{/if}}
                             {{#if ordnanceCtx.actionUsed}}disabled{{/if}}
@@ -34,7 +34,7 @@
                         &minus;
                     </button>
                     <span class="shipcombat-helm-stat-value">{{captainCtx.allocResolve}}</span>
-                    <button class="shipcombat-alloc-btn" data-action="allocLeadershipSL" data-stat="resolve" data-delta="1"
+                    <button type="button" class="shipcombat-alloc-btn" data-action="allocLeadershipSL" data-stat="resolve" data-delta="1"
                             {{#unless captainCtx.leadershipRolled}}disabled{{/unless}}
                             {{#if captainCtx.hasPlayedCards}}disabled{{/if}}
                             {{#if ordnanceCtx.actionUsed}}disabled{{/if}}
@@ -48,7 +48,7 @@
             <div class="shipcombat-helm-stat" data-tooltip="{{localize 'SHIPCOMBAT.Ordnance.EfficiencyTooltip'}}">
                 <span class="shipcombat-helm-stat-label">{{localize "SHIPCOMBAT.Ordnance.Efficiency"}}</span>
                 <div class="shipcombat-alloc-row">
-                    <button class="shipcombat-alloc-btn" data-action="allocOrdnanceSL" data-stat="efficiency" data-delta="-1"
+                    <button type="button" class="shipcombat-alloc-btn" data-action="allocOrdnanceSL" data-stat="efficiency" data-delta="-1"
                             {{#unless captainCtx.leadershipRolled}}disabled{{/unless}}
                             {{#if captainCtx.hasPlayedCards}}disabled{{/if}}
                             {{#if ordnanceCtx.actionUsed}}disabled{{/if}}
@@ -56,7 +56,7 @@
                         &minus;
                     </button>
                     <span class="shipcombat-helm-stat-value">{{ordnanceCtx.allocEfficiency}}</span>
-                    <button class="shipcombat-alloc-btn" data-action="allocOrdnanceSL" data-stat="efficiency" data-delta="1"
+                    <button type="button" class="shipcombat-alloc-btn" data-action="allocOrdnanceSL" data-stat="efficiency" data-delta="1"
                             {{#unless captainCtx.leadershipRolled}}disabled{{/unless}}
                             {{#if captainCtx.hasPlayedCards}}disabled{{/if}}
                             {{#if ordnanceCtx.actionUsed}}disabled{{/if}}
@@ -70,7 +70,7 @@
             <div class="shipcombat-helm-stat" data-tooltip="{{localize 'SHIPCOMBAT.Ordnance.ExpedienceTooltip'}}">
                 <span class="shipcombat-helm-stat-label">{{localize "SHIPCOMBAT.Ordnance.Expedience"}}</span>
                 <div class="shipcombat-alloc-row">
-                    <button class="shipcombat-alloc-btn" data-action="allocOrdnanceSL" data-stat="expedience" data-delta="-1"
+                    <button type="button" class="shipcombat-alloc-btn" data-action="allocOrdnanceSL" data-stat="expedience" data-delta="-1"
                             {{#unless captainCtx.leadershipRolled}}disabled{{/unless}}
                             {{#if captainCtx.hasPlayedCards}}disabled{{/if}}
                             {{#if ordnanceCtx.actionUsed}}disabled{{/if}}
@@ -78,7 +78,7 @@
                         &minus;
                     </button>
                     <span class="shipcombat-helm-stat-value">{{ordnanceCtx.allocExpedience}}</span>
-                    <button class="shipcombat-alloc-btn" data-action="allocOrdnanceSL" data-stat="expedience" data-delta="1"
+                    <button type="button" class="shipcombat-alloc-btn" data-action="allocOrdnanceSL" data-stat="expedience" data-delta="1"
                             {{#unless captainCtx.leadershipRolled}}disabled{{/unless}}
                             {{#if captainCtx.hasPlayedCards}}disabled{{/if}}
                             {{#if ordnanceCtx.actionUsed}}disabled{{/if}}

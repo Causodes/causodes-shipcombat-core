@@ -20,7 +20,7 @@
                 <span class="shipcombat-overlay-crit-desc">{{localize "SHIPCOMBAT.Engineer.CoreCritLockedDesc"}}</span>
             </div>
         {{else}}
-        <button class="shipcombat-section-overlay-btn" data-action="selectAction" data-action-type="cores">
+        <button type="button" class="shipcombat-section-overlay-btn" data-action="selectAction" data-action-type="cores">
             {{localize "SHIPCOMBAT.Engineer.CoreDistribution"}}
         </button>
         {{/if}}
@@ -50,12 +50,12 @@
         {{/if}}
 
         <div class="shipcombat-core-action-row">
-            <button class="shipcombat-eng-btn shipcombat-overclock-btn" data-action="overclock"
+            <button type="button" class="shipcombat-eng-btn shipcombat-overclock-btn" data-action="overclock"
                     {{#unless engineerCtx.canOverclock}}disabled{{/unless}}
-                    data-tooltip="{{localize 'SHIPCOMBAT.Tooltip.Overclock'}} ({{engineerCtx.overclockTier}} {{engineerCtx.overclockModifier}})">
+                    data-tooltip="{{engineerCtx.overclockTooltip}}">
                 {{localize "SHIPCOMBAT.Action.Overclock"}}
             </button>
-            <button class="shipcombat-eng-btn shipcombat-dispatch-btn" data-action="dispatchCores"
+            <button type="button" class="shipcombat-eng-btn shipcombat-dispatch-btn" data-action="dispatchCores"
                     {{#unless engineerCtx.hasStaged}}disabled{{/unless}}
                     data-tooltip="{{localize 'SHIPCOMBAT.Tooltip.DispatchCores'}}">
                 {{localize "SHIPCOMBAT.Engineer.DispatchCores"}}
@@ -68,9 +68,9 @@
                 <span class="shipcombat-core-alloc-detail shipcombat-muted">{{localize "SHIPCOMBAT.Engineer.ProjectedShieldPool"}}: <strong class="shipcombat-shieldpool-active">{{engineerCtx.projectedShieldPool}}</strong> / {{engineerCtx.maxVoidFlux}}</span>
                 <div class="shipcombat-core-alloc-ctrl">
                     <span class="shipcombat-core-flux-label shipcombat-muted">{{engineerCtx.shieldStrengthPerCore}} {{localize "SHIPCOMBAT.Engineer.FluxPerCore"}}</span>
-                    <button class="shipcombat-alloc-btn" data-action="uncommitShieldCore">&minus;</button>
+                    <button type="button" class="shipcombat-alloc-btn" data-action="uncommitShieldCore">&minus;</button>
                     <span class="shipcombat-core-alloc-count">{{engineerCtx.stagedShieldCores}}</span>
-                    <button class="shipcombat-alloc-btn" data-action="commitShieldCore">+</button>
+                    <button type="button" class="shipcombat-alloc-btn" data-action="commitShieldCore">+</button>
                 </div>
             </div>
             <div class="shipcombat-core-alloc-row shipcombat-core-alloc-row--aux">
@@ -78,9 +78,9 @@
                 <span class="shipcombat-core-alloc-detail shipcombat-muted">{{localize "SHIPCOMBAT.Engineer.ProjectedAuxPower"}}: <strong>+{{engineerCtx.projectedAuxGain}}</strong></span>
                 <div class="shipcombat-core-alloc-ctrl">
                     <span class="shipcombat-core-flux-label shipcombat-muted">{{engineerCtx.reserveMultiplier}} {{localize "SHIPCOMBAT.Engineer.AuxPerCore"}}</span>
-                    <button class="shipcombat-alloc-btn" data-action="uncommitAuxCore">&minus;</button>
+                    <button type="button" class="shipcombat-alloc-btn" data-action="uncommitAuxCore">&minus;</button>
                     <span class="shipcombat-core-alloc-count">{{engineerCtx.stagedAuxCores}}</span>
-                    <button class="shipcombat-alloc-btn" data-action="commitAuxCore">+</button>
+                    <button type="button" class="shipcombat-alloc-btn" data-action="commitAuxCore">+</button>
                 </div>
             </div>
             {{#each roles}}
@@ -106,11 +106,11 @@
 
         <div style="text-align:center; margin-top:0.25rem">
             {{#if engineerCtx.ventPending}}
-            <button class="shipcombat-eng-btn shipcombat-action-danger shipcombat-action-vent-fired" disabled style="max-width:20rem; margin:0 auto">
+            <button type="button" class="shipcombat-eng-btn shipcombat-action-danger shipcombat-action-vent-fired" disabled style="max-width:20rem; margin:0 auto">
                 {{localize "SHIPCOMBAT.Engineer.VentFired"}}
             </button>
             {{else}}
-            <button class="shipcombat-eng-btn shipcombat-action-danger" data-action="emergencyVent"
+            <button type="button" class="shipcombat-eng-btn shipcombat-action-danger" data-action="emergencyVent"
                     data-tooltip="{{localize 'SHIPCOMBAT.Engineer.EmergencyVentDesc'}}" style="max-width:20rem; margin:0 auto"
                     {{#unless engineerCtx.heat}}disabled{{/unless}}>
                 {{localize "SHIPCOMBAT.Engineer.EmergencyVent"}}

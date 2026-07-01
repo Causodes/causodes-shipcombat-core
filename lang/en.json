@@ -1201,7 +1201,7 @@
       "TorpedoCapacity": "{{SHIPCOMBAT.Term.Torpedo}} Capacity",
       "StrikeCraftFlightSize": "{{SHIPCOMBAT.Term.StrikeCraft}} Flight Size",
       "WeaponCategory": "Animation Style",
-      "StrikeCraftCapacity": "{{SHIPCOMBAT.Term.StrikeCraft}} Capacity"
+      "StrikeCraftCapacity": "Flight Capacity"
     }
   }
 }
