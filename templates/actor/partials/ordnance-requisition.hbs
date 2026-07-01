@@ -11,7 +11,7 @@
                     <span class="shipcombat-helm-stat-value shipcombat-sl-badge">{{ordnanceCtx.slRemaining}}</span>
                 {{else}}
                     <button type="button" class="shipcombat-roll-piloting-btn" data-action="rollOrdnanceMaster">
-                        <i class="fa-solid fa-dice"></i> {{ordnanceCtx.rollLabel}}
+                        <i class="fa-solid {{shipCombatDiceIcon}}"></i> {{ordnanceCtx.rollLabel}}
                     </button>
                 {{/if}}
             </div>

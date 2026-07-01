@@ -1,3 +1,8 @@
+## v2.1.6
+- Fix bug where extra cores awarded from Overclock were not being correctly displayed
+- Further agnosticize Overclock success logic and move binary success determination to companion module
+- Add handling for module-specific dice icon override
+
 ## v2.1.5
 - Explicitly classify buttons as type `button` in handlebars templates to prevent unintended form submission behavior
 - Add handling for scaling DC for Overclock checks in systems like SF2e or D&D5e

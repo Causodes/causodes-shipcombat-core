@@ -396,6 +396,7 @@ export class ShipController {
     }));
 
     const powerCoresMax         = ShipCombatState.getReactorStats(this.actor).coreOutput;
+    const powerCoresPool        = sys.resources?.engineer?.powerCores ?? 0;
     const stagedCoreCount       = Object.values(stagedCoresMap).filter(Boolean).length;
     const stagedShieldCoreCount = sys.resources?.engineer?.stagedShieldCores ?? 0;
     const stagedAuxCoreCount    = sys.resources?.engineer?.stagedAuxCores ?? 0;
@@ -403,8 +404,8 @@ export class ShipController {
     const shieldCommittedCount  = sys.shieldPool?.committed ?? 0;
     const assignedCoreCount     = Object.values(sys.assignedCores ?? {}).filter(Boolean).length;
     const distributedCores      = stagedCoreCount + stagedShieldCoreCount + stagedAuxCoreCount + committedAuxCoreCount + shieldCommittedCount + assignedCoreCount;
-    const powerCoresAvailable   = Math.max(0, powerCoresMax - distributedCores);
-    const totalCoreCount        = powerCoresAvailable + distributedCores;
+    const totalCoreCount        = powerCoresPool + distributedCores;
+    const powerCoresAvailable   = powerCoresPool;
 
     const components          = this.actor.items.filter(i => i.type === `${MODULE_ID}.component`);
     const equippedComponents  = components.filter(c => c.system.equipped !== false);

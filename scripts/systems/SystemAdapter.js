@@ -119,6 +119,30 @@ export class SystemAdapter {
    * @returns {number|null}
    */
   getOverclockDC(_heat, _heatMax) { return null; }
+
+  /**
+   * Determine whether an overclock attempt succeeded.
+   *
+   * Default (ImpMal): success when SL ≥ 0 — the tier modifier already
+   * adjusts the roll difficulty, so any non-negative SL is a pass.
+   *
+   * DC-based systems (SF2e, D&D5e) override this to compare the raw d20
+   * total against the DC that was passed into the roll.
+   *
+   * @param {{ SL: number, succeeded: boolean, roll: Roll }} result  rollSkillTest result
+   * @param {{ dc: number|null, heat: number, heatMax: number }}     options
+   * @returns {boolean}
+   */
+  isOverclockSuccess(result, _options) { return result.SL >= 0; }
+
+  /**
+   * Font Awesome icon class for generic "roll dice" buttons in skill-check UI.
+   * Default is `fa-dice` (two d6s).  d20 systems override to `fa-dice-d20`.
+   * Used by the `{{shipCombatDiceIcon}}` Handlebars helper so templates stay
+   * system-agnostic.
+   * @returns {string}
+   */
+  getRollDiceIcon() { return "fa-dice"; }
   /* ── Initiative rolls ──────────────────────────────────────────────────── */
 
   /**

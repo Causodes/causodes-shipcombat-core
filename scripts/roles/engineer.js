@@ -100,21 +100,31 @@ async function _onOverclock() {
   const overclockDC = SystemAdapter.current.getOverclockDC(heat, heatMax);
   let result;
   if (overclockDC !== null) {
-    result = await SystemAdapter.current.rollSkillTest(crewActor, sys.roleSkillOverrides?.engineer ?? "engineering", { dc: overclockDC });
+    result = await SystemAdapter.current.rollSkillTest(crewActor, sys.roleSkillOverrides?.engineer ?? "engineering", { dc: overclockDC, skipPointsTable: true });
   } else {
     const tier = _getOverclockModifier(heat);
     result = await SystemAdapter.current.rollSkillTest(crewActor, sys.roleSkillOverrides?.engineer ?? "engineering", { modifier: tier.modifier });
   }
   if (!result) return;
 
+  const succeeded = SystemAdapter.current.isOverclockSuccess(result, { dc: overclockDC, heat, heatMax });
+
+  // For DC-based systems, append overclock outcome to the chat card (best-effort,
+  // fire-and-forget so a failed message update cannot block game state changes).
+  if (overclockDC !== null) {
+    const outcomeLabel = succeeded ? "✓ Success" : "✗ Fail";
+    const coreLabel    = succeeded ? "Core Granted" : "Core Not Granted";
+    const outcomeHtml  = `<div class="sc-overclock-result" style="margin-top:0.5rem;padding-top:0.4rem;border-top:1px solid rgba(0,0,0,0.2)"><strong>Overclock DC ${overclockDC}: ${outcomeLabel}</strong><br>${coreLabel} · System Heat Increased</div>`;
+    const msg = game.messages.contents.at(-1);
+    if (msg) msg.update({ flavor: `${msg.flavor ?? ""}${outcomeHtml}` });
+  }
+
   // Heat always increases regardless of result
   emitToGM("updateResource", { roleId: "engineer", key: "heat", value: heat + 1 });
 
-  const succeeded = overclockDC !== null ? result.roll.total >= overclockDC : result.SL >= 0;
   if (succeeded) {
     const available = sys.resources?.engineer?.powerCores ?? 0;
     emitToGM("updateResource", { roleId: "engineer", key: "powerCores", value: available + 1 });
-  } else {
   }
 }
 

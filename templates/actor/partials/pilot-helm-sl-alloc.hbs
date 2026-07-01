@@ -7,7 +7,7 @@
         {{else}}
             <button type="button" class="shipcombat-roll-piloting-btn" data-action="rollPiloting"
                     {{#if helm.allocLocked}}disabled{{/if}}>
-                <i class="fa-solid fa-dice"></i> {{helm.helmRollLabel}}
+                <i class="fa-solid {{shipCombatDiceIcon}}"></i> {{helm.helmRollLabel}}
             </button>
         {{/if}}
     </div>

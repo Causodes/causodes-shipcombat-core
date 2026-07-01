@@ -42,18 +42,7 @@ export async function stagePowerCore(targetRoleId) {
     ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.PowerFluctuation"));
     return;
   }
-  // Derive available from reactor max minus currently distributed cores so the
-  // guard stays accurate even if the reactor was changed mid-combat.
-  const reactorStats    = this.getReactorStats();
-  const _staged         = data.resources?.engineer?.stagedCores ?? {};
-  const _stagedCount    = Object.values(_staged).filter(Boolean).length;
-  const _distributed    = _stagedCount
-    + (data.resources?.engineer?.stagedShieldCores ?? 0)
-    + (data.resources?.engineer?.stagedAuxCores    ?? 0)
-    + (data.resources?.engineer?.committedAuxCores ?? 0)
-    + (data.shieldPool?.committed ?? 0)
-    + Object.values(data.assignedCores ?? {}).filter(Boolean).length;
-  const available = Math.max(0, reactorStats.coreOutput - _distributed);
+  const available = data.resources?.engineer?.powerCores ?? 0;
   if (available <= 0) {
     ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoPowerCores"));
     return;
