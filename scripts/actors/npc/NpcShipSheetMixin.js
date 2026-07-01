@@ -20,6 +20,7 @@ import { heatColor } from "../../theme.js";
 import { enrichWeaponForGunner } from "../../roles/gunner.js";
 import { TargetingPopup } from "../../apps/TargetingPopup.js";
 import { RecoverCraftPopup } from "../../apps/StrikeCraftPopups.js";
+import { coerceEmptyNumberInputs } from "../../sheet-utils.js";
 import { RamTargetPopup } from "../../apps/RamTargetPopup.js";
 import { SystemAdapter } from "../../systems/SystemAdapter.js";
 
@@ -483,6 +484,11 @@ export const NpcShipSheetMixin = (BaseClass) => {
         input.name = SystemAdapter.current.systemPath(input.name.slice("system.".length));
       }
       return super._onChangeInput(event);
+    }
+
+    _processFormData(event, form, formData) {
+      coerceEmptyNumberInputs(form, formData);
+      return super._processFormData(event, form, formData);
     }
   }
 
@@ -1822,6 +1828,13 @@ export const NpcShipSheetV1Mixin = (BaseClass) => {
     }
 
     async _updateObject(event, formData) {
+      // Coerce empty number inputs to 0 so Foundry's NumberField validation
+      // doesn't reject them with "must be a number".
+      for (const [key, value] of Object.entries(formData)) {
+        if ((value === "" || value == null) && this.form?.elements?.[key]?.type === "number") {
+          formData[key] = 0;
+        }
+      }
       const keysToRemap = Object.keys(formData).filter(k => k.startsWith("system."));
       for (const key of keysToRemap) {
         const newKey = SystemAdapter.current.systemPath(key.slice("system.".length));

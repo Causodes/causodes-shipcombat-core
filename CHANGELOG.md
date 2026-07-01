@@ -1,3 +1,10 @@
+## v2.1.4
+- Fix all AppV2 ship sheets throwing `DataModelValidationError` ("must be a number") when a number field is cleared
+  - Applies to NPC ship, player ship, ship component items, and ordnance sheets
+  - Extract shared `coerceEmptyNumberInputs` helper into `scripts/sheet-utils.js`
+  - AppV2: override `_processFormData` in each sheet mixin to coerce `null` values from empty `<input type="number">` to `0` before Foundry validates the expanded object; use `querySelector`+`CSS.escape` for reliable element lookup with dotted names
+  - AppV1: `_updateObject` coerces empty inputs to `0` before the key-remap loop
+
 ## v2.1.3
 - Remove legacy data migration code
 - Add flavour/flavor language keys

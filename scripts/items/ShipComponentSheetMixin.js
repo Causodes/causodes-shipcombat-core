@@ -11,6 +11,7 @@
 
 import { MODULE_ID, CORE_MODULE_ID } from "../constants.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
+import { coerceEmptyNumberInputs } from "../sheet-utils.js";
 
 const ZONE_KEYS = ["bow", "stern", "port", "starboard"];
 
@@ -270,6 +271,11 @@ export const ShipComponentSheetMixin = (BaseClass) => {
         }
       }
       this.item.update(updates);
+    }
+
+    _processFormData(event, form, formData) {
+      coerceEmptyNumberInputs(form, formData);
+      return super._processFormData(event, form, formData);
     }
   }
 

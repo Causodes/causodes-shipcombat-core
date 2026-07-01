@@ -15,6 +15,7 @@ import { HelmPreview } from "../../canvas/HelmPreview.js";
 import { TorpedoOverlay } from "../../canvas/TorpedoOverlay.js";
 import { StrikeCraftArcOverlay } from "../../canvas/StrikeCraftArcOverlay.js";
 import { StrikeCraftAttackPopup } from "../../apps/StrikeCraftPopups.js";
+import { coerceEmptyNumberInputs } from "../../sheet-utils.js";
 import { emitToGM, emitToAll } from "../../socket.js";
 import { ShipCombatState } from "../../state/ShipCombatState.js";
 import { SystemAdapter } from "../../systems/SystemAdapter.js";
@@ -633,6 +634,11 @@ export const OrdnanceSheetMixin = (BaseClass) => {
         input.name = SystemAdapter.current.systemPath(input.name.slice("system.".length));
       }
       return super._onChangeInput(event);
+    }
+
+    _processFormData(event, form, formData) {
+      coerceEmptyNumberInputs(form, formData);
+      return super._processFormData(event, form, formData);
     }
   }
 

@@ -13,6 +13,7 @@
 
 import { MODULE_ID } from "../../constants.js";
 import { emitToGM } from "../../socket.js";
+import { coerceEmptyNumberInputs } from "../../sheet-utils.js";
 
 import { OVERVIEW_ACTIONS } from "../../roles/overview.js";
 import { SHARED_ACTIONS } from "../../roles/shared.js";
@@ -206,6 +207,11 @@ export const ShipSheetV2Mixin = (BaseClass) => {
     _prepareSubmitData(event, form, formData) {
       this.controller.applySystemPathRemap(formData);
       return super._prepareSubmitData(event, form, formData);
+    }
+
+    _processFormData(event, form, formData) {
+      coerceEmptyNumberInputs(form, formData);
+      return super._processFormData(event, form, formData);
     }
 
     _onRender(context, options) {
