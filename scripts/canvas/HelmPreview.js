@@ -110,6 +110,13 @@ export class HelmPreview {
     const gridSize = canvas.grid.size;
     this._sprite.width  = token.document.width  * gridSize;
     this._sprite.height = token.document.height * gridSize;
+    // Re-apply mirroring: PIXI's width/height setters always produce positive
+    // scale values, discarding the sign that encodes mirror-X / mirror-Y.
+    // Read the sign from the token's own texture scale config and restore it.
+    const tScaleX = token.document.texture?.scaleX ?? 1;
+    const tScaleY = token.document.texture?.scaleY ?? 1;
+    if (tScaleX < 0) this._sprite.scale.x = -Math.abs(this._sprite.scale.x);
+    if (tScaleY < 0) this._sprite.scale.y = -Math.abs(this._sprite.scale.y);
     this._sprite.alpha  = 0.4;
     this._sprite.tint   = pixi(THEME.overlay.helmGhost);
 
@@ -746,9 +753,9 @@ export class HelmPreview {
     const tokenH   = token.document.height * gridSize;
     const cx0      = token.document.x + tokenW / 2;
     const cy0      = token.document.y + tokenH / 2;
-    // Foundry: rotation 0 = north, CW positive, y-axis down on screen.
+    // Foundry: rotation 0 = south, CW positive, y-axis down on screen.
     // Converted to math angle: 0 = east, CCW positive with y-down = CW visually.
-    const h0 = (token.document.rotation - 90) * (Math.PI / 180);
+    const h0 = (token.document.rotation + 90) * (Math.PI / 180);
     return { cx0, cy0, h0, gridSize, tokenW, tokenH };
   }
 

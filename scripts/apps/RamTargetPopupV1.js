@@ -136,7 +136,7 @@ export class RamTargetPopupV1 extends foundry.appv1.api.Application {
       const thrustFraction = Math.min(1, this.powerRemaining / (this.powerMax || 100));
 
       // Damage preview (mirrors pilotRam formulas exactly)
-      const tgtHeadingRad = (candidate.document.rotation ?? 0) * (Math.PI / 180);
+      const tgtHeadingRad = ((candidate.document.rotation ?? 0) + 90) * (Math.PI / 180);
       let impactAngle = attackAngle - tgtHeadingRad + Math.PI;
       impactAngle = ((impactAngle % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
       if (impactAngle > Math.PI) impactAngle -= 2 * Math.PI;

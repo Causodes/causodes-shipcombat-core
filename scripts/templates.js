@@ -46,6 +46,7 @@ export const CORE_PARTIAL_DEFAULTS = Object.freeze(Object.fromEntries([
   "vessel-weapon-traits",
   "vessel-turn-complete",
   "vessel-trait-summary",
+  "payload-damage-component",
   // Captain
   "captain-claim-prompt",
   "captain-status-bar",

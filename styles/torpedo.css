@@ -97,7 +97,8 @@
   text-transform: uppercase;
   opacity: 0.6;
 }
-.shipcombat-torpedo-stat input {
+.shipcombat-torpedo-stat input,
+.shipcombat-torpedo-stat select {
   width: 100%;
   text-align: center;
   background: rgba(0,0,0,0.2);
@@ -106,6 +107,8 @@
   color: #fff;
   font-size: 0.85rem;
   padding: 2px;
+  height: unset;
+  line-height: normal;
 }
 
 /* Traits */
@@ -127,7 +130,9 @@
   text-transform: uppercase;
   opacity: 0.6;
 }
-.shipcombat-torpedo-trait input[type="number"] {
+.shipcombat-torpedo-trait input[type="number"],
+.shipcombat-torpedo-trait input[type="text"],
+.shipcombat-torpedo-trait select {
   width: 100%;
   text-align: center;
   background: rgba(0,0,0,0.2);
@@ -136,6 +141,8 @@
   color: #fff;
   font-size: 0.85rem;
   padding: 2px;
+  height: unset;
+  line-height: normal;
 }
 .shipcombat-torpedo-trait input[type="checkbox"] {
   margin: 4px auto 0;

@@ -47,7 +47,7 @@ export async function pilotRetrograde(userId, retroValue, newX, newY, newRotatio
     const vmag = Math.hypot(vx, vy);
     if (vmag > 0 && token) {
       // Cancel retroValue VU from the velocity along the current heading direction
-      const h0 = (token.document.rotation - 90) * (Math.PI / 180);
+      const h0 = (token.document.rotation + 90) * (Math.PI / 180);
       const dot = vx * Math.cos(h0) + vy * Math.sin(h0);
       const cancel = Math.min(retroValue, Math.max(0, dot));
       const newVx = vx - cancel * Math.cos(h0);
@@ -98,7 +98,7 @@ export async function pilotStrafe(userId, newX, newY, newRotation, dist, waypoin
     const vy = data.resources?.pilot?.velocityY ?? 0;
     if (token) {
       // Determine direction from displacement vs current heading perpendicular
-      const h0 = (token.document.rotation - 90) * (Math.PI / 180);
+      const h0 = (token.document.rotation + 90) * (Math.PI / 180);
       const perpAngle = h0 + Math.PI / 2; // starboard
       // Project displacement onto perp to get signed dist
       const gridSize = (typeof canvas !== "undefined") ? canvas.grid.size : 100;
@@ -301,7 +301,7 @@ export async function pilotRam(
   // attackAngle: vector FROM ramming ship TO rammed ship (atan2)
   // incoming   : angle from rammed ship's bow to the impact vector
   const rammedRotation  = rammedToken?.document?.rotation ?? rammedActor.getActiveTokens?.()?.[0]?.document?.rotation ?? 0;
-  const tgtHeadingRad   = (rammedRotation - 90) * (Math.PI / 180);
+  const tgtHeadingRad   = (rammedRotation + 90) * (Math.PI / 180);
   let   incoming        = attackAngle - tgtHeadingRad + Math.PI;
   // Normalise to [−π, +π]
   while (incoming >  Math.PI) incoming -= 2 * Math.PI;
@@ -315,14 +315,27 @@ export async function pilotRam(
   const rammingBowArmour = Math.max(1, rammingSys?.armour?.bow ?? 0);
   const rammingHullMax   = rammingSys?.hull?.max ?? 50;
   const rammingBase      = rammingBowArmour + 0.25 * rammingHullMax;
-  const damageToRammed   = Math.max(1, Math.round(rammingBase * thrustFraction * angleModRammed * RAM_COEFF));
+  const preIwrDamageToRammed = Math.max(1, Math.round(rammingBase * thrustFraction * angleModRammed * RAM_COEFF));
 
   // ── 8. Damage TO ramming ship (uses RAMMED ship's stats; bow armour soaks) ──
   const rammingTakesArmour  = Math.max(1, rammedSys?.armour?.[hitSectorRammed] ?? 0);
   const rammingTakesHullMax = rammedSys?.hull?.max ?? 50;
   const rammingBase2        = rammingTakesArmour + 0.25 * rammingTakesHullMax;
   const rawDamageToRamming  = Math.round(rammingBase2 * thrustFraction * 1.0 * RAM_COEFF);
-  const damageToRamming     = Math.max(0, rawDamageToRamming - rammingBowArmour);
+  const preIwrDamageToRamming = Math.max(0, rawDamageToRamming - rammingBowArmour);
+
+  // ── 8b. Damage-type IWR ── each ship's immunities/weaknesses/resistances
+  // apply to the collision damage it receives.  getRamDamageTypeKey() returns
+  // null on systems without a typed ram damage concept, and
+  // modifyDamageForType is a pass-through no-op unless the adapter
+  // implements IWR — so this is inert outside systems that opt in.
+  const _ramTypeKey = SystemAdapter.current.getRamDamageTypeKey?.() ?? null;
+  const damageToRammed = _ramTypeKey
+    ? SystemAdapter.current.modifyDamageForType(preIwrDamageToRammed, _ramTypeKey, rammedActor).finalDamage
+    : preIwrDamageToRammed;
+  const damageToRamming = _ramTypeKey
+    ? SystemAdapter.current.modifyDamageForType(preIwrDamageToRamming, _ramTypeKey, rammingActor).finalDamage
+    : preIwrDamageToRamming;
 
   // ── 9. Apply hull damage to rammed ship (bypasses shields and armour) ──────
   const isHpRemaining = SystemAdapter.current.hullDisplayMode === "hpRemaining";

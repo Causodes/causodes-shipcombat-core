@@ -308,7 +308,7 @@ export class ShieldArcOverlay {
     const cx        = token.x + tokenW / 2;
     const cy        = token.y + tokenH / 2;
 
-    const h0 = (token.document.rotation - 90) * (Math.PI / 180);
+    const h0 = (token.document.rotation + 90) * (Math.PI / 180);
 
     const tokenRadius = Math.sqrt((tokenW / 2) ** 2 + (tokenH / 2) ** 2);
     const gap         = Math.max(4,  gridSize * 0.06);

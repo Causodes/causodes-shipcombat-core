@@ -41,7 +41,7 @@
             <label>MAN</label>
             <input type="number" name="system.movement.maneuverability" value="{{sys.movement.maneuverability}}" />
         </div>
-        {{#unless useDiceBreakdown}}
+        {{#unless useDiceBreakdown}}{{#unless useComponentDamage}}
         <div class="shipcombat-torpedo-stat">
             <label>COUNT</label>
             <input type="number" name="system.payloadDiceCount" value="{{sys.payloadDiceCount}}" placeholder="—" />
@@ -54,7 +54,7 @@
             <label>TYPE</label>
             <input type="text" name="system.payloadDamageType" value="{{sys.payloadDamageType}}" placeholder="—" />
         </div>
-        {{/unless}}
+        {{/unless}}{{/unless}}
         <div class="shipcombat-torpedo-stat">
             <label>RADIUS</label>
             <input type="number" name="system.payloadRadius" value="{{sys.payloadRadius}}" />
@@ -83,6 +83,7 @@
         </div>
     </div>
     {{/if}}
+    {{> "payload-damage-component" }}
 
     {{> "vessel-weapon-traits" title="Warhead Traits"}}
 
@@ -130,7 +131,7 @@
     {{!-- Sensor stats --}}
     <div class="shipcombat-torpedo-stats">
         <div class="shipcombat-torpedo-stat">
-            <label data-tooltip="{{localize 'SHIPCOMBAT.Component.AutoScanRange'}}" data-tooltip-direction="UP">ASR</label>
+            <label data-tooltip="{{localize 'SHIPCOMBAT.Component.AutoScanRange'}}" data-tooltip-direction="UP">OPT</label>
             <input type="number" name="system.autoScanRange" value="{{sys.autoScanRange}}" />
         </div>
         <div class="shipcombat-torpedo-stat">
@@ -167,10 +168,11 @@
         </div>
     </div>
     {{/if}}
+    {{> "payload-damage-component" }}
     <div class="shipcombat-torpedo-traits">
         <h4>Payload</h4>
         <div class="shipcombat-torpedo-trait-grid">
-            {{#unless useDiceBreakdown}}
+            {{#unless useDiceBreakdown}}{{#unless useComponentDamage}}
             <div class="shipcombat-torpedo-trait">
                 <label>COUNT</label>
                 <input type="number" name="system.payloadDiceCount" value="{{sys.payloadDiceCount}}" placeholder="—" />
@@ -183,7 +185,7 @@
                 <label>TYPE</label>
                 <input type="text" name="system.payloadDamageType" value="{{sys.payloadDamageType}}" placeholder="—" />
             </div>
-            {{/unless}}
+            {{/unless}}{{/unless}}
             <div class="shipcombat-torpedo-trait">
                 <label>ANGLE</label>
                 <input type="number" name="system.payloadAngle" value="{{sys.payloadAngle}}" />

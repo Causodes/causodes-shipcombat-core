@@ -1,0 +1,46 @@
+{{!--
+  payload-damage-component.hbs
+
+  dnd5e-style ordnance payload damage block: Number | Die | Bonus | Type,
+  mirroring the ship-component weapon damage fields. Rendered only when the
+  system adapter sets `useComponentDamage` (dnd5e); the die-size list
+  (`diceOptions`) and damage-type list (`damageTypeChoices`) are supplied by
+  that adapter's sheet context so this partial stays system-agnostic. Bonus is
+  bound to the flat `payloadDamage` field (the ordnance schema has no separate
+  bonus field). Uses the same .shipcombat-torpedo-trait-grid layout as the
+  other config sections (label above input). Inherits the surrounding config
+  context (`sys`, etc.).
+--}}
+{{#if useComponentDamage}}
+<div class="shipcombat-torpedo-traits shipcombat-torpedo-traits--damage">
+    <h4>{{localize "SHIPCOMBAT.Label.Damage"}}</h4>
+    <div class="shipcombat-torpedo-trait-grid">
+        <div class="shipcombat-torpedo-trait">
+            <label>{{localize "DND5E.Number"}}</label>
+            <input type="number" name="system.payloadDiceCount" value="{{sys.payloadDiceCount}}" min="1" placeholder="—">
+        </div>
+        <div class="shipcombat-torpedo-trait">
+            <label>{{localize "DND5E.Die"}}</label>
+            <select name="system.payloadDiceSize">
+                <option value="">{{localize "DND5E.None"}}</option>
+                {{#each diceOptions}}<option value="{{this.value}}" {{#if (eq this.value @root.sys.payloadDiceSize)}}selected{{/if}}>{{this.label}}</option>{{/each}}
+            </select>
+        </div>
+        <div class="shipcombat-torpedo-trait">
+            <label>{{localize "DND5E.Bonus"}}</label>
+            <input type="text" inputmode="numeric" name="system.payloadDamage" value="{{sys.payloadDamage}}">
+        </div>
+        <div class="shipcombat-torpedo-trait">
+            <label>{{localize "DND5E.Type"}}</label>
+            <select name="system.payloadDamageType">
+                <option value=""></option>
+                {{#each damageTypeChoices}}
+                {{#if this.rule}}<hr>{{else}}
+                <option value="{{this.value}}" {{#if (eq @root.sys.payloadDamageType this.value)}}selected{{/if}}>{{this.label}}</option>
+                {{/if}}
+                {{/each}}
+            </select>
+        </div>
+    </div>
+</div>
+{{/if}}

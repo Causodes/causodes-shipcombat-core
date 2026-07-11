@@ -1307,7 +1307,7 @@ export class ShipCombatState {
    * through the same resolution path as the gunner.
    * Called via socket from StrikeCraftAttackPopup._onConfirmAttack.
    */
-  static async strikeCraftAttack({ craftName, craftImg, targetTokenId, hitQuadrant, accuracy, damage, payloadDiceCount, payloadDiceSize, traits, salvoSize = 1 }) {
+  static async strikeCraftAttack({ craftName, craftImg, targetTokenId, hitQuadrant, accuracy, damage, payloadDiceCount, payloadDiceSize, traits, salvoSize = 1, payloadDamageType = null }) {
     const targetTok   = canvas.tokens.get(targetTokenId);
     const targetActor = targetTok?.document?.actor ?? null;
     if (!targetActor) return;
@@ -1401,7 +1401,19 @@ export class ShipCombatState {
     const shieldBypass  = hardenedShields ? false : (traits?.shieldBypass ?? false);
     const shieldBurnVal = traits?.shieldBurn ?? 0;
 
-    if (shieldBypass) {
+    // ── Damage-type IWR ── immunity is checked before shields so immune
+    // attacks do not consume void shields at all (mirrors gunner-state);
+    // modifyDamageForType is a pass-through no-op on systems without IWR.
+    const _iwrImmune = payloadDamageType
+      ? SystemAdapter.current.modifyDamageForType(0, payloadDamageType, targetActor).immune
+      : false;
+    const _applyIwr = v => payloadDamageType
+      ? SystemAdapter.current.modifyDamageForType(v, payloadDamageType, targetActor).finalDamage
+      : v;
+
+    if (_iwrImmune) {
+      // Immune: no shield drain, no hull damage — hits pass through harmlessly.
+    } else if (shieldBypass) {
       if (shieldBurnVal > 0 && shieldsRemaining > 0) {
         shieldsRemaining = Math.max(0, shieldsRemaining - shieldBurnVal * totalHits);
         shieldCostTotal  = targetShields - shieldsRemaining;
@@ -1427,19 +1439,28 @@ export class ShipCombatState {
 
     let totalDamage = 0;
     let strikeDiceBreakdown = null;
-    if (hitsThroughShield > 0) {
+    if (hitsThroughShield > 0 && !_iwrImmune) {
       if (payloadDiceCount && payloadDiceSize) {
-        // SF2e: multiply dice count by hits, roll once, apply armour once
+        // Roll scaled dice (one die-set per hit through shields).  Systems that
+        // also carry a flat per-hit bonus (addsFlatBonusToDice) add it to the
+        // total; SF2e overrides that flag to false (dice-only damage model).
         const dmgFormula = `${hitsThroughShield * payloadDiceCount}${payloadDiceSize}`;
         const dmgRoll = await new Roll(dmgFormula).evaluate();
         if (game.dice3d) game.dice3d.showForRoll(dmgRoll, game.user, true);
-        totalDamage = Math.max(0, dmgRoll.total - effectiveArmour);
+        const flatBonus = SystemAdapter.current.addsFlatBonusToDice
+          ? (rawDamage ?? 0) * hitsThroughShield
+          : 0;
+        const preMitigation = dmgRoll.total + flatBonus;
+        // Weaknesses/resistances applied to the pre-armour damage.
+        totalDamage = Math.max(0, _applyIwr(preMitigation) - effectiveArmour);
         const diceResults = dmgRoll.terms?.[0]?.results?.map(r => r.result) ?? [];
         if (diceResults.length > 0) {
-          strikeDiceBreakdown = { formula: dmgFormula, dice: diceResults, total: dmgRoll.total };
+          const breakdownFormula = flatBonus > 0 ? `${dmgFormula} + ${flatBonus}` : dmgFormula;
+          strikeDiceBreakdown = { formula: breakdownFormula, dice: diceResults, total: preMitigation };
         }
       } else {
-        const damagePerHit = Math.max(0, rawDamage - effectiveArmour);
+        // Weaknesses/resistances applied per hit to the pre-armour damage.
+        const damagePerHit = Math.max(0, _applyIwr(rawDamage) - effectiveArmour);
         totalDamage = hitsThroughShield * damagePerHit;
       }
     }
@@ -1506,25 +1527,42 @@ export class ShipCombatState {
    * Apply torpedo detonation damage to a ship.
    * Called via socket from TorpedoSheet._onDetonate.
    */
-  static async torpedoDamage({ targetActorId, torName, torImg, damage, diceFormula, hitQuadrant, traits }) {
+  static async torpedoDamage({ targetActorId, torName, torImg, damage, diceFormula, hitQuadrant, traits, payloadDamageType = null }) {
     const target = game.actors.get(targetActorId);
     if (!target) return;
 
     const sys             = SystemAdapter.current.getShipData(target);
-    // Roll damage dice if a formula was provided (SF2e dice-breakdown path)
+    // Roll damage dice if a formula was provided.  Systems that also carry a
+    // flat bonus (addsFlatBonusToDice) add it to the total; the bonus here is
+    // already scaled by warhead count and distance decay in the caller.
+    // SF2e overrides the flag to false (dice-only damage model).
+    // The flat-only path is unchanged.
     let rawDamage;
     let diceBreakdown = null;
     if (diceFormula) {
       const dmgRoll = await new Roll(diceFormula).evaluate();
       if (game.dice3d) game.dice3d.showForRoll(dmgRoll, game.user, true);
-      rawDamage = dmgRoll.total;
+      const flatBonus = SystemAdapter.current.addsFlatBonusToDice ? (damage ?? 0) : 0;
+      rawDamage = dmgRoll.total + flatBonus;
       const diceResults = dmgRoll.terms?.[0]?.results?.map(r => r.result) ?? [];
       if (diceResults.length > 0) {
-        diceBreakdown = { formula: diceFormula, dice: diceResults, total: rawDamage };
+        const breakdownFormula = flatBonus > 0 ? `${diceFormula} + ${flatBonus}` : diceFormula;
+        diceBreakdown = { formula: breakdownFormula, dice: diceResults, total: rawDamage };
       }
     } else {
       rawDamage = damage ?? 1;
     }
+
+    // ── Damage-type IWR ── applied to the pre-armour damage, mirroring
+    // gunner-state.  modifyDamageForType is a pass-through no-op on systems
+    // whose adapter doesn't implement IWR.  Immunity zeroes rawDamage before
+    // the shield block below, which also prevents shield absorption and
+    // shield burn (both key off rawDamage > 0).
+    if (payloadDamageType) {
+      const iwr = SystemAdapter.current.modifyDamageForType(rawDamage, payloadDamageType, target);
+      rawDamage = iwr.immune ? 0 : iwr.finalDamage;
+    }
+
     const qLabel          = game.i18n.localize(
       "SHIPCOMBAT.Sector." + hitQuadrant.charAt(0).toUpperCase() + hitQuadrant.slice(1)
     );
@@ -1669,6 +1707,9 @@ ShipCombatState.fluxToCharge        = EngineerState.fluxToCharge;
 
 // Sensors
 ShipCombatState.addSensorEffect      = SensorsState.addSensorEffect;
+ShipCombatState.stripQuadrantShields = SensorsState.stripQuadrantShields;
+ShipCombatState.hasSensorEffectOn    = SensorsState.hasSensorEffectOn;
+ShipCombatState.getDisruptionPenalty = SensorsState.getDisruptionPenalty;
 ShipCombatState.upgradeLock          = SensorsState.upgradeLock;
 ShipCombatState.getLockTier          = SensorsState.getLockTier;
 ShipCombatState.getEffectiveLockTier = SensorsState.getEffectiveLockTier;

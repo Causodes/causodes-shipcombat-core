@@ -211,6 +211,11 @@ async function _onSensorCoreAction(event, target) {
   if (targetTokenId) {
     emitToGM("addSensorEffect", { actionId: entry.id, targetTokenId, roundsRemaining: entry.duration ?? 1 });
   }
+
+  // Signal Inversion: strip all shields from the target's closest quadrant
+  if (actionId === "signalInversion" && targetTokenId) {
+    emitToGM("stripQuadrantShields", { targetTokenId });
+  }
 }
 
 /**

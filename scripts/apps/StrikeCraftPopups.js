@@ -107,8 +107,8 @@ export class StrikeCraftAttackPopup extends foundry.applications.api.HandlebarsA
     const cx = token.x + (token.document.width  * gs) / 2;
     const cy = token.y + (token.document.height * gs) / 2;
 
-    // Heading: Foundry 0° = north, subtract π/2 to align with atan2 (east = 0)
-    const heading = (token.document.rotation ?? 0) * (Math.PI / 180) - Math.PI / 2;
+    // Heading: Foundry 0° = south (forward), add π/2 to align with atan2 (east = 0)
+    const heading = ((token.document.rotation ?? 0) + 90) * (Math.PI / 180);
     const halfArc = ((sys.payloadAngle ?? 120) / 2) * (Math.PI / 180);
 
     // Sensor stats from the craft's own fields
@@ -271,7 +271,10 @@ export class StrikeCraftAttackPopup extends foundry.applications.api.HandlebarsA
     if (!target || target.alreadyAttacked) return;
 
     const sys       = this.craftActor.system;
-    const flightSize = Math.max(1, (sys.hull?.max ?? 1) - (sys.hull?.value ?? 0));
+    // HP-remaining systems store intact airframes in hull.value directly;
+    // damage-taken systems store wounds, so remaining = max − value.
+    const _scIsHP    = SystemAdapter.current.hullDisplayMode === "hpRemaining";
+    const flightSize = Math.max(1, _scIsHP ? (sys.hull?.value ?? 1) : (sys.hull?.max ?? 1) - (sys.hull?.value ?? 0));
     const damage     = sys.payloadDamage ?? 0;
     const salvoSize  = (sys.payloadCount ?? 1) * flightSize;
 
@@ -285,6 +288,7 @@ export class StrikeCraftAttackPopup extends foundry.applications.api.HandlebarsA
       damage,
       payloadDiceCount: sys.payloadDiceCount ?? null,
       payloadDiceSize:  sys.payloadDiceSize  ?? null,
+      payloadDamageType: sys.payloadDamageType ?? null,
       traits:          sys.traits,
       salvoSize,
     });

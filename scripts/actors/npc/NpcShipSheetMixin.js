@@ -733,7 +733,8 @@ function _npcHelmOnRender(sheet) {
 async function _onNpcRollPiloting() {
   const sys     = SystemAdapter.current.getShipData(this.actor);
   const adapter = SystemAdapter.current;
-  const target  = sys.attributes?.piloting ?? 40;
+  // Sensor Disruption: penalty = disruptor's sensor hit modifier (min one band)
+  const target  = (sys.attributes?.piloting ?? 40) - ShipCombatState.getDisruptionPenalty(this.actor);
   const roll    = await new Roll(adapter.getRollFormula()).evaluate();
   const sl      = adapter.computeSuccessLevel(roll, target);
   const baseFlavor = `${game.i18n.localize("SHIPCOMBAT.Helm.RollPiloting")} (${target})`;
@@ -819,7 +820,7 @@ async function _onNpcConfirmHelm() {
         }
       }
     }
-    const h0 = ((token?.document?.rotation ?? 0) - 90) * (Math.PI / 180);
+    const h0 = ((token?.document?.rotation ?? 0) + 90) * (Math.PI / 180);
     const thrustDir = h0 + bearing * (Math.PI / 180);
     const thrustMag = (thrustPct / 100) * speed;
     const newVx = vx + Math.cos(thrustDir) * thrustMag;
@@ -911,7 +912,8 @@ async function _onNpcRollOrdnance() {
   if (sys.resources?.gunner?.ordnanceRolled) {
     return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.AlreadyRolledOrdnance"));
   }
-  const gunnery = sys.attributes?.gunnery ?? 40;
+  // Sensor Disruption: penalty = disruptor's sensor hit modifier (min one band)
+  const gunnery = (sys.attributes?.gunnery ?? 40) - ShipCombatState.getDisruptionPenalty(this.actor);
   const adapter = SystemAdapter.current;
   const roll    = await new Roll(adapter.getRollFormula()).evaluate();
   const sl      = Math.max(0, adapter.computeSuccessLevel(roll, gunnery));
@@ -1022,7 +1024,7 @@ async function _onSuppressFire() {
   const sys = SystemAdapter.current.getShipData(this.actor);
   if (sys.engActionUsed) return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.NpcShip.EngActionUsed"));
   if ((sys.internalFire ?? 0) <= 0) return;
-  const target  = sys.attributes?.tech ?? 40;
+  const target  = (sys.attributes?.tech ?? 40) - ShipCombatState.getDisruptionPenalty(this.actor);
   const adapter = SystemAdapter.current;
   const roll    = await new Roll(adapter.getRollFormula()).evaluate();
   const sl      = adapter.computeSuccessLevel(roll, target);
@@ -1036,7 +1038,7 @@ async function _onReduceHeat() {
   const sys = SystemAdapter.current.getShipData(this.actor);
   if (sys.engActionUsed) return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.NpcShip.EngActionUsed"));
   if ((sys.heat ?? 0) <= 0) return;
-  const target  = sys.attributes?.tech ?? 40;
+  const target  = (sys.attributes?.tech ?? 40) - ShipCombatState.getDisruptionPenalty(this.actor);
   const adapter = SystemAdapter.current;
   const roll    = await new Roll(adapter.getRollFormula()).evaluate();
   const sl      = adapter.computeSuccessLevel(roll, target);
@@ -1085,8 +1087,8 @@ async function _onFullReset() {
     const token    = this.actor.getActiveTokens()?.[0];
     const rotation = token?.document?.rotation ?? 0;
     const θ = rotation * Math.PI / 180;
-    updates[SystemAdapter.current.systemPath("resources.pilot.velocityX")]   = Math.sin(θ) * (baseSpeed / 2);
-    updates[SystemAdapter.current.systemPath("resources.pilot.velocityY")]   = -Math.cos(θ) * (baseSpeed / 2);
+    updates[SystemAdapter.current.systemPath("resources.pilot.velocityX")]   = -Math.sin(θ) * (baseSpeed / 2);
+    updates[SystemAdapter.current.systemPath("resources.pilot.velocityY")]   = Math.cos(θ) * (baseSpeed / 2);
   } else {
     updates[SystemAdapter.current.systemPath("resources.pilot.prevTurnMove")]   = baseSpeed;
   }
@@ -1316,7 +1318,7 @@ async function _npcLaunchOrdnance(type) {
     const shipVx     = launchSys.resources?.pilot?.velocityX ?? 0;
     const shipVy     = launchSys.resources?.pilot?.velocityY ?? 0;
     const ownSpeed   = actorData.system?.movement?.speed ?? 0;
-    const headingRad = (spawn.rotation - 90) * (Math.PI / 180);
+    const headingRad = (spawn.rotation + 90) * (Math.PI / 180);
     foundry.utils.setProperty(actorData, SystemAdapter.current.systemPath("helm.velocityX"), shipVx + Math.cos(headingRad) * (ownSpeed / 2));
     foundry.utils.setProperty(actorData, SystemAdapter.current.systemPath("helm.velocityY"), shipVy + Math.sin(headingRad) * (ownSpeed / 2));
   }

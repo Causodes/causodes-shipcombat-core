@@ -145,7 +145,7 @@ export class WeaponArcOverlay {
     const gs = canvas.grid.size;
     const cx = tok.x + (tok.document.width  * gs) / 2;
     const cy = tok.y + (tok.document.height * gs) / 2;
-    const h0 = (tok.document.rotation - 90) * (Math.PI / 180);
+    const h0 = (tok.document.rotation + 90) * (Math.PI / 180);
 
     // Look up sensor stats (component items for player ships, flat fields for NPC ships)
     const sensorComp = this._actor.items.find(

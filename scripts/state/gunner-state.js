@@ -148,15 +148,15 @@ export async function fireWeapon({ weaponId, actorId, fireMode, targetToken, hit
   const baseSalvo  = weapon.system.salvoSize ?? 1;
   const allRolls = [];
 
-  // Hit modifier: weapon trait + captain stance + player ship Fire Control Failure
+  // The targeting popups pass a fully composed hit modifier (sensor rating,
+  // zone/distance, fire mode, lock tier, SL allocation, weapon rating, stance,
+  // BDA corrections, Battle Clarity, captain boosts).  Do NOT re-add those
+  // here — only the Fire Control Failure penalty, which the popups don't know
+  // about, is applied at resolution time.
   const adapter          = SystemAdapter.current;
   const step             = adapter.getModifierStepSize();
-  const weaponHitMod     = traits.hitRatingModifier ?? 0;
-  const stance           = sys.resources?.captain?.stance ?? "none";
-  const stanceHitMod     = stance === "aggressive" ? step : stance === "defensive" ? -step : 0;
   const fcPenalty        = sys.conditions?.weaponsSensors?.tier === "high" ? -2 * step : 0;
-  const captainHitBonus  = sys.resources?.gunner?.captainHitBonus ?? 0;
-  const effectiveAccuracy = isAutoHit ? 999 : Math.max(accuracy + (allocAccuracy * (step / 2)) + weaponHitMod + stanceHitMod + fcPenalty + captainHitBonus, 1);
+  const effectiveAccuracy = isAutoHit ? 999 : Math.max(accuracy + fcPenalty, 1);
 
   // Adapter-supplied target AC (d20 systems only; null for roll-under systems)
   const targetAC = adapter.getTargetAC(targetActor);

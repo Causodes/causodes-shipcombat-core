@@ -238,7 +238,7 @@ function _paint(el, sheet) {
   const tokenH  = token.document.height * gridSize;
   const cx0     = token.document.x + tokenW / 2;
   const cy0     = token.document.y + tokenH / 2;
-  const heading = (token.document.rotation - 90) * (Math.PI / 180);
+  const heading = (token.document.rotation + 90) * (Math.PI / 180);
 
   // Discover other tokens (include hidden tokens  -  visibility is managed by
   // TokenVisibility based on lock tier; the radar must always see all contacts)
@@ -300,8 +300,8 @@ function _paint(el, sheet) {
       selected:   c.id === _selectedTokenId,
       // Target heading: relative for REL radar, absolute for TRUE radar.
       // Both stored so the rendering code can pick the right one.
-      targetHeadingRel: (c.document.rotation - 90) * (Math.PI / 180) - heading - Math.PI / 2,
-      targetHeadingAbs: (c.document.rotation - 90) * (Math.PI / 180),
+      targetHeadingRel: (c.document.rotation + 90) * (Math.PI / 180) - heading - Math.PI / 2,
+      targetHeadingAbs: (c.document.rotation + 90) * (Math.PI / 180),
     });
   }
 

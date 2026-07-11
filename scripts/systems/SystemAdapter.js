@@ -345,6 +345,18 @@ export class SystemAdapter {
   getHitBonusStep() { return this.getModifierStepSize(); }
 
   /**
+   * Magnitude of the Sensor Disruption roll penalty, given the disrupting
+   * ship's sensor rating.  Roll-under systems treat the sensor rating as a
+   * base hit TARGET (not a flat modifier), so the default is one range band.
+   * d20 adapters override to use the rating (a flat hit modifier there) with
+   * a one-band minimum.
+   *
+   * @param {number} _sensorRating  The disruptor's sensor rating.
+   * @returns {number}  Positive penalty magnitude; callers subtract it.
+   */
+  getSensorDisruptionPenalty(_sensorRating) { return this.getModifierStepSize(); }
+
+  /**
    * Maximum number of decay bands a weapon can fire into beyond its effective
    * range.  Systems that use a fixed cap (e.g. SF2e: 20) should override this.
    * The default derives the cap from sensor.rating — when the per-band penalty
@@ -570,6 +582,29 @@ export class SystemAdapter {
   modifyDamageForType(hullDamage, _damageType, _targetActor) {
     return { finalDamage: hullDamage, immune: false, note: null };
   }
+
+  /**
+   * Whether this system adds a flat damage bonus on top of dice when both are
+   * configured on an ordnance payload (i.e. the full NdX + bonus formula).
+   *
+   * - `true`  (default): flat bonus is added once per hit through shields,
+   *   matching standard d20 / D&D5e weapon-damage math.
+   * - `false`: only the dice are used; SF2e overrides this because its damage
+   *   model has no additive flat modifier alongside the die roll.
+   *
+   * @returns {boolean}
+   */
+  get addsFlatBonusToDice() { return true; }
+
+  /**
+   * The damage-type KEY used for ramming collisions, matched against the
+   * target's immunities/weaknesses/resistances via modifyDamageForType.
+   * Distinct from getRamDamageType(), which returns a display LABEL for chat.
+   * Return null (the default) to leave ram damage untyped — pilot-state then
+   * skips IWR for rams entirely.
+   * @returns {string|null}
+   */
+  getRamDamageTypeKey() { return null; }
 
   /* ── Model interface stubs ─────────────────────────────────────────────── */
 

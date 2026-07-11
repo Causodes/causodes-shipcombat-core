@@ -41,7 +41,7 @@ export class StrikeCraftArcOverlay {
     const cy  = tok.y + (tok.document.height * gs) / 2;
 
     // Forward heading (same convention as WeaponArcOverlay "prow")
-    const h0 = (tok.document.rotation - 90) * (Math.PI / 180);
+    const h0 = (tok.document.rotation + 90) * (Math.PI / 180);
 
     const sys      = SystemAdapter.current.getShipData(actor);
     const arcDeg   = sys.payloadAngle   ?? 120;

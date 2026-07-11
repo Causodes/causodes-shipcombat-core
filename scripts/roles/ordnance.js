@@ -1222,9 +1222,9 @@ function _computePerpendicularSpawn(token, side) {
   const offset = grid * 1.5; // distance from ship center to spawn
   const shipRotDeg = token.document?.rotation ?? 0;
 
-  // Foundry rotation: 0 = north (up-screen), CW positive.
-  // Convert to math radians: north = -π/2 in math coords.
-  const headingRad = (shipRotDeg - 90) * (Math.PI / 180);
+  // Foundry rotation: 0 = south (forward), CW positive.
+  // Convert to math radians: south = +π/2 in math coords.
+  const headingRad = (shipRotDeg + 90) * (Math.PI / 180);
 
   // Perpendicular: port = left of heading, starboard = right of heading
   const perpRad = side === "port"
@@ -1252,7 +1252,7 @@ function _computeSternSpawn(token) {
   const shipRotDeg = token.document?.rotation ?? 0;
 
   // Stern = opposite of heading (180° behind)
-  const headingRad = (shipRotDeg - 90) * (Math.PI / 180);
+  const headingRad = (shipRotDeg + 90) * (Math.PI / 180);
   const sternRad = headingRad + Math.PI;
 
   const cx = token.center?.x ?? (token.x + grid / 2);
@@ -1276,7 +1276,7 @@ function _computeBowSpawn(token) {
   const shipRotDeg = token.document?.rotation ?? 0;
 
   // Bow = forward heading
-  const headingRad = (shipRotDeg - 90) * (Math.PI / 180);
+  const headingRad = (shipRotDeg + 90) * (Math.PI / 180);
 
   const cx = token.center?.x ?? (token.x + grid / 2);
   const cy = token.center?.y ?? (token.y + grid / 2);

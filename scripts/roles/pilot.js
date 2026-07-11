@@ -148,7 +148,7 @@ async function _onConfirmHelm() {
     HelmPreview.hide();
     const waypoints = HelmPreview.projectWaypointsRealistic(token, bearing, thrustPct, speed, vx, vy, carryPct);
     // Compute new velocity: old vel + thrust vector
-    const h0 = (token.document.rotation - 90) * (Math.PI / 180);
+    const h0 = (token.document.rotation + 90) * (Math.PI / 180);
     const thrustDir = h0 + bearing * (Math.PI / 180);
     const thrustMag = (thrustPct / 100) * speed;
     const newVx = vx + Math.cos(thrustDir) * thrustMag;

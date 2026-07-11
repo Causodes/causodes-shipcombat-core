@@ -482,12 +482,13 @@ export function buildGunnerContext(sys, opts = {}) {
   });
 
   // ── Crit condition / stance effects ──────────────────────────────────────────────────
+  const _dispStep         = SystemAdapter.current.getModifierStepSize();
   const conditions        = sys.conditions ?? {};
   const weaponsSensorsTier = conditions.weaponsSensors?.tier;
   const blindedSectionId    = conditions.weaponsSensors?.blindedSectionId ?? null;
-  const fireControlPenalty  = weaponsSensorsTier === "high" ? -20 : 0;
+  const fireControlPenalty  = weaponsSensorsTier === "high" ? -2 * _dispStep : 0;
   const stance             = sys.resources?.captain?.stance ?? "none";
-  const stanceHitMod       = stance === "aggressive" ? 10 : stance === "defensive" ? -10 : 0;
+  const stanceHitMod       = stance === "aggressive" ? _dispStep : stance === "defensive" ? -_dispStep : 0;
 
   return {
     ammo,

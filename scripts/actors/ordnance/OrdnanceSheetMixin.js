@@ -112,7 +112,7 @@ async function _onOrdConfirmHelm() {
     [SystemAdapter.current.systemPath("helm.bearing")]:      bearing,
   };
   if (isRealistic && token) {
-    const h0 = (token.document.rotation - 90) * (Math.PI / 180);
+    const h0 = (token.document.rotation + 90) * (Math.PI / 180);
     const thrustDir = h0 + bearing * (Math.PI / 180);
     const thrustMag = (thrustArg / 100) * speed;
     updates[SystemAdapter.current.systemPath("helm.velocityX")] = (helm.velocityX ?? 0) + Math.cos(thrustDir) * thrustMag;
@@ -202,14 +202,20 @@ async function _onOrdDetonate() {
     const tx = t.x + tw / 2;
     const ty = t.y + th / 2;
     const attackAngle = Math.atan2(ty - cy, tx - cx);
-    const heading     = (t.document.rotation ?? 0) * (Math.PI / 180);
-    const relAngle    = attackAngle - heading;
-    const norm        = ((relAngle % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+    // Hit sector on the target — same formula as apps/TargetingPopup.getHitQuadrant
+    // (inlined to avoid an import cycle). targetHeading uses the +90 forward
+    // convention (rotation 0 = facing south) so torpedo blasts register the
+    // correct sector, matching weapon-fire and ram hit resolution.
+    const targetHeading = ((t.document.rotation ?? 0) + 90) * (Math.PI / 180);
+    let incoming = attackAngle - targetHeading + Math.PI;
+    incoming = ((incoming % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+    if (incoming > Math.PI) incoming -= 2 * Math.PI;
+    const deg = incoming * (180 / Math.PI);
     let hitQuadrant;
-    if (norm < Math.PI / 4 || norm >= 7 * Math.PI / 4) hitQuadrant = "bow";
-    else if (norm < 3 * Math.PI / 4) hitQuadrant = "starboard";
-    else if (norm < 5 * Math.PI / 4) hitQuadrant = "stern";
-    else hitQuadrant = "port";
+    if (deg >= -45 && deg < 45)        hitQuadrant = "bow";
+    else if (deg >= 45 && deg < 135)   hitQuadrant = "starboard";
+    else if (deg >= -135 && deg < -45) hitQuadrant = "port";
+    else                               hitQuadrant = "stern";
     emitToGM("torpedoDamage", {
       targetActorId: t.document.actorId,
       torName: this.actor.name,
@@ -218,6 +224,7 @@ async function _onOrdDetonate() {
       diceFormula,
       hitQuadrant,
       traits: sys.traits,
+      payloadDamageType: sys.payloadDamageType ?? null,
     });
   }
 

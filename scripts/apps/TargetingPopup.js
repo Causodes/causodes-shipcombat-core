@@ -99,7 +99,7 @@ export function classifyZone(distSquares, weaponRange, sensor, step) {
  *   Uses the angle from target's heading to the incoming attack vector.
  */
 export function getHitQuadrant(targetRotation, attackAngle) {
-  const targetHeading = (targetRotation - 90) * (Math.PI / 180);
+  const targetHeading = (targetRotation + 90) * (Math.PI / 180);
   const incoming = _normAngle(attackAngle - targetHeading + Math.PI);
   const deg = incoming * (180 / Math.PI);
 
@@ -167,7 +167,7 @@ export class TargetingPopup extends foundry.applications.api.HandlebarsApplicati
     const tokenH   = token.document.height * gridSize;
     const cx       = token.x + tokenW / 2;
     const cy       = token.y + tokenH / 2;
-    const heading  = (token.document.rotation - 90) * (Math.PI / 180);
+    const heading  = (token.document.rotation + 90) * (Math.PI / 180);
 
     // Gather sensor stats from installed component (player ships) or flat fields (NPC ships)
     const sensorComp = ship.items.find(
@@ -192,8 +192,16 @@ export class TargetingPopup extends foundry.applications.api.HandlebarsApplicati
     // Captain stance hit modifier (same for all targets in this popup)
     const adapter         = SystemAdapter.current;
     const step            = adapter.getModifierStepSize();
+    const hbs             = adapter.getHitBonusStep();  // fixed hit-bonus step (lock, ranging, BDA, battle clarity)
     const captainStance   = sys.resources?.captain?.stance ?? "none";
     const stanceHitMod    = captainStance === "aggressive" ? step : captainStance === "defensive" ? -step : 0;
+
+    // Hostile sensor effects on the FIRING ship (registered by an enemy Sensors
+    // Officer): Disruption penalises all rolls by the disruptor's sensor hit
+    // modifier (min one range band); Overcharge limits weapons to the ship's
+    // own auto-scan range.
+    const inboundOvercharged = ShipCombatState.hasSensorEffectOn(ship, "sensorOvercharge");
+    const disruptionPenalty  = -ShipCombatState.getDisruptionPenalty(ship);
 
     // Find valid target tokens: exclude own ship and own torpedoes / strike craft
     const shipTokenId = token.id;
@@ -219,6 +227,8 @@ export class TargetingPopup extends foundry.applications.api.HandlebarsApplicati
       const distSquares = arc.distance / gridSize;
       const zone = classifyZone(distSquares, weaponRange, sensor);
       if (!zone) continue;
+      // Sensor Overcharge: this ship's weapons can only fire within auto-scan range
+      if (inboundOvercharged && distSquares > sensor.autoScanRange) continue;
 
       // Lock-tier gate: Gunner can only fire at targets with lock ≥ 1
       // NPC ships are treated as Lock 3 by default (no augur sensor system).
@@ -236,7 +246,7 @@ export class TargetingPopup extends foundry.applications.api.HandlebarsApplicati
       // Lock-tier accuracy bonuses
       let lockAccuracyBonus = 0;
       if (lockTier >= 4) {
-        lockAccuracyBonus = step;        // +1 step accuracy at Lock 4
+        lockAccuracyBonus = hbs;        // fixed hit bonus at Lock 4
       }
 
       // Zone 3 penalty negated at Lock ≥ 4
@@ -255,20 +265,25 @@ export class TargetingPopup extends foundry.applications.api.HandlebarsApplicati
       const correctionMatches = fcRaw
         && fcRaw.targetTokenId === candidate.id
         && (fcRaw.type === "rangingFireBonus" || !fcRaw.weaponId || fcRaw.weaponId === this.weapon.id);
-      const adjustBearingBonus    = (correctionMatches && fcRaw.type === "adjustBearing") ? step : 0;
-      const rangingFireBonus      = (correctionMatches && fcRaw.type === "rangingFireBonus") ? step : 0;
+      const adjustBearingBonus    = (correctionMatches && fcRaw.type === "adjustBearing") ? hbs : 0;
+      const rangingFireBonus      = (correctionMatches && fcRaw.type === "rangingFireBonus") ? hbs : 0;
       const activeCorrection      = correctionMatches ? fcRaw : null;
 
-      // Battle Clarity: captain core action grants +1 step accuracy + 2 shield pierce on the nominated target
+      // Battle Clarity: captain core action grants a fixed hit bonus + 2 shield pierce on the nominated target
       const priorityTargetId     = sys.resources?.captain?.priorityTargetId ?? null;
-      const battleClarityBonus   = (priorityTargetId && priorityTargetId === candidate.id) ? step : 0;
+      const battleClarityBonus   = (priorityTargetId && priorityTargetId === candidate.id) ? hbs : 0;
       const battleClarityPierce  = (priorityTargetId && priorityTargetId === candidate.id) ? 2 : 0;
 
       const halfStep     = step / 2;
       const captainHitBonus = sys.resources?.gunner?.captainHitBonus ?? 0;
       const allocEvasion    = targetSys.resources?.pilot?.allocEvasion ?? 0;
-      const evasionPenalty  = allocEvasion * -halfStep;
-      let totalAccuracy = sensor.rating + finalZoneMod + (fireModeDetails.hitMod ?? 0) + lockAccuracyBonus + (allocAccuracy * halfStep) + weaponHitMod + adjustBearingBonus + rangingFireBonus + battleClarityBonus + stanceHitMod + captainHitBonus + evasionPenalty;
+      // d20 adapters fold evasion into the target's AC (getTargetAC); applying
+      // it to accuracy as well would double-count it. Only roll-under systems
+      // (getTargetAC → null) take it as an accuracy penalty.
+      const evasionPenalty  = adapter.getTargetAC(candidate.document.actor) === null
+        ? allocEvasion * -halfStep
+        : 0;
+      let totalAccuracy = sensor.rating + finalZoneMod + (fireModeDetails.hitMod ?? 0) + lockAccuracyBonus + (allocAccuracy * halfStep) + weaponHitMod + adjustBearingBonus + rangingFireBonus + battleClarityBonus + stanceHitMod + captainHitBonus + evasionPenalty + disruptionPenalty;
 
       // Zone 1 (close scan): system-specific bonus (IM: halve the miss chance)
       let zone1Bonus = 0;
@@ -290,6 +305,7 @@ export class TargetingPopup extends foundry.applications.api.HandlebarsApplicati
       if (battleClarityBonus !== 0) breakdownParts.push(`Battle Clarity: ${adapter.formatModifier(battleClarityBonus)}`);
       if (captainHitBonus !== 0) breakdownParts.push(`Insp. Targeting: ${adapter.formatModifier(captainHitBonus)}`);
       if (evasionPenalty  !== 0) breakdownParts.push(`Target Evasion: ${adapter.formatModifier(evasionPenalty)}`);
+      if (disruptionPenalty !== 0) breakdownParts.push(`Sensor Disruption: ${adapter.formatModifier(disruptionPenalty)}`);
       if (zone1Bonus !== 0) breakdownParts.push(`Close Scan: ${adapter.formatModifier(zone1Bonus)}`);
       const accuracyTooltip = breakdownParts.join("\n");
 

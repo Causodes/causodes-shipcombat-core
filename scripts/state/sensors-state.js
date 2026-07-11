@@ -19,6 +19,79 @@ export async function addSensorEffect({ actionId, targetTokenId, roundsRemaining
 }
 
 /**
+ * True if the given actor's active token is currently under the named sensor
+ * effect (registered on the player ship's combat state by its Sensors Officer).
+ * The player ship's own effects only ever target enemy tokens, so this is
+ * always false for the player ship itself.
+ */
+export function hasSensorEffectOn(actor, actionId) {
+  const tokenId = actor?.getActiveTokens?.()?.[0]?.id ?? null;
+  if (!tokenId) return false;
+  const effects = this.getData?.()?.resources?.sensors?.effects ?? [];
+  return effects.some(e => e.actionId === actionId && e.targetTokenId === tokenId);
+}
+
+/**
+ * Sensor Disruption penalty for the given actor's rolls.  The magnitude is
+ * adapter-defined (getSensorDisruptionPenalty): d20 systems use the disrupting
+ * (player) ship's sensor Hit Modifier with a one-band minimum; roll-under
+ * systems use one range band.  Returns 0 when the actor is not disrupted.
+ * Returned as a positive number; callers subtract it.
+ */
+export function getDisruptionPenalty(actor) {
+  if (!this.hasSensorEffectOn(actor, "sensorDisruption")) return 0;
+  const rating = this.getSensorStats?.()?.rating ?? 0;
+  return SystemAdapter.current.getSensorDisruptionPenalty(rating);
+}
+
+/**
+ * Signal Inversion (sensors core action): strip all shields from the target's
+ * quadrant closest to the player ship.  GM-side.
+ */
+export async function stripQuadrantShields({ targetTokenId }) {
+  if (!game.user.isGM || !canvas?.scene) return;
+  const targetToken = canvas.tokens.placeables.find(t => t.id === targetTokenId);
+  const targetActor = targetToken?.document?.actor ?? targetToken?.actor;
+  if (!targetToken || !targetActor) return;
+
+  const shipToken = this.ship?.getActiveTokens?.()?.[0];
+  if (!shipToken) return;
+
+  const gs = canvas.grid.size;
+  const sx = shipToken.x   + (shipToken.document.width    * gs) / 2;
+  const sy = shipToken.y   + (shipToken.document.height   * gs) / 2;
+  const tx = targetToken.x + (targetToken.document.width  * gs) / 2;
+  const ty = targetToken.y + (targetToken.document.height * gs) / 2;
+
+  // Quadrant of the TARGET facing the player ship (same math as getHitQuadrant,
+  // inlined to avoid an import cycle with apps/TargetingPopup.js)
+  const attackAngle   = Math.atan2(ty - sy, tx - sx);
+  const targetHeading = ((targetToken.document.rotation ?? 0) + 90) * (Math.PI / 180);
+  let incoming = attackAngle - targetHeading + Math.PI;
+  while (incoming >  Math.PI) incoming -= 2 * Math.PI;
+  while (incoming < -Math.PI) incoming += 2 * Math.PI;
+  const deg = incoming * (180 / Math.PI);
+  const quadrant =
+      (deg >= -45  && deg < 45)  ? "bow"
+    : (deg >= 45   && deg < 135) ? "starboard"
+    : (deg >= -135 && deg < -45) ? "port"
+    : "stern";
+
+  const current = targetActor.system?.shields?.[quadrant] ?? 0;
+  if (current > 0) {
+    await targetActor.update({ [SystemAdapter.current.systemPath(`shields.${quadrant}`)]: 0 });
+  }
+
+  const quadrantLabel = game.i18n.localize(
+    `SHIPCOMBAT.Sector.${quadrant.charAt(0).toUpperCase() + quadrant.slice(1)}`
+  );
+  await ChatMessage.create({
+    flavor:  game.i18n.localize("SHIPCOMBAT.Sensors.SignalInversion"),
+    content: `<p><b>${targetToken.document.name}</b>: ${quadrantLabel} shields stripped (${current} → 0).</p>`,
+  });
+}
+
+/**
  * Upgrade (or create) a sensor lock on a target token.
  * tier  -  the new lock tier (1-4).
  */

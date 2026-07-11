@@ -114,9 +114,9 @@ export const NpcShipSchemaMixin = (BaseClass) => class extends BaseClass {
 
     // ── NPC Attributes ────────────────────────────────────────────────────────
     schema.attributes = new fields.SchemaField({
-      piloting: new fields.NumberField({ initial: 40, integer: true }),
-      tech:     new fields.NumberField({ initial: 40, integer: true }),
-      gunnery:  new fields.NumberField({ initial: 40, integer: true }),
+      piloting: new fields.NumberField({ initial: 0, integer: true }),
+      tech:     new fields.NumberField({ initial: 0, integer: true }),
+      gunnery:  new fields.NumberField({ initial: 0, integer: true }),
     });
 
     schema.autoScanRange  = new fields.NumberField({ initial: 0, min: 0, integer: true });

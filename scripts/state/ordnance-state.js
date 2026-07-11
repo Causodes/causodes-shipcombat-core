@@ -85,6 +85,18 @@ export async function spawnOrdnance({ type, parentShipTokenId, x, y, rotation, t
     };
   }
 
+  // ── Guard: launch with a full tank and magazine ──────────────────────────
+  // Fuel/ammo are cloned straight from the template's saved state. A template
+  // may have its current value below max — e.g. a GM sets 0/5 by mistake, or
+  // the template actor was edited mid-combat — but a freshly launched torpedo
+  // or strike craft should always start full. Clamp each resource's value up
+  // to its own max. (Absent on the no-template fallback, where schema defaults
+  // of 0/0 apply and there is nothing to clamp.)
+  for (const res of ["fuel", "ammo"]) {
+    const r = actorData.system?.[res];
+    if (r && typeof r.max === "number") r.value = r.max;
+  }
+
   // ── Set actor ownership so the controlling player can move the token ──
   // In 5-man mode: torpedoes are controlled by the Gunner; strike craft by the SC (captain).
   // In 6-man mode: both are controlled by the Ordnance Master.
@@ -108,7 +120,7 @@ export async function spawnOrdnance({ type, parentShipTokenId, x, y, rotation, t
     const shipVx     = shipPilot.velocityX ?? 0;
     const shipVy     = shipPilot.velocityY ?? 0;
     const ownSpeed   = actorData.system?.movement?.speed ?? 0;
-    const headingRad = (rotation - 90) * (Math.PI / 180);
+    const headingRad = (rotation + 90) * (Math.PI / 180);
     foundry.utils.setProperty(actorData, "system.helm.velocityX", shipVx + Math.cos(headingRad) * (ownSpeed / 2));
     foundry.utils.setProperty(actorData, "system.helm.velocityY", shipVy + Math.sin(headingRad) * (ownSpeed / 2));
   }

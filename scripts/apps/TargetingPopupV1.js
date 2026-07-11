@@ -69,7 +69,7 @@ export class TargetingPopupV1 extends foundry.appv1.api.Application {
     const tokenH   = token.document.height * gridSize;
     const cx       = token.x + tokenW / 2;
     const cy       = token.y + tokenH / 2;
-    const heading  = (token.document.rotation - 90) * (Math.PI / 180);
+    const heading  = (token.document.rotation + 90) * (Math.PI / 180);
 
     const sensorComp = ship.items.find(
       i => i.type === `${MODULE_ID}.component` && i.system.slot === "sensor"
@@ -91,9 +91,17 @@ export class TargetingPopupV1 extends foundry.appv1.api.Application {
 
     const adapter       = SystemAdapter.current;
     const step          = adapter.getModifierStepSize();
+    const hbs           = adapter.getHitBonusStep();  // fixed hit-bonus step (lock, ranging, BDA, battle clarity)
     const captainStance = sys.resources?.captain?.stance ?? "none";
     const stanceHitMod  = captainStance === "aggressive" ? step
                         : captainStance === "defensive"  ? -step : 0;
+
+    // Hostile sensor effects on the FIRING ship (registered by an enemy Sensors
+    // Officer): Disruption penalises all rolls by the disruptor's sensor hit
+    // modifier (min one range band); Overcharge limits weapons to the ship's
+    // own auto-scan range.
+    const inboundOvercharged = ShipCombatState.hasSensorEffectOn(ship, "sensorOvercharge");
+    const disruptionPenalty  = -ShipCombatState.getDisruptionPenalty(ship);
 
     // Find valid target tokens: exclude own ship and own torpedoes / strike craft
     const shipTokenId = token.id;
@@ -118,6 +126,8 @@ export class TargetingPopupV1 extends foundry.appv1.api.Application {
       const distSquares = arc.distance / gridSize;
       const zone = classifyZone(distSquares, weaponRange, sensor);
       if (!zone) continue;
+      // Sensor Overcharge: this ship's weapons can only fire within auto-scan range
+      if (inboundOvercharged && distSquares > sensor.autoScanRange) continue;
 
       const lockTier = ship.type === `${MODULE_ID}.npcShip`
         ? 3
@@ -127,7 +137,7 @@ export class TargetingPopupV1 extends foundry.appv1.api.Application {
       const attackAngle = Math.atan2(ty - cy, tx - cx);
       const hitQuadrant = getHitQuadrant(candidate.document.rotation ?? 0, attackAngle);
 
-      const lockAccuracyBonus = lockTier >= 4 ? step : 0;
+      const lockAccuracyBonus = lockTier >= 4 ? hbs : 0;
       const finalZoneMod      = (zone.zone === 3 && lockTier >= 4) ? 0 : zone.modifier;
 
       const targetSys       = candidate.document.actor?.system ?? {};
@@ -138,18 +148,23 @@ export class TargetingPopupV1 extends foundry.appv1.api.Application {
       const correctionMatches = fcRaw
         && fcRaw.targetTokenId === candidate.id
         && (fcRaw.type === "rangingFireBonus" || !fcRaw.weaponId || fcRaw.weaponId === this.weapon.id);
-      const adjustBearingBonus  = (correctionMatches && fcRaw.type === "adjustBearing")    ? step : 0;
-      const rangingFireBonus    = (correctionMatches && fcRaw.type === "rangingFireBonus")  ? step : 0;
+      const adjustBearingBonus  = (correctionMatches && fcRaw.type === "adjustBearing")    ? hbs : 0;
+      const rangingFireBonus    = (correctionMatches && fcRaw.type === "rangingFireBonus")  ? hbs : 0;
       const activeCorrection    = correctionMatches ? fcRaw : null;
 
       const priorityTargetId   = sys.resources?.captain?.priorityTargetId ?? null;
-      const battleClarityBonus  = (priorityTargetId && priorityTargetId === candidate.id) ? step : 0;
+      const battleClarityBonus  = (priorityTargetId && priorityTargetId === candidate.id) ? hbs : 0;
       const battleClarityPierce = (priorityTargetId && priorityTargetId === candidate.id) ? 2    : 0;
 
       const halfStep        = step / 2;
       const captainHitBonus = sys.resources?.gunner?.captainHitBonus ?? 0;
       const allocEvasion    = targetSys.resources?.pilot?.allocEvasion ?? 0;
-      const evasionPenalty  = allocEvasion * -halfStep;
+      // d20 adapters fold evasion into the target's AC (getTargetAC); applying
+      // it to accuracy as well would double-count it. Only roll-under systems
+      // (getTargetAC → null) take it as an accuracy penalty.
+      const evasionPenalty  = adapter.getTargetAC(candidate.document.actor) === null
+        ? allocEvasion * -halfStep
+        : 0;
 
       let totalAccuracy = sensor.rating
         + finalZoneMod
@@ -162,7 +177,8 @@ export class TargetingPopupV1 extends foundry.appv1.api.Application {
         + battleClarityBonus
         + stanceHitMod
         + captainHitBonus
-        + evasionPenalty;
+        + evasionPenalty
+        + disruptionPenalty;
 
       let zone1Bonus = 0;
       if (zone.zone === 1) {
@@ -182,6 +198,7 @@ export class TargetingPopupV1 extends foundry.appv1.api.Application {
       if (battleClarityBonus !== 0)           breakdownParts.push(`Battle Clarity: ${adapter.formatModifier(battleClarityBonus)}`);
       if (captainHitBonus !== 0)              breakdownParts.push(`Insp. Targeting: ${adapter.formatModifier(captainHitBonus)}`);
       if (evasionPenalty !== 0)               breakdownParts.push(`Target Evasion: ${adapter.formatModifier(evasionPenalty)}`);
+      if (disruptionPenalty !== 0)            breakdownParts.push(`Sensor Disruption: ${adapter.formatModifier(disruptionPenalty)}`);
       if (zone1Bonus !== 0)                   breakdownParts.push(`Close Scan: ${adapter.formatModifier(zone1Bonus)}`);
       const accuracyTooltip = breakdownParts.join("\n");
 
