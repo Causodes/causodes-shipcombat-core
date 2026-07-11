@@ -5,7 +5,7 @@
  * Inside each function, `this` refers to the ShipCombatState class itself.
  */
 
-import { MODULE_ID, CORE_MODULE_ID, MACRO_FIRE_TIERS, LANCE_CHARGE_TIERS, buildChargeTiers, WEAPON_FIRED_HOOK } from "../constants.js";
+import { MODULE_ID, CORE_MODULE_ID, MACRO_FIRE_TIERS, LANCE_CHARGE_TIERS, buildChargeTiers, scaleDiceFormula, WEAPON_FIRED_HOOK } from "../constants.js";
 import { isOrdnance } from "../actors/ordnance/ordnance-types.js";
 import { rollCrit } from "./crit-state.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
@@ -343,10 +343,9 @@ export async function fireWeapon({ weaponId, actorId, fireMode, targetToken, hit
     const effectiveCharge = Math.min(lancePowerSpent, step * 4);
     const tier = tiers.find(t => effectiveCharge >= t.min && effectiveCharge <= t.max);
     const tierMult = tier?.multiplier ?? 1;
-    const _diceMatch = _damageFormula.match(/^(\d+)(d\d+.*)/i);
-    if (_diceMatch) {
-      // Dice formula: multiply the dice count and roll the scaled formula
-      _scaledFormula = `${parseInt(_diceMatch[1], 10) * tierMult}${_diceMatch[2]}`;
+    if (/^\d+d\d+/i.test(_damageFormula)) {
+      // Dice formula: scale the dice count and flat bonus, then roll it
+      _scaledFormula = scaleDiceFormula(_damageFormula, tierMult);
       lanceMult = 1; // already baked into the formula
     } else {
       lanceMult = tierMult; // flat value: multiply the result post-roll

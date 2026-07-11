@@ -127,6 +127,29 @@ export function buildChargeTiers(step = 5) {
   }));
 }
 
+/**
+ * Scale a weapon damage formula by a lance/power charge-tier multiplier.
+ * Multiplies both the dice count and a trailing flat "+ N" / "- N" bonus, so
+ * "2d6 + 5" at ×4 becomes "8d6 + 20". A dice formula with a more complex tail
+ * has only its leading dice count scaled (tail kept verbatim); a formula with
+ * no dice is returned unchanged for the caller to scale post-roll.
+ * @param {string} formula
+ * @param {number} mult
+ * @returns {string}
+ */
+export function scaleDiceFormula(formula, mult) {
+  const str = String(formula ?? "").trim();
+  const withBonus = str.match(/^(\d+)(d\d+)\s*([+-])\s*(\d+(?:\.\d+)?)$/i);
+  if (withBonus) {
+    const count = parseInt(withBonus[1], 10) * mult;
+    const bonus = Math.round(parseFloat(withBonus[4]) * mult);
+    return `${count}${withBonus[2].toLowerCase()} ${withBonus[3]} ${bonus}`;
+  }
+  const leadDice = str.match(/^(\d+)(d\d+.*)$/i);
+  if (leadDice) return `${parseInt(leadDice[1], 10) * mult}${leadDice[2]}`;
+  return str;
+}
+
 // ─── Lock Tier Decay Rounds ───────────────────────────────────────────────────
 // When a lock tier's decay counter reaches 0, the tier drops by 1 and the
 // counter resets to the new tier's value.  Tier 0 means the lock is removed.

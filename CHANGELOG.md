@@ -1,3 +1,6 @@
+## v2.2.1
+- Add missing handling for display of flat weapon damage bonuses (such as in D&D5e)
+
 ## v2.2.0
 - Fix weapon accuracy being double-counted: the targeting popups pass a fully composed hit modifier, and `fireWeapon` no longer re-adds allocation/stance/weapon-rating/captain bonuses on top of it — only the Fire Control Failure penalty (unknown to the popups) is applied at resolution time. Rolls now match the value shown in the targeting popup
 - Use the fixed hit-bonus step (`getHitBonusStep`) for the Lock 4, BDA Adjust Bearing, Ranging Fire, and Battle Clarity bonuses in the core targeting popups (no change for d100 systems, where both steps are equal)

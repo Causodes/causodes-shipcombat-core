@@ -17,7 +17,7 @@
  *   - Weapon Arc Overlay: Show firing arcs to the Helmsman.
  */
 import { emitToGM, emitToAll } from "../socket.js";
-import { MODULE_ID, MACRO_FIRE_TIERS, buildChargeTiers, GUNNER_CORE_ACTIONS, CRIT_LOCATIONS } from "../constants.js";
+import { MODULE_ID, MACRO_FIRE_TIERS, buildChargeTiers, scaleDiceFormula, GUNNER_CORE_ACTIONS, CRIT_LOCATIONS } from "../constants.js";
 import { TargetingPopup } from "../apps/TargetingPopup.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
 import { heatColor } from "../theme.js";
@@ -354,12 +354,9 @@ function _enrichWeapon(item, gunnerCtx) {
     const tiers = buildChargeTiers(step);
     const maxCharge = step * 4;
     const effectiveCharge = Math.min(power, maxCharge);
-    const diceMatch    = damageFormula.match(/^(\d+)(d\d+)/i);
-    const isDice        = !!diceMatch;
-    const baseDiceCount = isDice ? parseInt(diceMatch[1], 10) : 0;
-    const dieSizeStr    = isDice ? diceMatch[2].toLowerCase() : "";
-    const flatBase      = isDice ? 0 : (parseFloat(damageFormula) || 0);
-    const typePart      = damageType ? ` ${damageType}` : "";
+    const isDice   = /^\d+d\d+/i.test(damageFormula);
+    const flatBase = isDice ? 0 : (parseFloat(damageFormula) || 0);
+    const typePart = damageType ? ` ${damageType}` : "";
     enriched.lance = {
       power,
       powerMax:   gunnerCtx.powerMax,
@@ -371,14 +368,14 @@ function _enrichWeapon(item, gunnerCtx) {
         max:        t.max,
         multiplier: t.multiplier,
         isActive:   effectiveCharge >= t.min && effectiveCharge <= t.max,
-        damage:     isDice ? `${baseDiceCount * t.multiplier}${dieSizeStr}` : Math.round(flatBase * t.multiplier),
+        damage:     isDice ? scaleDiceFormula(damageFormula, t.multiplier) : Math.round(flatBase * t.multiplier),
       })),
       activeTier: tiers.find(t => effectiveCharge >= t.min && effectiveCharge <= t.max),
     };
     if (enriched.lance.activeTier) {
       const mult = enriched.lance.activeTier.multiplier;
       const _scaledDmg = isDice
-        ? `${baseDiceCount * mult}${dieSizeStr}`
+        ? scaleDiceFormula(damageFormula, mult)
         : `${Math.round(flatBase * mult)}`;
       const _scaledFp = fpBonus * mult;
       enriched.lance.activeDamageLabel = _scaledFp > 0
