@@ -98,14 +98,17 @@ export async function spawnOrdnance({ type, parentShipTokenId, x, y, rotation, t
   }
 
   // ── Set actor ownership so the controlling player can move the token ──
-  // In 5-man mode: torpedoes are controlled by the Gunner; strike craft by the SC (captain).
-  // In 6-man mode: both are controlled by the Ordnance Master.
-  const stateData = this.getData?.() ?? {};
+  // Launching and controlling are separate duties (see README_3–6):
+  //   6-man: the Ordnance Master controls both types.
+  //   5-man: the Captain launches both, but torpedoes are steered by the
+  //          Gunner; strike craft stay with the Captain.
+  //   ≤4-man: the Gunner absorbs the ordnance station and controls both.
+  const stateData = (shipActor ? SystemAdapter.current.getShipData(shipActor) : null) ?? this.getData?.() ?? {};
   const stateRoles = stateData.roles ?? {};
-  const is5man = (stateData.crewSize ?? 6) <= 5;
-  const controllerRole = type === "torpedo"
-    ? (is5man ? "gunner" : "ordnance")
-    : (is5man ? "captain" : "ordnance");
+  const crewSize = stateData.crewSize ?? 6;
+  const controllerRole = crewSize >= 6 ? "ordnance"
+    : (crewSize === 5 && type === "strikeCraft") ? "captain"
+    : "gunner";
   const controllerUserId = Object.entries(stateRoles).find(([, r]) => r === controllerRole)?.[0];
   if (controllerUserId) {
     actorData.ownership = foundry.utils.mergeObject(

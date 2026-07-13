@@ -338,7 +338,7 @@ marked with ★ call an adapter method and may interact with companion code.
 | `updateChatMessage` | When a piloting roll message is mutated (reroll/fortune), reads the new SL and updates pilot allocation state. | ★ Calls `parseRollResultFromMessage()`. |
 | `updateCombat` | Advances helm state at turn/round boundaries (auto-move, reset allocations, apply internal fire). | — |
 | `canvasTearDown` | Hides helm preview and destroys all arc/shield overlays. | — |
-| `renderChatMessage` | Wires BDA-pending chat card buttons. | — |
+| `renderChatMessageHTML` | Wires BDA-pending chat card buttons. | — |
 
 ---
 

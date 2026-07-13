@@ -303,13 +303,18 @@ export const OrdnanceSheetMixin = (BaseClass) => {
 
     get isEditable() {
       if (game.user.isGM) return true;
+      // Owners can steer their ordnance (helm controls on the main tab) —
+      // spawnOrdnance grants OWNER to the controlling player, and reduced
+      // crews have no "ordnance" role at all. Stat editing is still protected:
+      // the config tab, which holds all stat fields, renders for GMs only.
+      if (this.actor.isOwner) return true;
       const ship = ShipCombatState.ship;
       return ship?.system?.roles?.[game.user.id] === "ordnance";
     }
 
     _prepareTabs() {
       const tabs = super._prepareTabs();
-      if (!this.actor.isOwner) delete tabs.config;
+      if (!game.user.isGM) delete tabs.config;
 
       const subtype = SystemAdapter.current.getShipData(this.actor).subtype ?? "";
       if (subtype === "strikeCraft") {
@@ -325,7 +330,7 @@ export const OrdnanceSheetMixin = (BaseClass) => {
 
     _configureRenderOptions(options) {
       super._configureRenderOptions(options);
-      if (!this.actor.isOwner && options.parts) {
+      if (!game.user.isGM && options.parts) {
         options.parts = options.parts.filter(p => p !== "config");
       }
     }
@@ -698,6 +703,12 @@ export const OrdnanceSheetV1Mixin = (BaseClass) => {
 
     get isEditable() {
       if (game.user.isGM) return true;
+      // Owners can steer their ordnance (helm controls on the main tab) —
+      // spawnOrdnance grants OWNER to the controlling player, and reduced
+      // crews have no "ordnance" role at all. Stat editing is still protected:
+      // the config tab, which holds all stat fields, renders for GMs only
+      // (canConfigure below).
+      if (this.actor.isOwner) return true;
       return ShipCombatState.ship?.system?.roles?.[game.user.id] === "ordnance";
     }
 
@@ -768,6 +779,7 @@ export const OrdnanceSheetV1Mixin = (BaseClass) => {
         actor:        this.actor,
         sys,
         owner:        this.actor.isOwner,
+        canConfigure: game.user.isGM,
         isTorpedo:    _isTorpedo,
         isStrikeCraft: _isStrikeCraft,
         // tabsById: provides {id, cssClass} objects for each AppV1 tab so that

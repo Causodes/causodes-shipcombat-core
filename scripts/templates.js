@@ -241,7 +241,7 @@ export async function loadAllTemplates(registry) {
   // (e.g. "ship-header").  AppV2 sheets reference partials by short name via
   // {{> "ship-header"}} in tab templates, which works fine.
   const overridableMap = registry.entries();
-  await loadTemplates(overridableMap);
+  await foundry.applications.handlebars.loadTemplates(overridableMap);
 
   // AppV1 sheets call {{> (lookup partTemplates partId)}} where partTemplates
   // maps part IDs to full paths (e.g. "modules/.../partials/ship-header.hbs").
@@ -256,5 +256,5 @@ export async function loadAllTemplates(registry) {
   }
 
   // Static templates: array form — registered under their full paths.
-  await loadTemplates([...STATIC_TEMPLATE_PATHS]);
+  await foundry.applications.handlebars.loadTemplates([...STATIC_TEMPLATE_PATHS]);
 }

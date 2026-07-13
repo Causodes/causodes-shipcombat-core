@@ -416,6 +416,19 @@ Hooks.on("deleteToken", (tokenDoc) => {
   }
 });
 
+// When an ordnance token is created, re-render open ship sheets on every
+// client so the Deployed Ordnance list updates live. spawnOrdnance's own
+// re-render only runs on the GM client; players otherwise see the launch
+// only after the next ship-actor update.
+Hooks.on("createToken", (tokenDoc) => {
+  const parentId = tokenDoc.actor?.system?.parentShipTokenId;
+  if (!parentId) return;
+  const parentToken = canvas?.scene?.tokens.get(parentId);
+  if (parentToken?.actor?.sheet?.rendered) {
+    parentToken.actor.sheet.render();
+  }
+});
+
 // ── Ship component change notification ──────────────────────────────────────
 // Certain stats derived from components (shield pool, power cores, manpower)
 // are only fully written to the actor database when the sheet is reloaded.
@@ -730,11 +743,11 @@ Hooks.on("updateCombat", async (combat, changes) => {
 
 // ── BDA-Pending chat card: Augur-only launch button ─────────────────────────
 
-Hooks.on("renderChatMessage", (message, html) => {
+Hooks.on("renderChatMessageHTML", (message, html) => {
   const flags = message.flags?.[MODULE_ID];
   if (flags?.type !== "bdaPending") return;
 
-  const btn = html[0]?.querySelector("[data-action='openBDAFromChat']");
+  const btn = html.querySelector("[data-action='openBDAFromChat']");
   if (!btn) return; // Already in rolled/completed state  -  no button in template
 
   const augurUserId = flags.augurUserId;

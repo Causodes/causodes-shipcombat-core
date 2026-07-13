@@ -1,3 +1,10 @@
+## v2.2.2
+- Fix players being unable to control launched ordnance: the player who owns a launched torpedo or strike craft can now operate its helm controls
+- Fix strike craft ownership going to the Captain instead of the Gunner in 3- and 4-player crews, where the Gunner runs the ordnance station
+- `spawnOrdnance` now resolves the controlling player from the launching ship's role assignments rather than the first ship found (fixes wrong ownership in multi-ship scenes)
+- Fix launched ordnance not appearing in other players' deployed panels until the next ship update: ship sheets now re-render on every client when an ordnance token is created
+- Replace deprecated Foundry API calls (`renderChatMessage` hook → `renderChatMessageHTML`; `loadTemplates` → `foundry.applications.handlebars.loadTemplates`)
+
 ## v2.2.1
 - Add missing handling for display of flat weapon damage bonuses (such as in D&D5e)
 

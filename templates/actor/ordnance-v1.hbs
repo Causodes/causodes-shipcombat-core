@@ -19,7 +19,7 @@
   {{!-- Tab navigation --}}
   <nav class="ordnance-sheet-tabs sheet-tabs tabs" data-group="primary">
     <a class="item" data-tab="main" data-group="primary">{{localize mainTabLabel}}</a>
-    {{#if owner}}
+    {{#if canConfigure}}
     <a class="item" data-tab="config" data-group="primary">{{localize "SHIPCOMBAT.Tab.Configuration"}}</a>
     {{/if}}
   </nav>
@@ -30,7 +30,7 @@
        .tab[data-tab]:not(.active) rule permanently hides the content. --}}
   <section class="ordnance-sheet-body">
     {{> "modules/causodes-shipcombat-core/templates/actor/sheets/ordnance-main.hbs"   tab=(lookup tabsById "main")}}
-    {{#if owner}}
+    {{#if canConfigure}}
     {{> "modules/causodes-shipcombat-core/templates/actor/sheets/ordnance-config.hbs" tab=(lookup tabsById "config")}}
     {{/if}}
   </section>
