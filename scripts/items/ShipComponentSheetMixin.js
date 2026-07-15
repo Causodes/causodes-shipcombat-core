@@ -255,7 +255,7 @@ export const ShipComponentSheetMixin = (BaseClass) => {
       const result = await foundry.applications.api.DialogV2.prompt({
         window:  { title: game.i18n.localize("SHIPCOMBAT.Component.Traits") },
         content: `<div class="flexcol">${rows}</div>`,
-        ok: { callback: (_ev, button) => new FormDataExtended(button.form).object },
+        ok: { callback: (_ev, button) => new foundry.applications.ux.FormDataExtended(button.form).object },
       });
       if (!result) return;
 
@@ -373,7 +373,7 @@ class _WeaponTraitsEditorV1 extends foundry.appv1.api.Application {
     }
 
     const form   = this.element.find("form")[0];
-    const result = new FormDataExtended(form).object;
+    const result = new foundry.applications.ux.FormDataExtended(form).object;
 
     const updates = {};
     for (const def of traitDefs) {

@@ -199,7 +199,7 @@ export class WeaponArcOverlay {
     // Delegated to the system adapter so each ruleset can apply its own cap
     // (e.g. WH40K: rating / step; SF2e: fixed 20).
     const bandSize   = sensor.bandSize;
-    const maxBands   = (bandSize > 0 && sensor.rating > 0)
+    const maxBands   = bandSize > 0
       ? SystemAdapter.current.getMaxDecayBands(sensor.rating)
       : 0;
 

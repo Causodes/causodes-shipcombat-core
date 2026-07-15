@@ -17,6 +17,7 @@ import {
   ROLES, ROLE_ACTIONS, SHIP_CLASSIFICATIONS, PAYLOAD_TYPES,
 } from "../../constants.js";
 import { isTorpedo, isStrikeCraft } from "../ordnance/ordnance-types.js";
+import { normalizeStrikeCraftTemplateHull } from "../ordnance/ordnance-helpers.js";
 import { emitToGM } from "../../socket.js";
 import { ShipCombatState } from "../../state/ShipCombatState.js";
 import { buildHelmContext, helmOnRender } from "../../roles/pilot.js";
@@ -788,6 +789,7 @@ export class ShipController {
       const existing  = SystemAdapter.current.getShipData(this.actor).ordnanceActors?.[slotType] ?? [];
       const actorData = actor.toObject();
       delete actorData._id;
+      normalizeStrikeCraftTemplateHull(actorData, slotType, SystemAdapter.current.hullDisplayMode);
       return this.actor.update({ [SystemAdapter.current.systemPath(`ordnanceActors.${slotType}`)]: [...existing, {
         id: foundry.utils.randomID(), uuid: actor.uuid ?? null,
         name: actor.name, img: actor.img,

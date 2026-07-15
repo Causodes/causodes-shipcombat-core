@@ -14,6 +14,7 @@
 
 import { CORE_MODULE_ID, hullDisplay } from "../../constants.js";
 import { ShipController } from "./ShipController.js";
+import { normalizeStrikeCraftTemplateHull } from "../ordnance/ordnance-helpers.js";
 import { PILOT_ACTIONS, helmUpdatePreview } from "../../roles/pilot.js";
 import { HelmPreview } from "../../canvas/HelmPreview.js";
 import { WeaponArcOverlay } from "../../canvas/WeaponArcOverlay.js";
@@ -101,6 +102,7 @@ export const ShipSheetV1Mixin = (BaseClass) => {
       }
       const editData = foundry.utils.deepClone(entry.actorData);
       editData._id   = undefined;
+      normalizeStrikeCraftTemplateHull(editData, slotType, SystemAdapter.current.hullDisplayMode);
       editData.name  = `[Edit] ${entry.name || editData.name || "Ordnance"}`;
       editData.flags = foundry.utils.mergeObject(editData.flags ?? {}, {
         [MODULE_ID]: { fromOrdnanceMaster: true, embeddedEdit: true },

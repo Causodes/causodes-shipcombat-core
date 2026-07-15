@@ -69,7 +69,7 @@ export function testArc(cx, cy, heading, weapon, tx, ty) {
  * Classify a target into a hit zone.
  *   Zone 1: close range (within autoScanRange AND weapon range  -  no extra bonus)
  *   Zone 2: normal      (within weapon range, roll at base sensor rating)
- *   Zone 3: extended    (beyond weapon range, −10 per band, limited by sensor rating)
+ *   Zone 3: extended    (beyond weapon range, one penalty step per band)
  *   null:   out of range
  */
 export function classifyZone(distSquares, weaponRange, sensor, step) {
@@ -84,9 +84,9 @@ export function classifyZone(distSquares, weaponRange, sensor, step) {
   if (distSquares <= weaponRange) {
     return { zone: 2, modifier: 0, label: "SHIPCOMBAT.Targeting.Zone2" };
   }
-  if (bandSize > 0 && rating > 0) {
+  if (bandSize > 0) {
     const bands    = Math.ceil((distSquares - weaponRange) / bandSize);
-    const maxBands = Math.floor(rating / _step);
+    const maxBands = SystemAdapter.current.getMaxDecayBands(rating);
     if (bands > maxBands) return null; // beyond maximum reach
     const penalty  = bands * -_step;
     return { zone: 3, modifier: penalty, label: "SHIPCOMBAT.Targeting.Zone3" };

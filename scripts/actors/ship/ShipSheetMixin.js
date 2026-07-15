@@ -28,6 +28,7 @@ import { WeaponArcOverlay } from "../../canvas/WeaponArcOverlay.js";
 import { SystemAdapter } from "../../systems/SystemAdapter.js";
 import { SHIP_PARTS, SHIP_TABS } from "./parts.js";
 import { ShipController } from "./ShipController.js";
+import { normalizeStrikeCraftTemplateHull } from "../ordnance/ordnance-helpers.js";
 export { getEffectiveSkillSpec } from "./ShipController.js";
 
 // ── Mixin ─────────────────────────────────────────────────────────────────
@@ -127,6 +128,7 @@ export const ShipSheetV2Mixin = (BaseClass) => {
       }
       const editData = foundry.utils.deepClone(entry.actorData);
       editData._id   = undefined;
+      normalizeStrikeCraftTemplateHull(editData, slotType, SystemAdapter.current.hullDisplayMode);
       editData.name  = `[Edit] ${entry.name || editData.name || "Ordnance"}`;
       editData.flags = foundry.utils.mergeObject(editData.flags ?? {}, {
         [MODULE_ID]: { fromOrdnanceMaster: true, embeddedEdit: true },
