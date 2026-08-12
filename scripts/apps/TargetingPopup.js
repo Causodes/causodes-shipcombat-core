@@ -134,7 +134,9 @@ export class TargetingPopup extends foundry.applications.api.HandlebarsApplicati
   }
 
   static DEFAULT_OPTIONS = {
-    id: "shipcombat-targeting-popup",
+    // Multiple fire actions can overlap with live hook-driven re-renders. A
+    // unique DOM id prevents one instance replacing another instance's frame.
+    id: "shipcombat-targeting-popup-{id}",
     classes: ["shipcombat-targeting-popup"],
     tag: "div",
     window: {

@@ -31,6 +31,8 @@ import { ShipController } from "./ShipController.js";
 import { normalizeStrikeCraftTemplateHull } from "../ordnance/ordnance-helpers.js";
 export { getEffectiveSkillSpec } from "./ShipController.js";
 
+const GUNNER_TABS = new Set(["gunner", "gunner4man", "gunner5man"]);
+
 // ── Mixin ─────────────────────────────────────────────────────────────────
 
 export const ShipSheetV2Mixin = (BaseClass) => {
@@ -235,7 +237,7 @@ export const ShipSheetV2Mixin = (BaseClass) => {
         if (!isHelmTab) HelmPreview.hide();
         else this._updateHelmPreview();
         const arcBroadcast = !!(SystemAdapter.current.getShipData(this.actor).resources?.gunner?.arcOverlayActive);
-        if (tab === "gunner" || arcBroadcast) WeaponArcOverlay.activate(this.actor);
+        if (GUNNER_TABS.has(tab) || arcBroadcast) WeaponArcOverlay.activate(this.actor);
         else WeaponArcOverlay.deactivate();
       }
     }

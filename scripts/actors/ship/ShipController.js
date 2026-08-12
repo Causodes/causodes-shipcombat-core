@@ -66,6 +66,7 @@ const TAB_TO_ROLE = {
   gunner: "gunner", gunner4man: "gunner", gunner5man: "gunner",
   ordnance: "ordnance",
 };
+const GUNNER_TABS = new Set(["gunner", "gunner4man", "gunner5man"]);
 
 // ── Module-level helpers ──────────────────────────────────────────────────
 
@@ -1163,7 +1164,7 @@ export class ShipController {
     });
 
     const arcBroadcast = !!(SystemAdapter.current.getShipData(this.actor).resources?.gunner?.arcOverlayActive);
-    if (this.sheet.tabGroups?.primary === "gunner" || arcBroadcast) WeaponArcOverlay.activate(this.actor);
+    if (GUNNER_TABS.has(this.sheet.tabGroups?.primary) || arcBroadcast) WeaponArcOverlay.activate(this.actor);
     else WeaponArcOverlay.deactivate();
   }
 }

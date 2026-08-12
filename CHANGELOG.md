@@ -1,3 +1,7 @@
+## v2.2.3
+- Fix weapon firing-arc and range overlays being disabled on AppV2 player ships using the 4- or 5-person Gunner tabs; `gunner`, `gunner4man`, and `gunner5man` are now handled consistently
+- Give each AppV2 weapon-targeting popup a unique application ID so opening overlapping targeting windows no longer replaces another popup's DOM frame or triggers detached-element positioning errors
+
 ## v2.2.2
 - Fix players being unable to control launched ordnance: the player who owns a launched torpedo or strike craft can now operate its helm controls
 - Fix strike craft ownership going to the Captain instead of the Gunner in 3- and 4-player crews, where the Gunner runs the ordnance station
