@@ -1,0 +1,49 @@
+name: Publish release manifest
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag whose manifest should be repaired
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  publish-manifest:
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.event.release.tag_name }}
+    steps:
+      - name: Check out the released source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - name: Validate manifest against the release tag
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+
+          const manifest = JSON.parse(fs.readFileSync("module.json", "utf8"));
+          const tag = process.env.RELEASE_TAG;
+          const expectedVersion = tag.replace(/^v/, "");
+          const expectedDownload = `https://github.com/${process.env.GITHUB_REPOSITORY}/archive/refs/tags/${tag}.zip`;
+
+          if (manifest.version !== expectedVersion) {
+            throw new Error(`module.json version ${manifest.version} does not match release ${tag}`);
+          }
+          if (manifest.download !== expectedDownload) {
+            throw new Error(`module.json download URL does not match release ${tag}`);
+          }
+          NODE
+
+      - name: Upload the tagged manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$RELEASE_TAG" module.json --clobber --repo "$GITHUB_REPOSITORY"

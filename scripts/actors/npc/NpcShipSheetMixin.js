@@ -23,6 +23,7 @@ import { RecoverCraftPopup } from "../../apps/StrikeCraftPopups.js";
 import { coerceEmptyNumberInputs } from "../../sheet-utils.js";
 import { RamTargetPopup } from "../../apps/RamTargetPopup.js";
 import { SystemAdapter } from "../../systems/SystemAdapter.js";
+import { SHARED_ACTIONS } from "../../roles/shared.js";
 
 async function _animateTokenPath(token, waypoints, projected) {
   const canvasToken = token.object ?? token;
@@ -56,6 +57,7 @@ export const NpcShipSheetMixin = (BaseClass) => {
       // classes intentionally empty — concrete class provides system-specific classes
       classes: [],
       actions: {
+        ...SHARED_ACTIONS,
         npcAdjustShield:    _onAdjustShield,
         npcSuppressFire:    _onSuppressFire,
         npcReduceHeat:      _onReduceHeat,
@@ -1389,6 +1391,7 @@ async function _onNpcRemoveOrdTemplate(event, target) {
 // ══════════════════════════════════════════════════════════════════════════════
 
 const NPC_ACTIONS = {
+  ...SHARED_ACTIONS,
   npcAdjustShield:      _onAdjustShield,
   npcSuppressFire:      _onSuppressFire,
   npcReduceHeat:        _onReduceHeat,

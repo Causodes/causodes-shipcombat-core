@@ -1,3 +1,6 @@
+## 2.2.4
+- Fix NPC ship weapon delete controls doing nothing by registering the shared embedded-item actions on both AppV2 and legacy AppV1 NPC sheets
+
 ## v2.2.3
 - Fix weapon firing-arc and range overlays being disabled on AppV2 player ships using the 4- or 5-person Gunner tabs; `gunner`, `gunner4man`, and `gunner5man` are now handled consistently
 - Give each AppV2 weapon-targeting popup a unique application ID so opening overlapping targeting windows no longer replaces another popup's DOM frame or triggers detached-element positioning errors
