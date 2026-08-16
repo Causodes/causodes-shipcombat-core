@@ -46,4 +46,18 @@ jobs:
       - name: Upload the tagged manifest
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$RELEASE_TAG" module.json --clobber --repo "$GITHUB_REPOSITORY"
+        shell: bash
+        run: |
+          for attempt in {1..6}; do
+            if gh release upload "$RELEASE_TAG" module.json --clobber --repo "$GITHUB_REPOSITORY"; then
+              exit 0
+            fi
+
+            if (( attempt == 6 )); then
+              echo "Release $RELEASE_TAG was still unavailable after $attempt attempts." >&2
+              exit 1
+            fi
+
+            echo "Release $RELEASE_TAG is not available yet; retrying in 10 seconds ($attempt/6)."
+            sleep 10
+          done
