@@ -22,6 +22,7 @@ import { SystemAdapter } from "../systems/SystemAdapter.js";
 import { MODULE_ID, PAYLOAD_TYPES, PAYLOADS_BY_ROLE, ORDNANCE_MASTER_ACTIONS, ORDNANCE_MASTER_CORE_ACTIONS, ORDNANCE_4MAN_COSTS } from "../constants.js";
 import { RecoverCraftPopup } from "../apps/StrikeCraftPopups.js";
 import { isOrdnance, isTorpedo, isStrikeCraft, ordnanceSubtype } from "../actors/ordnance/ordnance-types.js";
+import { resolveStationOperatorActor } from "./crew-operators.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -47,17 +48,7 @@ function _getActiveTemplates(sys) {
 }
 
 async function _resolveOrdnanceActor(sheet) {
-  const sys = SystemAdapter.current.getShipData(sheet.actor);
-  const ref = sys.crewActors?.ordnance;
-  if (ref?.uuid) {
-    try { return await fromUuid(ref.uuid); } catch { /* ignore */ }
-  }
-  const entry = Object.entries(sys.roles ?? {}).find(([, r]) => r === "ordnance");
-  if (entry) {
-    const user = game.users.get(entry[0]);
-    return user?.character ?? null;
-  }
-  return null;
+  return resolveStationOperatorActor(sheet.actor, "ordnance");
 }
 
 /**

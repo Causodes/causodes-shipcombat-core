@@ -9,6 +9,16 @@ import { MODULE_ID, CORE_MODULE_ID, MACRO_FIRE_TIERS, LANCE_CHARGE_TIERS, buildC
 import { isOrdnance } from "../actors/ordnance/ordnance-types.js";
 import { rollCrit } from "./crit-state.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
+import { getSensorsOperatorUserId } from "../roles/crew-operators.js";
+
+/** Allocate an opaque BDA key without ever overwriting a live attack record. */
+export function allocateBdaAttackId(existingAttacks = {}) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const id = foundry.utils.randomID(20);
+    if (!Object.hasOwn(existingAttacks, id)) return id;
+  }
+  throw new Error(`${MODULE_ID} | Unable to allocate a unique BDA attack id`);
+}
 
 /**
  * B2 Resolution Chain (SL Allocation model):
@@ -219,9 +229,14 @@ export async function fireWeapon({ weaponId, actorId, fireMode, targetToken, hit
     ? game.i18n.localize("SHIPCOMBAT.Fire.AutoHit")
     : `${totalHits}/${totalSalvo} ${game.i18n.localize("SHIPCOMBAT.Fire.Hits")}`;
 
-  // Always consume lock after firing  -  enables BDA regardless of hit count
+  // Always consume lock after firing. The immutable pre-fire tier is carried
+  // into this attack's own BDA record instead of shared ship-wide fields.
+  let bdaAttackId = null;
+  let bdaOriginalLockTier = 0;
   if (targetToken && !isNpcFire) {
-    await this.consumeLock(targetToken);
+    const existingAttacks = this.getData()?.resources?.sensors?.bdaAttacks ?? {};
+    bdaAttackId = allocateBdaAttackId(existingAttacks);
+    bdaOriginalLockTier = await this.consumeLock(targetToken);
   }
 
   if (totalHits === 0) {
@@ -236,6 +251,9 @@ export async function fireWeapon({ weaponId, actorId, fireMode, targetToken, hit
       targetAC,
       lanceTierLabel,
       critResults: [],
+      bdaAttackId,
+      bdaTargetTokenId: targetToken,
+      bdaOriginalLockTier,
     });
     return;
   }
@@ -265,6 +283,9 @@ export async function fireWeapon({ weaponId, actorId, fireMode, targetToken, hit
       targetAC,
       lanceTierLabel,
       critResults: [],
+      bdaAttackId,
+      bdaTargetTokenId: targetToken,
+      bdaOriginalLockTier,
     });
     return;
   }
@@ -505,6 +526,9 @@ export async function fireWeapon({ weaponId, actorId, fireMode, targetToken, hit
     targetAC,
     lanceTierLabel,
     critResults,
+    bdaAttackId,
+    bdaTargetTokenId: targetToken,
+    bdaOriginalLockTier,
   });
 
   // ── 9. Animation hook (GM-local) ──
@@ -537,6 +561,9 @@ export async function _fireWeaponChat(weapon, fireMode, targetName, hitQuadrant,
     critResults = [],
     targetAC = null,
     lanceTierLabel = null,
+    bdaAttackId = null,
+    bdaTargetTokenId = null,
+    bdaOriginalLockTier = 0,
   } = results;
 
   const _baseFireModeLabel = game.i18n.localize(
@@ -622,40 +649,59 @@ export async function _fireWeaponChat(weapon, fireMode, targetName, hitQuadrant,
   // Store result and defer posting until the Augur completes BDA
   // NPC fire bypasses BDA entirely and posts the result card immediately.
 
-  // ── BDA-Pending notification (Augur-only button) ───────────────────────
-  const augurUserId = !isNpcFire &&
-    (Object.entries(SystemAdapter.current.getShipData(this.ship)?.roles ?? {})
-      .find(([, r]) => r === "sensors")?.[0] ?? null);
+  // ── BDA-Pending notification ────────────────────────────────────────────
+  // Each attack owns an immutable result snapshot keyed by attackId. This
+  // prevents later shots from replacing the hit count or damage shown by an
+  // earlier assessment.
+  const operatorUserId = !isNpcFire ? getSensorsOperatorUserId(this.ship) : null;
+  const storeData = critResults.length > 0
+    ? { templateData: { ...templateData, critResults }, messageFlags }
+    : { templateData, messageFlags };
 
-  if (!isNpcFire) {
-    // For player fire, store critResults alongside templateData so BDA card can reveal them
-    const storeData = critResults.length > 0
-      ? { templateData: { ...templateData, critResults }, messageFlags }
-      : { templateData, messageFlags };
+  if (operatorUserId && bdaAttackId) {
+    const createdAt = Date.now();
+    const attackRecord = {
+      attackId: bdaAttackId,
+      shipUuid: this.ship.uuid,
+      targetTokenId: bdaTargetTokenId,
+      targetName,
+      weaponName: weapon.name,
+      weaponImg: weapon.img,
+      fireModeLabel,
+      originalLockTier: bdaOriginalLockTier,
+      operatorUserId,
+      status: "pending",
+      createdAt,
+      messageId: null,
+      pendingFireResult: JSON.stringify(storeData),
+    };
     await this.update({
-      "resources.sensors.pendingFireResult": JSON.stringify(storeData),
+      [`resources.sensors.bdaAttacks.${bdaAttackId}`]: attackRecord,
     });
-  }
 
-  if (augurUserId) {
     const bdaContent = await renderTemplate(
       `modules/${CORE_MODULE_ID}/templates/chat/bda-pending.hbs`,
       { targetName, weaponName: weapon.name, weaponImg: weapon.img, fireModeLabel }
     );
     const bdaMsg = await ChatMessage.create({
       content: bdaContent,
-      user:    augurUserId,
+      user:    operatorUserId,
       speaker: ChatMessage.getSpeaker({ actor: speakerActor ?? this.ship }),
       flags: {
         [MODULE_ID]: {
           type: "bdaPending",
-          augurUserId,
+          attackId: bdaAttackId,
+          attackCreatedAt: createdAt,
+          shipUuid: this.ship.uuid,
+          operatorUserId,
           targetName,
         },
       },
     });
     if (bdaMsg?.id) {
-      await this.update({ "resources.sensors.bdaMessageId": bdaMsg.id });
+      await this.update({
+        [`resources.sensors.bdaAttacks.${bdaAttackId}.messageId`]: bdaMsg.id,
+      });
     }
   } else {
     // No Augur assigned: post fire result immediately

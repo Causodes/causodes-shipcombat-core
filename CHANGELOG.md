@@ -1,5 +1,9 @@
 ## 2.2.5 (UNRELEASED)
 - Fix Combat Telemetry only upgrading one target by applying all lock upgrades in one atomic GM-side actor update
+- Keep BDA results isolated per attack so overlapping assessments cannot display another shot's hit count or damage
+- Resolve the BDA operator from crew layout, allow the Captain to operate Sensors in 4-person crews, and retain GM launch access
+- Resolve every station operator from the 3–6 person crew layout, including reduced-crew helm, sensor visibility, ordnance rolls, and deployed-craft control
+- Use collision-checked 20-character BDA attack IDs and mark completed or round-reset assessment cards as expired
 
 ## 2.2.4
 - Fix NPC ship weapon delete controls doing nothing by registering the shared embedded-item actions on both AppV2 and legacy AppV1 NPC sheets

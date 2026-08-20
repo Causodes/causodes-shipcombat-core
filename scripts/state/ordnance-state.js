@@ -8,6 +8,7 @@
 import { MODULE_ID } from "../constants.js";
 import { ordnanceTypeName } from "../actors/ordnance/ordnance-types.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
+import { getOrdnanceControllerUserId } from "../roles/crew-operators.js";
 
 /**
  * Spawn a torpedo or strike craft token near the ship.
@@ -104,12 +105,7 @@ export async function spawnOrdnance({ type, parentShipTokenId, x, y, rotation, t
   //          Gunner; strike craft stay with the Captain.
   //   ≤4-man: the Gunner absorbs the ordnance station and controls both.
   const stateData = (shipActor ? SystemAdapter.current.getShipData(shipActor) : null) ?? this.getData?.() ?? {};
-  const stateRoles = stateData.roles ?? {};
-  const crewSize = stateData.crewSize ?? 6;
-  const controllerRole = crewSize >= 6 ? "ordnance"
-    : (crewSize === 5 && type === "strikeCraft") ? "captain"
-    : "gunner";
-  const controllerUserId = Object.entries(stateRoles).find(([, r]) => r === controllerRole)?.[0];
+  const controllerUserId = getOrdnanceControllerUserId(stateData, subtype);
   if (controllerUserId) {
     actorData.ownership = foundry.utils.mergeObject(
       actorData.ownership ?? { default: 0 },

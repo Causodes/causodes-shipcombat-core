@@ -63,20 +63,6 @@ const UTILITY_ACTIONS = [
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-async function _resolveSensorsActor(sheet) {
-  const sys = SystemAdapter.current.getShipData(sheet.actor);
-  const ref = sys.crewActors?.sensors;
-  if (ref?.uuid) {
-    try { return await fromUuid(ref.uuid); } catch { /* ignore */ }
-  }
-  const entry = Object.entries(sys.roles ?? {}).find(([, r]) => r === "sensors");
-  if (entry) {
-    const user = game.users.get(entry[0]);
-    return user?.character ?? null;
-  }
-  return null;
-}
-
 /**
  * Spend AP from the Engineer's auxiliary power pool.
  * Returns true on success.
@@ -223,19 +209,30 @@ async function _onSensorCoreAction(event, target) {
 async function _onOpenBDAPopup(event, target) {
   const sys     = SystemAdapter.current.getShipData(this.actor);
   const sensors = sys.resources?.sensors ?? {};
+  const attacks = Object.values(sensors.bdaAttacks ?? {})
+    .sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
+  const correction = attacks.find(attack => attack.status === "correction") ?? null;
+  const pending = attacks.find(attack => attack.status === "pending") ?? null;
 
   // Corrections already ready (roll was done from chat card)  -  open corrections popup
-  if (sensors.bdaCorrectionPending) {
-    const targetTokenId = sensors.bdaTargetTokenId ?? null;
-    const sl            = sensors.bdaResultSL ?? 0;
-    const popup = new BDAPopup({ ship: this.actor, targetTokenId, sl });
+  if (correction) {
+    const popup = new BDAPopup({
+      ship: this.actor,
+      attackId: correction.attackId,
+      targetTokenId: correction.targetTokenId ?? null,
+      sl: correction.sl ?? 0,
+      messageId: correction.messageId ?? null,
+      targetName: correction.targetName ?? null,
+      originalLockTier: correction.originalLockTier ?? 4,
+    });
     popup.render(true);
     return;
   }
 
   // BDA roll still needed  -  launch directly (no chat card to update from the Sensors tab)
-  if (sensors.bdaAvailable) {
-    await launchBDAFromChat(this.actor, null);
+  if (pending) {
+    const message = pending.messageId ? game.messages.get(pending.messageId) ?? null : null;
+    await launchBDAFromChat(this.actor, message, pending.attackId);
     return;
   }
 
@@ -266,10 +263,15 @@ export function buildSensorsContext(sys, opts = {}) {
       id,
       label: game.i18n.localize(`SHIPCOMBAT.Captain.Card.${id}`),
     }));
-  const bdaAvailable       = sys.resources?.sensors?.bdaAvailable ?? false;
-  const bdaCorrectionPending = sys.resources?.sensors?.bdaCorrectionPending ?? false;
-  const bdaResultSL        = sys.resources?.sensors?.bdaResultSL ?? 0;
-  const bdaTargetTokenId   = sys.resources?.sensors?.bdaTargetTokenId ?? null;
+  const bdaAttacks = Object.values(sys.resources?.sensors?.bdaAttacks ?? {})
+    .sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
+  const bdaCorrection = bdaAttacks.find(attack => attack.status === "correction") ?? null;
+  const bdaPending = bdaAttacks.find(attack => attack.status === "pending") ?? null;
+  const activeBda = bdaCorrection ?? bdaPending;
+  const bdaAvailable = bdaPending !== null;
+  const bdaCorrectionPending = bdaCorrection !== null;
+  const bdaResultSL = bdaCorrection?.sl ?? 0;
+  const bdaTargetTokenId = activeBda?.targetTokenId ?? null;
   const fireCorrection = sys.resources?.sensors?.fireCorrection ?? null;
 
   const apMax = reactorStats?.auxPowerCapacity ?? 0;
@@ -371,6 +373,7 @@ export function buildSensorsContext(sys, opts = {}) {
     bdaResultSL,
     bdaSlBadge: SystemAdapter.current.formatBdaBadge(bdaResultSL),
     bdaTargetTokenId,
+    bdaPendingCount: bdaAttacks.length,
     fireCorrection,
     corrections,
     lockTier0,

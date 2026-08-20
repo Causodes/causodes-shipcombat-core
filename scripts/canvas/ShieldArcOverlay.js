@@ -2,6 +2,7 @@ import { MODULE_ID } from "../constants.js";
 import { ShipCombatState } from "../state/ShipCombatState.js";
 import { THEME, pixi } from "../theme.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
+import { userOperatesStation } from "../roles/crew-operators.js";
 
 /**
  * Returns true if the current user should see numeric shield labels on
@@ -18,8 +19,7 @@ function _canSeeShieldValues(ship) {
   // Own ship: user has owner-level permission
   if (ship.testUserPermission(game.user, "OWNER")) return true;
   // Augur role on this ship
-  const myRole = ShipCombatState.getRoleForUser(game.user.id);
-  return myRole === "sensors";
+  return userOperatesStation(ShipCombatState.ship, game.user, "sensors");
 }
 
 /**
@@ -431,5 +431,4 @@ function _arcBandPoints(cx, cy, innerR, outerR, startAngle, endAngle, segments) 
 
   return pts;
 }
-
 

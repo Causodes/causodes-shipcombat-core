@@ -28,6 +28,7 @@ import { emitToGM } from "../socket.js";
 import { heatColor } from "../theme.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
 import { MODULE_ID, hullDisplay } from "../constants.js";
+import { resolveStationOperatorActor } from "./crew-operators.js";
 
 function _getHeatCapacity(shipActor) {
   const reactor = shipActor?.items?.find(i => i.type === `${MODULE_ID}.component` && i.system.slot === "reactor");
@@ -54,17 +55,7 @@ function _getOverclockModifier(heat) {
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 async function _resolveEngineerActor(sheet) {
-  const sys = SystemAdapter.current.getShipData(sheet.actor);
-  const ref = sys.crewActors?.engineer;
-  if (ref?.uuid) {
-    try { return await fromUuid(ref.uuid); } catch { /* ignore */ }
-  }
-  const entry = Object.entries(sys.roles ?? {}).find(([, r]) => r === "engineer");
-  if (entry) {
-    const user = game.users.get(entry[0]);
-    return user?.character ?? null;
-  }
-  return null;
+  return resolveStationOperatorActor(sheet.actor, "engineer");
 }
 
 // ── Action handlers ─────────────────────────────────────────────────────────

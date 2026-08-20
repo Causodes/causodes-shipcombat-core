@@ -10,7 +10,7 @@
  */
 
 import { MODULE_ID, CORE_MODULE_ID, hullDisplay } from "../../constants.js";
-import { isTorpedo, isStrikeCraft } from "./ordnance-types.js";
+import { isTorpedo, isStrikeCraft, ordnanceSubtype } from "./ordnance-types.js";
 import { HelmPreview } from "../../canvas/HelmPreview.js";
 import { TorpedoOverlay } from "../../canvas/TorpedoOverlay.js";
 import { StrikeCraftArcOverlay } from "../../canvas/StrikeCraftArcOverlay.js";
@@ -19,6 +19,7 @@ import { coerceEmptyNumberInputs } from "../../sheet-utils.js";
 import { emitToGM, emitToAll } from "../../socket.js";
 import { ShipCombatState } from "../../state/ShipCombatState.js";
 import { SystemAdapter } from "../../systems/SystemAdapter.js";
+import { getOrdnanceControllerUserId } from "../../roles/crew-operators.js";
 
 async function _animateTokenPath(token, waypoints, projected) {
   const canvasToken = token.object ?? token;
@@ -308,8 +309,7 @@ export const OrdnanceSheetMixin = (BaseClass) => {
       // crews have no "ordnance" role at all. Stat editing is still protected:
       // the config tab, which holds all stat fields, renders for GMs only.
       if (this.actor.isOwner) return true;
-      const ship = ShipCombatState.ship;
-      return ship?.system?.roles?.[game.user.id] === "ordnance";
+      return game.user.id === getOrdnanceControllerUserId(ShipCombatState.ship, ordnanceSubtype(this.actor));
     }
 
     _prepareTabs() {
@@ -709,7 +709,7 @@ export const OrdnanceSheetV1Mixin = (BaseClass) => {
       // the config tab, which holds all stat fields, renders for GMs only
       // (canConfigure below).
       if (this.actor.isOwner) return true;
-      return ShipCombatState.ship?.system?.roles?.[game.user.id] === "ordnance";
+      return game.user.id === getOrdnanceControllerUserId(ShipCombatState.ship, ordnanceSubtype(this.actor));
     }
 
     async getData(options = {}) {

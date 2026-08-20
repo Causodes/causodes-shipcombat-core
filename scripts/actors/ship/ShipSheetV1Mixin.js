@@ -28,6 +28,7 @@ import { CAPTAIN_ACTIONS }  from "../../roles/captain.js";
 import { SENSORS_ACTIONS }  from "../../roles/sensors.js";
 import { GUNNER_ACTIONS }   from "../../roles/gunner.js";
 import { ORDNANCE_ACTIONS } from "../../roles/ordnance.js";
+import { userOperatesStation } from "../../roles/crew-operators.js";
 
 // ── Mixin ─────────────────────────────────────────────────────────────────
 
@@ -264,8 +265,7 @@ export const ShipSheetV1Mixin = (BaseClass) => {
     _updateHelmPreview() {
       // V1 tracks active tab via this._tabs[0]?.active (not tabGroups)
       if (this._tabs?.[0]?.active !== "pilot") { HelmPreview.hide(); return; }
-      const myRole = this._resolveRoleForUser(game.user);
-      if (myRole !== "pilot" && !game.user.isGM) return;
+      if (!game.user.isGM && !userOperatesStation(this.actor, game.user, "pilot")) return;
       helmUpdatePreview(this);
     }
 

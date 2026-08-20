@@ -210,10 +210,7 @@ export class ShipCombatState {
     // ── Augur: reset per-turn flags (NO passive data regen) ──
     updates["resources.sensors.actionUsed"]        = false;
     updates["resources.sensors.coreActionUsed"]    = false;
-    updates["resources.sensors.bdaAvailable"]      = false;
-    updates["resources.sensors.bdaCorrectionPending"] = false;
-    updates["resources.sensors.bdaResultSL"]       = 0;
-    updates["resources.sensors.bdaTargetTokenId"]  = null;
+    updates["resources.sensors.bdaAttacks"]        = {};
     updates["resources.sensors.fireCorrection"]    = null;
 
     const prevEffects = data.resources?.sensors?.effects ?? [];
@@ -894,10 +891,7 @@ export class ShipCombatState {
       "resources.sensors.effects": [],
       "resources.sensors.actionUsed": false,
       "resources.sensors.coreActionUsed": false,
-      "resources.sensors.bdaAvailable": false,
-      "resources.sensors.bdaCorrectionPending": false,
-      "resources.sensors.bdaResultSL": 0,
-      "resources.sensors.bdaTargetTokenId": null,
+      "resources.sensors.bdaAttacks": {},
       "resources.sensors.fireCorrection": null,
       "resources.engineer.payload": "",
       internalFire: 0,
@@ -1717,6 +1711,7 @@ ShipCombatState.getEffectiveLockTier = SensorsState.getEffectiveLockTier;
 ShipCombatState.consumeLock          = SensorsState.consumeLock;
 ShipCombatState.removeLock           = SensorsState.removeLock;
 ShipCombatState.resolveBDA           = SensorsState.resolveBDA;
+ShipCombatState.completeBDA          = SensorsState.completeBDA;
 ShipCombatState.setFireCorrection    = SensorsState.setFireCorrection;
 ShipCombatState.spendAP              = SensorsState.spendAP;
 

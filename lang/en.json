@@ -169,6 +169,8 @@
       "NoEngineer": "No player is assigned as {{SHIPCOMBAT.Role.{{SHIPCOMBAT.Role.Engineer}}}}.",
       "NoShip": "No Ship actor found. Create a Ship actor and add it to the Combat Tracker.",
       "NoPilotAssigned": "No crew actor is assigned to the {{SHIPCOMBAT.Role.Pilot}} role.",
+      "BDAOperatorOnly": "Only the assigned {{SHIPCOMBAT.Role.Sensors}} operator or the GM can launch this assessment.",
+      "BDAExpired": "This assessment has expired or was already completed.",
       "CoreAlreadyConsumed": "That role already consumed a {{SHIPCOMBAT.Term.PowerCore}} this turn. Only one core per role per turn.",
       "InsufficientAP": "Not enough Auxiliary Power for this action.",
       "NoAuxiliaryPower": "No Auxiliary Power remaining.",

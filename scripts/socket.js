@@ -29,6 +29,7 @@ export function setupSocket() {
     "consumeLock",
     "removeLock",
     "resolveBDA",
+    "completeBDA",
     "setFireCorrection",
     "spendAP",
     "torpedoDamage",
@@ -338,6 +339,10 @@ async function _handleAction(action, payload = {}) {
 
     case "resolveBDA":
       await ShipCombatState.resolveBDA(payload);
+      break;
+
+    case "completeBDA":
+      await ShipCombatState.completeBDA(payload);
       break;
 
     case "setFireCorrection":

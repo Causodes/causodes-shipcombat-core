@@ -29,6 +29,7 @@ import { SystemAdapter } from "../../systems/SystemAdapter.js";
 import { SHIP_PARTS, SHIP_TABS } from "./parts.js";
 import { ShipController } from "./ShipController.js";
 import { normalizeStrikeCraftTemplateHull } from "../ordnance/ordnance-helpers.js";
+import { userOperatesStation } from "../../roles/crew-operators.js";
 export { getEffectiveSkillSpec } from "./ShipController.js";
 
 const GUNNER_TABS = new Set(["gunner", "gunner4man", "gunner5man"]);
@@ -225,8 +226,7 @@ export const ShipSheetV2Mixin = (BaseClass) => {
 
     _updateHelmPreview() {
       if (this.tabGroups?.primary !== "pilot") { HelmPreview.hide(); return; }
-      const myRole = this._resolveRoleForUser(game.user);
-      if (myRole !== "pilot" && !game.user.isGM) return;
+      if (!game.user.isGM && !userOperatesStation(this.actor, game.user, "pilot")) return;
       helmUpdatePreview(this);
     }
 

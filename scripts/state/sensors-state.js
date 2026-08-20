@@ -153,10 +153,15 @@ export function getEffectiveLockTier(targetTokenId, distSq) {
 }
 
 /**
- * Consume lock on a target after firing  -  drops lock to 0.
- * Sets bdaAvailable=true so the Augur can roll BDA.
+ * Consume lock on a target after firing  -  drops lock to 0 and returns the
+ * effective pre-fire tier for the attack's immutable BDA record.
  */
-export async function consumeLock(targetTokenId) {
+export async function consumeLock(targetTokenIdOrPayload) {
+  const targetTokenId = typeof targetTokenIdOrPayload === "string"
+    ? targetTokenIdOrPayload
+    : targetTokenIdOrPayload?.targetTokenId;
+  if (!targetTokenId) return 0;
+
   const data  = this.getData();
   const locks = [...(data.resources?.sensors?.locks ?? [])];
   const idx   = locks.findIndex(l => l.targetTokenId === targetTokenId);
@@ -187,12 +192,8 @@ export async function consumeLock(targetTokenId) {
 
   const originalTier = Math.max(explicitTier, autoTier);
   if (idx >= 0) locks.splice(idx, 1);
-  return this.update({
-    "resources.sensors.locks": locks,
-    "resources.sensors.bdaAvailable": true,
-    "resources.sensors.bdaTargetTokenId": targetTokenId,
-    "resources.sensors.bdaOriginalLockTier": originalTier,
-  });
+  await this.update({ "resources.sensors.locks": locks });
+  return originalTier;
 }
 
 /**
@@ -209,23 +210,22 @@ export async function removeLock(targetTokenId) {
  * BDA resolution: retain partial lock based on SL thresholds.
  * SL 0  = reveal damage only (lock lost). SL 1+ = Tier 1. SL 2+ = Tier 2. SL 3+ = Tier 3. SL 4+ = Tier 4.
  */
-export async function resolveBDA({ targetTokenId, sl, messageId }) {
+export async function resolveBDA({ attackId, sl, messageId }) {
   const data = this.getData();
-  const originalLockTier = data.resources?.sensors?.bdaOriginalLockTier ?? 4;
+  const attack = data.resources?.sensors?.bdaAttacks?.[attackId];
+  if (!attack) return;
+
+  const targetTokenId = attack.targetTokenId ?? null;
+  const originalLockTier = attack.originalLockTier ?? 4;
+  const resolvedMessageId = messageId ?? attack.messageId ?? null;
 
   let retainedTier = SystemAdapter.current.getLockTierForSL(sl);
   // Cap: BDA cannot restore higher than the original lock tier
   retainedTier = Math.min(retainedTier, originalLockTier);
 
-  const updates = {
-    "resources.sensors.bdaAvailable":        false,
-    "resources.sensors.bdaCorrectionPending": sl >= 1,  // only true when corrections are available
-    "resources.sensors.bdaResultSL":          sl,
-    "resources.sensors.bdaOriginalLockTier":  0,
-    "resources.sensors.bdaMessageId":         null,
-  };
+  const updates = {};
 
-  if (retainedTier > 0) {
+  if (retainedTier > 0 && targetTokenId) {
     const locks = [...(data.resources?.sensors?.locks ?? [])];
     const decay = LOCK_DECAY_ROUNDS[retainedTier] ?? 1;
     const idx   = locks.findIndex(l => l.targetTokenId === targetTokenId);
@@ -240,8 +240,8 @@ export async function resolveBDA({ targetTokenId, sl, messageId }) {
   // If a BDA message exists the player client already embedded the fire result in it.
   // Only post a standalone fire-result card when there is no BDA message
   // (e.g. Augur used the sensors tab shortcut instead of the chat card button).
-  const pendingRaw = data.resources?.sensors?.pendingFireResult;
-  if (!messageId && pendingRaw) {
+  const pendingRaw = attack.pendingFireResult ?? null;
+  if (!resolvedMessageId && pendingRaw) {
     if (sl >= 0) {
       try {
         const { templateData, messageFlags } = JSON.parse(pendingRaw);
@@ -264,10 +264,24 @@ export async function resolveBDA({ targetTokenId, sl, messageId }) {
     }
   }
 
-  // Always clear pending result
-  updates["resources.sensors.pendingFireResult"] = null;
+  if (sl >= 1) {
+    updates[`resources.sensors.bdaAttacks.${attackId}`] = {
+      ...attack,
+      status: "correction",
+      sl,
+      messageId: resolvedMessageId,
+    };
+  } else {
+    updates[`resources.sensors.bdaAttacks.-=${attackId}`] = null;
+  }
 
   return this.update(updates);
+}
+
+/** Remove one completed per-attack BDA record. */
+export async function completeBDA({ attackId }) {
+  if (!attackId) return;
+  return this.update({ [`resources.sensors.bdaAttacks.-=${attackId}`]: null });
 }
 
 /**

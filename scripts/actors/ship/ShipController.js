@@ -23,6 +23,7 @@ import { ShipCombatState } from "../../state/ShipCombatState.js";
 import { buildHelmContext, helmOnRender } from "../../roles/pilot.js";
 import { buildEngineerContext } from "../../roles/engineer.js";
 import { buildSensorsContext } from "../../roles/sensors.js";
+import { resolveStationOperatorActorSync, userOperatesStation } from "../../roles/crew-operators.js";
 import { buildGunnerContext, enrichWeaponForGunner } from "../../roles/gunner.js";
 import { ORDNANCE_ACTIONS, buildOrdnanceContext } from "../../roles/ordnance.js";
 import { buildCaptainContext } from "../../roles/captain.js";
@@ -571,8 +572,7 @@ export class ShipController {
           velocityBearingMode: this.sheet._velocityBearingMode ?? "relative",
         });
         // Expose the pilot's roll modifier via the system adapter (adapter provides system-specific skill lookup).
-        const _pilotActorRef = sys.crewActors?.pilot;
-        const _pilotActor = _pilotActorRef?.uuid ? (fromUuidSync?.(_pilotActorRef.uuid) ?? null) : null;
+        const _pilotActor = resolveStationOperatorActorSync(this.actor, "pilot");
         h.pilotingMod = SystemAdapter.current.getHelmRollModifier(_pilotActor);
         h.hasPilotingMod = h.pilotingMod !== null && h.pilotingMod !== undefined;
         return h;
@@ -618,7 +618,7 @@ export class ShipController {
         ctx.slTooltip = _resolveSlTooltip(sys, "captain", "SHIPCOMBAT.Captain.LeadershipSLTooltip");
         return ctx;
       })(),
-      isEngineerOrGM: game.user.isGM || myRole === "engineer",
+      isEngineerOrGM: game.user.isGM || userOperatesStation(this.actor, game.user, "engineer"),
       shipClassifications: SHIP_CLASSIFICATIONS,
       componentInventoryBySlot: (() => {
         const groups = [];

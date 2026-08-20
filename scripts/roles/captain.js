@@ -12,6 +12,7 @@ import { emitToGM }                               from "../socket.js";
 import { SystemAdapter }                          from "../systems/SystemAdapter.js";
 import { BattleClarityPopup }                     from "../apps/BattleClarityPopup.js";
 import { DeadReckoningPopup }                     from "../apps/DeadReckoningPopup.js";
+import { resolveStationOperatorActor }             from "./crew-operators.js";
 
 // Card definition lookup map (built once)
 const CARD_DEFS = Object.fromEntries(CAPTAIN_CARDS.map(c => [c.id, c]));
@@ -309,19 +310,8 @@ async function _onFullRedraw(event, _target) {
  */
 /** Roll the ship's initiative via the system adapter. */
 async function _onRollInitiative() {
-  let crewActor = null;
   const sys = SystemAdapter.current.getShipData(this.actor);
-  const captainRef = sys.crewActors?.captain;
-  if (captainRef?.uuid) {
-    try { crewActor = await fromUuid(captainRef.uuid); } catch { /* ignore */ }
-  }
-  if (!crewActor) {
-    const entry = Object.entries(sys.roles ?? {}).find(([, r]) => r === "captain");
-    if (entry) {
-      const user = game.users.get(entry[0]);
-      crewActor = user?.character ?? null;
-    }
-  }
+  const crewActor = await resolveStationOperatorActor(this.actor, "captain");
   if (!crewActor) {
     ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoCaptainAssigned"));
     return;
@@ -347,18 +337,7 @@ async function _onRollLeadershipSL() {
     return;
   }
 
-  let crewActor = null;
-  const captainRef = sys.crewActors?.captain;
-  if (captainRef?.uuid) {
-    try { crewActor = await fromUuid(captainRef.uuid); } catch { /* ignore */ }
-  }
-  if (!crewActor) {
-    const entry = Object.entries(sys.roles ?? {}).find(([, r]) => r === "captain");
-    if (entry) {
-      const user = game.users.get(entry[0]);
-      crewActor = user?.character ?? null;
-    }
-  }
+  const crewActor = await resolveStationOperatorActor(this.actor, "captain");
   if (!crewActor) {
     ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoCaptainAssigned"));
     return;

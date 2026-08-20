@@ -21,6 +21,7 @@ import { MODULE_ID, MACRO_FIRE_TIERS, buildChargeTiers, scaleDiceFormula, GUNNER
 import { TargetingPopup } from "../apps/TargetingPopup.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
 import { heatColor } from "../theme.js";
+import { resolveStationOperatorActor } from "./crew-operators.js";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -47,17 +48,7 @@ function _getAuxPowerCapacity(shipActor) {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 async function _resolveGunnerActor(sheet) {
-  const sys = SystemAdapter.current.getShipData(sheet.actor);
-  const ref = sys.crewActors?.gunner;
-  if (ref?.uuid) {
-    try { return await fromUuid(ref.uuid); } catch { /* ignore */ }
-  }
-  const entry = Object.entries(sys.roles ?? {}).find(([, r]) => r === "gunner");
-  if (entry) {
-    const user = game.users.get(entry[0]);
-    return user?.character ?? null;
-  }
-  return null;
+  return resolveStationOperatorActor(sheet.actor, "gunner");
 }
 
 // ── Action handlers (static, `this` = sheet instance) ────────────────────────

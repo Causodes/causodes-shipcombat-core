@@ -30,6 +30,7 @@ import { SystemAdapter } from "./scripts/systems/SystemAdapter.js";
 import { registerSettings } from "./scripts/settings.js";
 import { registerLangSubstitution } from "./scripts/lang.js";
 import { BDAPopup, launchBDAFromChat } from "./scripts/apps/BDAPopup.js";
+import { getOrdnanceControllerUserId, resolveStationOperatorActor } from "./scripts/roles/crew-operators.js";
 import { registerAnimations } from "./scripts/animations.js";
 import { PartialRegistry, CORE_PARTIAL_DEFAULTS, loadAllTemplates } from "./scripts/templates.js";
 import { TargetingPopupV1 }
@@ -187,15 +188,16 @@ Hooks.once("init", async () => {
   };
 
   // ── Ordnance token control restriction ─────────────────────────────────
-  // Non-GM, non-Ordnance Master players can see friendly ordnance but not select or
-  // move it.  Only the ordnance role holder (Ordnance Master) may interact.
+  // Non-GMs may control deployed ordnance when its launch logic granted them
+  // ownership. The station fallback also covers templates created before that
+  // ownership assignment was introduced.
   const _origCanControl = TokenCls.prototype._canControl;
   TokenCls.prototype._canControl = function (user, event) {
     if (isOrdnance(this.document.actor)) {
       if (user.isGM) return true;
       const ship = ShipCombatState.ship;
-      const myRole = ship?.system?.roles?.[user.id];
-      return myRole === "ordnance";
+      return this.document.actor?.testUserPermission?.(user, "OWNER")
+        || user.id === getOrdnanceControllerUserId(ship, ordnanceSubtype(this.document.actor));
     }
     return _origCanControl.call(this, user, event);
   };
@@ -212,15 +214,7 @@ Hooks.once("init", async () => {
       const actor = combatant?.actor;
       if (!actor || actor.type !== `${MODULE_ID}.ship`) continue;
       // Mirror the captain-lookup logic from _onRollInitiative in captain.js
-      const sys = SystemAdapter.current.getShipData(actor);
-      let hasCaptain = false;
-      if (sys.crewActors?.captain?.uuid) {
-        try { hasCaptain = !!(await fromUuid(sys.crewActors.captain.uuid)); } catch { /* ignore */ }
-      }
-      if (!hasCaptain) {
-        const entry = Object.entries(sys.roles ?? {}).find(([, r]) => r === "captain");
-        if (entry) hasCaptain = !!(game.users.get(entry[0])?.character);
-      }
+      const hasCaptain = !!(await resolveStationOperatorActor(actor, "captain"));
       if (!hasCaptain) {
         ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoCaptainAssigned"));
         return this;
@@ -741,18 +735,36 @@ Hooks.on("updateCombat", async (combat, changes) => {
   }
 });
 
-// ── BDA-Pending chat card: Augur-only launch button ─────────────────────────
+// ── BDA-Pending chat card: assigned operator + GM fallback ──────────────────
 
-Hooks.on("renderChatMessageHTML", (message, html) => {
+Hooks.on("renderChatMessageHTML", async (message, html) => {
   const flags = message.flags?.[MODULE_ID];
   if (flags?.type !== "bdaPending") return;
 
   const btn = html.querySelector("[data-action='openBDAFromChat']");
   if (!btn) return; // Already in rolled/completed state  -  no button in template
 
-  const augurUserId = flags.augurUserId;
-  if (game.user.id !== augurUserId) {
-    btn.remove();
+  const operatorUserId = flags.operatorUserId ?? flags.augurUserId ?? null;
+  if (!game.user.isGM && game.user.id !== operatorUserId) {
+    btn.disabled = true;
+    btn.dataset.tooltip = game.i18n.localize("SHIPCOMBAT.Warning.BDAOperatorOnly");
+    btn.title = game.i18n.localize("SHIPCOMBAT.Warning.BDAOperatorOnly");
+    return;
+  }
+
+  let ship = null;
+  if (flags.shipUuid) {
+    try { ship = await fromUuid(flags.shipUuid); } catch { /* use legacy fallback */ }
+  }
+  ship ??= ShipCombatState.ship;
+  const attacks = ship ? SystemAdapter.current.getShipData(ship)?.resources?.sensors?.bdaAttacks : null;
+  const exactAttack = flags.attackId ? attacks?.[flags.attackId] : null;
+  const mismatchedGeneration = exactAttack && flags.attackCreatedAt !== undefined
+    && exactAttack.createdAt !== flags.attackCreatedAt;
+  if (flags.attackId && (!exactAttack || mismatchedGeneration)) {
+    btn.disabled = true;
+    btn.dataset.tooltip = game.i18n.localize("SHIPCOMBAT.Warning.BDAExpired");
+    btn.title = game.i18n.localize("SHIPCOMBAT.Warning.BDAExpired");
     return;
   }
 
@@ -762,10 +774,9 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
     _launching = true;
     btn.disabled = true;
 
-    const ship = ShipCombatState.ship;
     if (!ship) { _launching = false; btn.disabled = false; return; }
 
-    await launchBDAFromChat(ship, message);
+    await launchBDAFromChat(ship, message, flags.attackId ?? null);
   });
 });
 

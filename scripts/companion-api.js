@@ -42,3 +42,12 @@ export { ShipComponentSchemaMixin }                          from "./items/ShipC
 export { ShipComponentSheetMixin, ShipComponentSheetV1Mixin } from "./items/ShipComponentSheetMixin.js";
 export { CORE_MODULE_ID, MACRO_FIRE_TIERS, buildChargeTiers, SHIP_CLASSIFICATIONS } from "./constants.js";
 export { hullDisplay }                                       from "./constants.js";
+export {
+  getStationOperatorRole,
+  getStationOperatorUserId,
+  resolveStationOperatorActor,
+  resolveStationOperatorActorSync,
+  userOperatesStation,
+  getOrdnanceControllerRole,
+  getOrdnanceControllerUserId,
+} from "./roles/crew-operators.js";

@@ -13,6 +13,7 @@ import { RamTargetPopup } from "../apps/RamTargetPopup.js";
 import { ShipCombatState } from "../state/ShipCombatState.js";
 import { MODULE_ID } from "../constants.js";
 import { getEffectiveSkillSpec } from "../actors/ship/ShipSheetMixin.js";
+import { resolveStationOperatorActor } from "./crew-operators.js";
 
 // ── Action handlers (static, `this` = sheet instance) ──────────────────────
 
@@ -55,40 +56,10 @@ async function _onRollPiloting() {
   const sys = SystemAdapter.current.getShipData(this.actor);
   const crewSize = sys.crewSize ?? 6;
   const is3man = crewSize <= 3;
-  // In 3-man mode the Engineer handles helm; roll Engineering instead of Piloting.
-  // Look up the engineer crewActor first; fall back to pilot slot for 4-6 man.
-  let crewActor = null;
-
-  if (is3man) {
-    const enginRef = sys.crewActors?.engineer;
-    if (enginRef?.uuid) {
-      try { crewActor = await fromUuid(enginRef.uuid); } catch { /* ignore */ }
-    }
-    if (!crewActor) {
-      const entry = Object.entries(sys.roles ?? {}).find(([, r]) => r === "engineer");
-      if (entry) {
-        const user = game.users.get(entry[0]);
-        crewActor = user?.character ?? null;
-      }
-    }
-    if (!crewActor) {
-      return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoPilotAssigned"));
-    }
-  } else {
-    const pilotRef = sys.crewActors?.pilot;
-    if (pilotRef?.uuid) {
-      try { crewActor = await fromUuid(pilotRef.uuid); } catch { /* ignore */ }
-    }
-    if (!crewActor) {
-      const entry = Object.entries(sys.roles ?? {}).find(([, r]) => r === "pilot");
-      if (entry) {
-        const user = game.users.get(entry[0]);
-        crewActor = user?.character ?? null;
-      }
-    }
-    if (!crewActor) {
-      return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoPilotAssigned"));
-    }
+  // In 3-man mode the Engineer operates helm; larger crews use the Helmsman.
+  const crewActor = await resolveStationOperatorActor(this.actor, "pilot");
+  if (!crewActor) {
+    return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoPilotAssigned"));
   }
 
   const skillKey = is3man
