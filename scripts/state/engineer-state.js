@@ -1,4 +1,5 @@
 import { SystemAdapter } from "../systems/SystemAdapter.js";
+import { getPowerCoreCount, getPowerCorePoolRole } from "../roles/crew-operators.js";
 /**
  * engineer-state.js – Power cores, heat, fire, shields, core bank, hull repair
  * extracted from ShipCombatState.
@@ -9,31 +10,9 @@ import { SystemAdapter } from "../systems/SystemAdapter.js";
 
 // ── Power Cores ───────────────────────────────────────────────────────────
 
-export async function assignPowerCore(targetUserId) {
-  const data = this.getData();
-  const available = data.resources?.engineer?.powerCores ?? 0;
-  if (available <= 0) {
-    ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoPowerCores"));
-    return;
-  }
-  return this.update({
-    [`assignedCores.${targetUserId}`]: true,
-    "resources.engineer.powerCores": available - 1,
-  });
-}
-
-export async function revokePowerCore(targetUserId) {
-  const data = this.getData();
-  const available = data.resources?.engineer?.powerCores ?? 0;
-  return this.update({
-    [`assignedCores.${targetUserId}`]: false,
-    "resources.engineer.powerCores": available + 1,
-  });
-}
-
 export async function stagePowerCore(targetRoleId) {
   const data = this.getData();
-  if (data.assignedCores?.[targetRoleId] === "spent") {
+  if (data.assignedCores?.[targetRoleId]) {
     ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.CoreAlreadyConsumed"));
     return;
   }
@@ -63,6 +42,10 @@ export async function unstagePowerCore(targetRoleId) {
 }
 
 export async function dispatchStagedCores() {
+  return this.withPowerCoreTransaction(() => _dispatchStagedCores.call(this));
+}
+
+async function _dispatchStagedCores() {
   const data = this.getData();
   // Power Fluctuation: Core Systems Low+ blocks all core distribution
   if (data.conditions?.coreSystems?.tier) {
@@ -80,8 +63,11 @@ export async function dispatchStagedCores() {
     if (val) {
       updates[`assignedCores.${uid}`] = true;
       updates[`resources.engineer.stagedCores.${uid}`] = false;
-      // Increment coreCount for the role receiving the dispatched core
-      updates[`resources.${uid}.coreCount`] = (data.resources?.[uid]?.coreCount ?? 0) + 1;
+      // assignedCores is only the Engineer's once-per-role distribution ledger.
+      // The spendable core itself joins the receiving operator's shared pool.
+      const poolRole = getPowerCorePoolRole(data, uid);
+      const key = `resources.${poolRole}.coreCount`;
+      updates[key] = (updates[key] ?? getPowerCoreCount(data, uid)) + 1;
     }
   }
   if (stagedShield > 0) {
@@ -97,7 +83,7 @@ export async function dispatchStagedCores() {
 
 export function hasPowerCore(roleId) {
   const data = this.getData();
-  return (data.resources?.[roleId]?.coreCount ?? 0) > 0;
+  return getPowerCoreCount(data, roleId) > 0;
 }
 
 // ── Emergency Vent & Internal Fire ──────────────────────────────────────

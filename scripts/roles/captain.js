@@ -12,7 +12,7 @@ import { emitToGM }                               from "../socket.js";
 import { SystemAdapter }                          from "../systems/SystemAdapter.js";
 import { BattleClarityPopup }                     from "../apps/BattleClarityPopup.js";
 import { DeadReckoningPopup }                     from "../apps/DeadReckoningPopup.js";
-import { resolveStationOperatorActor }             from "./crew-operators.js";
+import { getPowerCoreCount, resolveStationOperatorActor } from "./crew-operators.js";
 
 // Card definition lookup map (built once)
 const CARD_DEFS = Object.fromEntries(CAPTAIN_CARDS.map(c => [c.id, c]));
@@ -117,7 +117,7 @@ export function buildCaptainContext(sys, opts = {}) {
   const discardPileCards = _resolvePileCards(captain.discardPile);
   const mulliganUsed      = captain.mulliganUsed  ?? false;
   const coreActionUsed    = captain.coreActionUsed ?? false;
-  const hasCoreAssigned   = ((captain.coreCount ?? 0) > 0) || (!!(sys.assignedCores?.captain) && sys.assignedCores?.captain !== "spent");
+  const hasCoreAssigned   = getPowerCoreCount(sys, "captain") > 0;
   const selectedCoreActionLabel = (coreActionUsed && captain.selectedCoreAction)
     ? game.i18n.localize(CAPTAIN_CORE_ACTIONS.find(a => a.id === captain.selectedCoreAction)?.label ?? "")
     : "";
@@ -402,7 +402,7 @@ async function _onCaptainCoreAction(event, target) {
   const actionId = target.dataset.coreAction;
   const captain  = sys.resources?.captain ?? {};
 
-  const hasCoreAssigned = ((captain.coreCount ?? 0) > 0) || (!!(sys.assignedCores?.captain) && sys.assignedCores?.captain !== "spent");
+  const hasCoreAssigned = getPowerCoreCount(sys, "captain") > 0;
   if (!hasCoreAssigned) {
     ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Captain.Core.NoCoreAssigned"));
     return;

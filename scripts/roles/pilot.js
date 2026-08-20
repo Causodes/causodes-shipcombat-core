@@ -13,7 +13,7 @@ import { RamTargetPopup } from "../apps/RamTargetPopup.js";
 import { ShipCombatState } from "../state/ShipCombatState.js";
 import { MODULE_ID } from "../constants.js";
 import { getEffectiveSkillSpec } from "../actors/ship/ShipSheetMixin.js";
-import { resolveStationOperatorActor } from "./crew-operators.js";
+import { getPowerCoreCount, resolveStationOperatorActor } from "./crew-operators.js";
 
 // ── Action handlers (static, `this` = sheet instance) ──────────────────────
 
@@ -186,7 +186,7 @@ async function _onConfirmHelm() {
 
 async function _onPilotRetrograde() {
   const sys = SystemAdapter.current.getShipData(this.actor);
-  if (!((sys.resources?.pilot?.coreCount ?? 0) > 0)) return;
+  if (getPowerCoreCount(sys, "pilot") <= 0) return;
 
   const token = this.actor.getActiveTokens()?.[0];
   if (!token) {
@@ -214,7 +214,7 @@ async function _onPilotRetrograde() {
 
 async function _onPilotOverdrive() {
   const sys = SystemAdapter.current.getShipData(this.actor);
-  if (!((sys.resources?.pilot?.coreCount ?? 0) > 0)) return;
+  if (getPowerCoreCount(sys, "pilot") <= 0) return;
   const confirmed = await foundry.applications.api.DialogV2.confirm({
     window: { title: game.i18n.localize("SHIPCOMBAT.Dialog.OverdriveTitle") },
     content: `<p>${game.i18n.localize("SHIPCOMBAT.Dialog.OverdriveBody")}</p>`,
@@ -235,7 +235,7 @@ async function _onApToThrust() {
 
 async function _onPilotStrafe() {
   const sys = SystemAdapter.current.getShipData(this.actor);
-  if (!((sys.resources?.pilot?.coreCount ?? 0) > 0)) return;
+  if (getPowerCoreCount(sys, "pilot") <= 0) return;
 
   const token = this.actor.getActiveTokens()?.[0];
   if (!token) {
@@ -271,7 +271,7 @@ async function _onPilotStrafe() {
 
 async function _onPilotFlipAndBurn() {
   const sys = SystemAdapter.current.getShipData(this.actor);
-  if (!((sys.resources?.pilot?.coreCount ?? 0) > 0)) return;
+  if (getPowerCoreCount(sys, "pilot") <= 0) return;
 
   const token = this.actor.getActiveTokens()?.[0];
   if (!token) {
@@ -572,7 +572,7 @@ export function buildHelmContext(sys, opts = {}) {
     hasCaptainFreeCore: false,
     // hasCoreAssigned drives the core action button visibility in the helm template.
     // True whenever ANY core is available (captain-granted OR engineer-dispatched).
-    hasCoreAssigned: (sys.resources?.pilot?.coreCount ?? 0) > 0,
+    hasCoreAssigned: getPowerCoreCount(sys, "pilot") > 0,
     // Auxiliary Power (from engineer resources, read-only display in pilot tab)
     auxiliaryPower,
     auxPowerCapacity,

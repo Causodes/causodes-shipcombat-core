@@ -18,10 +18,24 @@
 
 import { MODULE_ID, CAPTAIN_CARDS, CAPTAIN_CORE_ACTIONS, buildCaptainDeck } from "../constants.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
+import { getPowerCoreCount, getPowerCorePoolRole } from "../roles/crew-operators.js";
 
 const HAND_CAP   = 6;
 const DRAWS_PER_ROUND = 3;
 const TRIAGE_MAX = 2;
+const CORE_GRANT_CARD_IDS = new Set([
+  "gunsHot",
+  "pressTheAttack",
+  "enhancedSensor",
+  "armamentOrder",
+  "overdriveCommand",
+]);
+
+function _grantCore(sys, updates, stationRole, count = 1) {
+  const poolRole = getPowerCorePoolRole(sys, stationRole);
+  const key = `resources.${poolRole}.coreCount`;
+  updates[key] = (updates[key] ?? getPowerCoreCount(sys, stationRole)) + count;
+}
 
 // ── Card lookup helper ────────────────────────────────────────────────────────
 function _findCardDef(cardId) {
@@ -150,7 +164,14 @@ export async function drawCards({ count = DRAWS_PER_ROUND } = {}) {
 // ─────────────────────────────────────────────────────────────────────────────
 // playCard({ cardId })
 // ─────────────────────────────────────────────────────────────────────────────
-export async function playCard({ cardId, sector }) {
+export async function playCard(payload) {
+  if (CORE_GRANT_CARD_IDS.has(payload?.cardId)) {
+    return this.withPowerCoreTransaction(() => _playCard.call(this, payload));
+  }
+  return _playCard.call(this, payload);
+}
+
+async function _playCard({ cardId, sector }) {
   const sys     = this.getData();
   const captain = sys.resources?.captain ?? {};
   const hand    = [...(captain.hand ?? [])];
@@ -178,11 +199,12 @@ export async function playCard({ cardId, sector }) {
 
   // Per-card immediate effects
   switch (cardId) {
-    // Free core action: grant a virtual core (does NOT set assignedCores, so Engineer can still assign a real one later)
-    case "gunsHot":         updates["resources.gunner.coreCount"]   = (sys.resources?.gunner?.coreCount   ?? 0) + 1; break;
-    case "pressTheAttack":  updates["resources.pilot.coreCount"]    = (sys.resources?.pilot?.coreCount    ?? 0) + 1; break;
-    case "enhancedSensor":  updates["resources.sensors.coreCount"]  = (sys.resources?.sensors?.coreCount  ?? 0) + 1; break;
-    case "armamentOrder":    updates["resources.ordnance.coreCount"] = (sys.resources?.ordnance?.coreCount ?? 0) + 1; break;
+    // Core grants share the receiving operator's pool. They intentionally do
+    // not touch assignedCores, which is exclusively the Engineer's ledger.
+    case "gunsHot":         _grantCore(sys, updates, "gunner");   break;
+    case "pressTheAttack":  _grantCore(sys, updates, "pilot");    break;
+    case "enhancedSensor":  _grantCore(sys, updates, "sensors");  break;
+    case "armamentOrder":   _grantCore(sys, updates, "ordnance"); break;
     // Gunner hit bonus
     case "inspiredTargeting":
       updates["resources.gunner.captainHitBonus"] = (sys.resources?.gunner?.captainHitBonus ?? 0) + SystemAdapter.current.getHitBonusStep();
@@ -227,7 +249,7 @@ export async function playCard({ cardId, sector }) {
     // Overdrive Command: grant a free core use to all combat roles + extra engineer action
     case "overdriveCommand": {
       for (const roleId of ["gunner", "pilot", "sensors", "ordnance", "captain"]) {
-        updates[`resources.${roleId}.coreCount`] = (sys.resources?.[roleId]?.coreCount ?? 0) + 1;
+        _grantCore(sys, updates, roleId);
       }
       updates["resources.engineer.extraActions"] = (sys.resources?.engineer?.extraActions ?? 0) + 1;
       break;
@@ -411,7 +433,7 @@ export async function captainCoreAction({ actionId, tokenId, cardId, newPile } =
   const sys     = this.getData();
   const captain = sys.resources?.captain ?? {};
 
-  const hasCoreAvail = ((captain.coreCount ?? 0) > 0) || (!!(sys.assignedCores?.captain) && sys.assignedCores.captain !== "spent");
+  const hasCoreAvail = getPowerCoreCount(sys, "captain") > 0;
   if (!hasCoreAvail) return;
 
   const TIER_ORDER = ["low", "medium", "high"];
@@ -478,12 +500,9 @@ export async function captainCoreAction({ actionId, tokenId, cardId, newPile } =
 
   else return; // unknown actionId
 
-  // Consume one core (card-granted coreCount first, then Engineer-assigned core)
-  if ((captain.coreCount ?? 0) > 0) {
-    updates[SystemAdapter.current.systemPath("resources.captain.coreCount")] = captain.coreCount - 1;
-  } else {
-    updates[SystemAdapter.current.systemPath("assignedCores.captain")] = "spent";
-  }
+  // Reserve the shared pool before applying the prepared effect. Competing
+  // Captain/Sensors/Ordnance actions can no longer authorize the same core.
+  if (!(await this.consumePowerCore("captain"))) return;
 
   await this.ship.update(updates);
 

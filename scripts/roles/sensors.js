@@ -39,6 +39,7 @@ import { SystemAdapter } from "../systems/SystemAdapter.js";
 import { LOCK_DECAY_ROUNDS, AUGUR_LOCK_COSTS, AUGUR_CORE_ACTIONS, BDA_CORRECTIONS, MODULE_ID } from "../constants.js";
 import { SensorRadar } from "../canvas/SensorRadar.js";
 import { BDAPopup, launchBDAFromChat } from "../apps/BDAPopup.js";
+import { getPowerCoreCount } from "./crew-operators.js";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -166,7 +167,7 @@ async function _onSensorCoreAction(event, target) {
   const sys      = SystemAdapter.current.getShipData(this.actor);
   const actionId = target.dataset.actionId;
 
-  const hasCoreAvail = (sys.resources?.sensors?.coreCount ?? 0) > 0;
+  const hasCoreAvail = getPowerCoreCount(sys, "sensors") > 0;
   if (!hasCoreAvail) {
     return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NeedsPowerCore"));
   }
@@ -174,9 +175,20 @@ async function _onSensorCoreAction(event, target) {
   const entry = AUGUR_CORE_ACTIONS.find(a => a.id === actionId);
   if (!entry) return;
 
-  // Spend AP cost (with Telemetry Buoy discount if active)
+  // Validate AP before reserving the shared operator core. The GM-side core
+  // reservation is serialized, so only its successful caller applies effects.
   const apCostMultiplier = _getSensorApCostMultiplier(this.actor);
-  if (!_spendAP(sys, _buoyDiscount(sys, Math.ceil(entry.ap * apCostMultiplier)))) return;
+  const apCost = _buoyDiscount(sys, Math.ceil(entry.ap * apCostMultiplier));
+  if ((sys.resources?.engineer?.auxiliaryPower ?? 0) < apCost) {
+    ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.InsufficientAP"));
+    return;
+  }
+  const consumed = await emitToGM("consumePowerCore", { roleId: "sensors", actionId });
+  if (!consumed) {
+    ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NeedsPowerCore"));
+    return;
+  }
+  _spendAP(sys, apCost);
 
   // Combat Telemetry: upgrade ALL currently locked targets to tier 4
   if (actionId === "combatTelemetry") {
@@ -185,10 +197,6 @@ async function _onSensorCoreAction(event, target) {
     // stale lock array and overwrite one another.
     emitToGM("upgradeAllLocks", { tier: 4 });
   }
-
-  const played = [...(sys.resources?.sensors?.coreActionsPlayed ?? []), actionId];
-  emitToGM("updateResource", { roleId: "sensors", key: "coreActionsPlayed", value: played });
-  emitToGM("markOvercharge", { roleId: "sensors" });
 
   // Store targeted effect for radar visualisation
   const targetTokenId = target.dataset.targetTokenId;
@@ -250,7 +258,7 @@ export function buildSensorsContext(sys, opts = {}) {
   const ap           = sys.resources?.engineer?.auxiliaryPower ?? 0;
   const actionUsed   = sys.resources?.sensors?.actionUsed ?? false;
   const coreUsed     = sys.resources?.sensors?.coreActionUsed ?? false;
-  const coreCount    = sys.resources?.sensors?.coreCount ?? 0;
+  const coreCount    = getPowerCoreCount(sys, "sensors");
   const hasCoreAssigned = coreCount > 0;
 
   // ── Captain card: Sensor Priority ──────────────────────────────────────────

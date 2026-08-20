@@ -23,7 +23,7 @@ import { ShipCombatState } from "../../state/ShipCombatState.js";
 import { buildHelmContext, helmOnRender } from "../../roles/pilot.js";
 import { buildEngineerContext } from "../../roles/engineer.js";
 import { buildSensorsContext } from "../../roles/sensors.js";
-import { resolveStationOperatorActorSync, userOperatesStation } from "../../roles/crew-operators.js";
+import { getOperatedPowerCoreCount, getPowerCoreCount, resolveStationOperatorActorSync, userOperatesStation } from "../../roles/crew-operators.js";
 import { buildGunnerContext, enrichWeaponForGunner } from "../../roles/gunner.js";
 import { ORDNANCE_ACTIONS, buildOrdnanceContext } from "../../roles/ordnance.js";
 import { buildCaptainContext } from "../../roles/captain.js";
@@ -349,6 +349,8 @@ export class ShipController {
 
       const payloadId  = sys.resources?.[roleId]?.payload ?? "";
       const payloadDef = payloadId ? PAYLOAD_TYPES[payloadId] : null;
+      // All grants feed the receiving operator's one spendable core pool.
+      const operatedCoreCount = getOperatedPowerCoreCount(sys, roleId);
 
       return {
         ...role,
@@ -362,10 +364,13 @@ export class ShipController {
         } : (actorRef ?? null),
         assignedUserId: assignedUid,
         isMyRole:       assignedUid === userId,
-        hasCoreAssigned: !!(sys.assignedCores?.[roleId]) && sys.assignedCores?.[roleId] !== "spent",
+        hasCoreAssigned: !!sys.assignedCores?.[roleId],
         hasCaptainFreeCore: false,
         isCoreSpent: false,
-        coreCount:    sys.resources?.[roleId]?.coreCount ?? 0,
+        coreCount:    getPowerCoreCount(sys, roleId),
+        operatedCoreCount,
+        showCoreDistributionRow: roleId !== "engineer" || operatedCoreCount > 0,
+        canStageCore: roleId !== "engineer",
         hasCoreStaged: !!(stagedCoresMap[roleId]),
         standardUsed:  turnDone,
         overchargedUsed,
@@ -387,7 +392,7 @@ export class ShipController {
     for (const r of rolesArray) roles[r.id] = r;
 
     const myRoleData   = myRole ? roles[myRole] : null;
-    const hasPowerCore = (sys.resources?.pilot?.coreCount ?? 0) > 0;
+    const hasPowerCore = getPowerCoreCount(sys, "pilot") > 0;
     const shieldCfg    = ShipCombatState.getShieldStats();
 
     const sectors = SECTORS.map(sector => ({

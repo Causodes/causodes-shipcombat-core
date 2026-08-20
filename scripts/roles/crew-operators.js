@@ -1,6 +1,8 @@
 /** Resolve station ownership consistently across every supported crew layout. */
 import { SystemAdapter } from "../systems/SystemAdapter.js";
 
+export const POWER_CORE_STATION_ROLES = Object.freeze(["captain", "gunner", "pilot", "sensors", "ordnance"]);
+
 function _shipData(shipOrData) {
   return shipOrData?.system
     ? SystemAdapter.current.getShipData(shipOrData)
@@ -23,6 +25,27 @@ export function getStationOperatorRole(shipOrData, stationRole) {
     if (crewSize === 5) return "captain";
   }
   return stationRole;
+}
+
+/**
+ * Return the crew-role resource bucket that owns a station's Power Cores.
+ * Core provenance is deliberately not represented here: Captain grants and
+ * Engineer dispatches both increase this same receiving-operator pool.
+ */
+export function getPowerCorePoolRole(shipOrData, stationRole) {
+  return getStationOperatorRole(shipOrData, stationRole);
+}
+
+/** Return the number of ready Power Cores available to a station's operator. */
+export function getPowerCoreCount(shipOrData, stationRole) {
+  const sys = _shipData(shipOrData);
+  const poolRole = getPowerCorePoolRole(sys, stationRole);
+  return Math.max(0, Number(sys?.resources?.[poolRole]?.coreCount) || 0);
+}
+
+/** Ready Power Cores held by a crew role, for the Engineer distribution UI. */
+export function getOperatedPowerCoreCount(shipOrData, operatorRole) {
+  return getPowerCoreCount(shipOrData, operatorRole);
 }
 
 export function getStationOperatorUserId(shipActor, stationRole) {

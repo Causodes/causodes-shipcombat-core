@@ -17,16 +17,7 @@ import { SystemAdapter } from "../systems/SystemAdapter.js";
  * @param {string} actionId  – "overdrive" | "strafe" | "retro"
  */
 export async function consumePilotCore(userId, actionId) {
-  if (!this.hasPowerCore("pilot")) return false;
-  const data      = this.getData();
-  const coreCount = data.resources?.pilot?.coreCount ?? 0;
-  if (coreCount <= 0) return false;
-  const played = [...(data.resources?.pilot?.coreActionsPlayed ?? []), actionId];
-  await this.update({
-    "resources.pilot.coreCount":         Math.max(0, coreCount - 1),
-    "resources.pilot.coreActionsPlayed": played,
-  });
-  return true;
+  return this.consumePowerCore("pilot", actionId);
 }
 
 /**

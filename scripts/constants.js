@@ -188,7 +188,7 @@ export const DEFAULT_COMBAT_STATE = {
   reactions: {},
   roles: {},
   resources: {
-    engineer: { heat: 0, powerCores: 0, auxiliaryPower: 0, actionChoices: [], extraActions: 0, stagedCores: {}, stagedShieldCores: 0, stagedAuxCores: 0, committedAuxCores: 0, heatCoresStaged: 1, fireCoresStaged: 1, payload: "" },
+    engineer: { heat: 0, powerCores: 0, auxiliaryPower: 0, coreCount: 0, actionChoices: [], extraActions: 0, stagedCores: {}, stagedShieldCores: 0, stagedAuxCores: 0, committedAuxCores: 0, heatCoresStaged: 1, fireCoresStaged: 1, payload: "" },
     pilot:     { fuelBurned: 0, bearing: 0, payload: "", coreCount: 0, coreActionsPlayed: [] },
     sensors:   { actionUsed: false, coreActionUsed: false, bdaAttacks: {}, locks: [], effects: [], fireCorrection: null, payload: "", coreCount: 0, coreActionsPlayed: [] },
     gunner:    { ammo: 0, power: 0, ordnanceSL: 0, allocAccuracy: 0, allocPenetration: 0, allocFirepower: 0, slLocked: false, ordnanceRolled: false, arcOverlayActive: false, payload: "", coreCount: 0, coreActionsPlayed: [] },

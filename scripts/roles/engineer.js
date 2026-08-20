@@ -10,7 +10,8 @@
  * resources.engineer.extraActions:  number     -  extra slots granted by captain cards
  *
  * Staged cores: toggle-bolts stage/unstage cores (deducted from pool, not yet
- * granted to roles). "Dispatch Cores" button commits staged → assignedCores.
+ * granted to roles). "Dispatch Cores" adds to each receiving operator's core
+ * pool and records the once-per-role assignment in assignedCores.
  *
  * Shield commitment: part of Core Distribution. Multiple cores can be committed
  * to shields; they convert to void flux at the start of the NEXT round.
@@ -119,7 +120,7 @@ async function _onOverclock() {
   }
 }
 
-/** Dispatch staged cores → assignedCores so roles can use their Overcharged action. */
+/** Dispatch staged cores into receiving-operator pools and record the Engineer ledger. */
 async function _onDispatchCores() {
   emitToGM("dispatchStagedCores", {});
 }

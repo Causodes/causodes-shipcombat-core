@@ -84,23 +84,33 @@
                 </div>
             </div>
             {{#each roles}}
-            {{#unless (shipcombatEq id "engineer")}}
+            {{#if showCoreDistributionRow}}
             <div class="shipcombat-core-alloc-row">
                 <span class="shipcombat-core-alloc-name">{{labelLocalized}}</span>
-                <span class="shipcombat-core-alloc-detail shipcombat-muted">{{#if assignedActor}}{{assignedActor.name}}{{else}}&mdash;{{/if}}</span>
+                <span class="shipcombat-core-alloc-detail shipcombat-muted">
+                    {{#if assignedActor}}{{assignedActor.name}}{{else}}&mdash;{{/if}}
+                    {{#if operatedCoreCount}}
+                    <span class="shipcombat-core-ready-count">
+                        <i class="fa-solid fa-bolt"></i>
+                        {{localize "SHIPCOMBAT.Engineer.ReadyCores" count=operatedCoreCount}}
+                    </span>
+                    {{/if}}
+                </span>
                 <div class="shipcombat-core-alloc-ctrl">
                     {{#if hasCoreAssigned}}
                         <span class="shipcombat-core-btn--assigned"><i class="fa-solid fa-check"></i></span>
-                    {{else}}
+                    {{else if canStageCore}}
                         <a class="shipcombat-core-btn {{#if hasCoreStaged}}shipcombat-core-btn--staged{{/if}}"
                            data-action="toggleCore" data-role-id="{{id}}"
                            data-tooltip="{{localize 'SHIPCOMBAT.Tooltip.ToggleCore'}}">
                             <i class="fa-solid fa-bolt"></i>
                         </a>
+                    {{else}}
+                        <span class="shipcombat-muted">&mdash;</span>
                     {{/if}}
                 </div>
             </div>
-            {{/unless}}
+            {{/if}}
             {{/each}}
         </div>
 

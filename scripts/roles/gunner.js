@@ -21,12 +21,15 @@ import { MODULE_ID, MACRO_FIRE_TIERS, buildChargeTiers, scaleDiceFormula, GUNNER
 import { TargetingPopup } from "../apps/TargetingPopup.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
 import { heatColor } from "../theme.js";
-import { resolveStationOperatorActor } from "./crew-operators.js";
+import { getPowerCoreCount, resolveStationOperatorActor } from "./crew-operators.js";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-const CORE_AMMO_BONUS   = 6;
-const CORE_POWER_BONUS  = 5;
+async function _reserveGunnerCore(actionId) {
+  const consumed = await emitToGM("consumePowerCore", { roleId: "gunner", actionId });
+  if (!consumed) ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NeedsPowerCore"));
+  return consumed;
+}
 
 function _getOrdnanceBayCaps(shipActor) {
   const bay = shipActor?.items?.find(i => i.type === `${MODULE_ID}.component` && i.system.slot === "weaponsBay");
@@ -38,11 +41,6 @@ function _getOrdnanceBayCaps(shipActor) {
 function _getHeatCapacity(shipActor) {
   const reactor = shipActor?.items?.find(i => i.type === `${MODULE_ID}.component` && i.system.slot === "reactor");
   return reactor?.system?.heatCapacity ?? 0;
-}
-
-function _getAuxPowerCapacity(shipActor) {
-  const reactor = shipActor?.items?.find(i => i.type === `${MODULE_ID}.component` && i.system.slot === "reactor");
-  return reactor?.system?.bankCapacity ?? 0;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -113,39 +111,6 @@ async function _onAllocGunnerSL(event, target) {
 }
 
 /**
- * Core action: Consume the assigned Power Core → gain +6 Ammo or +5 Auxiliary Power.
- * data-track = "ammo" | "power"
- */
-async function _onConsumeCore(event, target) {
-  const sys   = SystemAdapter.current.getShipData(this.actor);
-  const track = target.dataset.track;
-
-  const hasCoreAvail = (sys.resources?.gunner?.coreCount ?? 0) > 0;
-  if (!hasCoreAvail) {
-    return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NeedsPowerCore"));
-  }
-
-  const actionLabel = track === "ammo" ? "coreAmmo" : "corePower";
-  const played = [...(sys.resources?.gunner?.coreActionsPlayed ?? []), actionLabel];
-
-  if (track === "ammo") {
-    const current = sys.resources?.gunner?.ammo ?? 0;
-    const caps = _getOrdnanceBayCaps(this.actor);
-    const next    = Math.min(caps.ammoMax, current + CORE_AMMO_BONUS);
-    emitToGM("updateResource", { roleId: "gunner", key: "ammo", value: next });
-  } else if (track === "power") {
-    const current = sys.resources?.engineer?.auxiliaryPower ?? 0;
-    const cap = _getAuxPowerCapacity(this.actor);
-    const next = Math.min(cap, current + CORE_POWER_BONUS);
-    emitToGM("updateResource", { roleId: "engineer", key: "auxiliaryPower", value: next });
-  }
-
-  // Record played action then consume core
-  emitToGM("updateResource", { roleId: "gunner", key: "coreActionsPlayed", value: played });
-  emitToGM("markOvercharge", { roleId: "gunner" });
-}
-
-/**
  * Core action: Gunner picks one of two core action modes:
  *   showArcs       – broadcast fire arc overlay to helmsman (consume core)
  *   chooseCritLoc  – activate choose-crit-location flag for next crit (consume core)
@@ -154,15 +119,13 @@ async function _onGunnerCoreAction(event, target) {
   const sys    = SystemAdapter.current.getShipData(this.actor);
   const action = target.dataset.coreAction;
 
-  const hasCoreAvail = (sys.resources?.gunner?.coreCount ?? 0) > 0;
+  const hasCoreAvail = getPowerCoreCount(sys, "gunner") > 0;
   if (!hasCoreAvail) {
     return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NeedsPowerCore"));
   }
 
   if (action === "extendRange") {
-    const played = [...(sys.resources?.gunner?.coreActionsPlayed ?? []), "extendRange"];
-    emitToGM("updateResource", { roleId: "gunner", key: "coreActionsPlayed", value: played });
-    emitToGM("markOvercharge", { roleId: "gunner" });
+    if (!(await _reserveGunnerCore("extendRange"))) return;
     emitToGM("updateResource", { roleId: "gunner", key: "sensorBandExpanded", value: true });
   } else if (action === "chooseCritLoc") {
     // Gunner picks the location NOW (player-side dialog), stores choice for the next crit.
@@ -181,9 +144,7 @@ async function _onGunnerCoreAction(event, target) {
       }).render(true);
     });
     if (!locId) return; // cancelled  -  do NOT consume core
-    const played = [...(sys.resources?.gunner?.coreActionsPlayed ?? []), "chooseCritLoc"];
-    emitToGM("updateResource", { roleId: "gunner", key: "coreActionsPlayed", value: played });
-    emitToGM("markOvercharge", { roleId: "gunner" });
+    if (!(await _reserveGunnerCore("chooseCritLoc"))) return;
     emitToGM("updateResource", { roleId: "gunner", key: "chooseCritLocation", value: true });
     emitToGM("updateResource", { roleId: "gunner", key: "critLocationChoice",  value: locId });
   } else if (action === "emergencyResupply") {
@@ -192,9 +153,7 @@ async function _onGunnerCoreAction(event, target) {
     const current = sys.resources?.gunner?.ammo ?? 0;
     const gain    = Math.max(1, Math.ceil(caps.ammoMax * 0.25));
     const next    = Math.min(caps.ammoMax, current + gain);
-    const played  = [...(sys.resources?.gunner?.coreActionsPlayed ?? []), "emergencyResupply"];
-    emitToGM("updateResource", { roleId: "gunner", key: "coreActionsPlayed", value: played });
-    emitToGM("markOvercharge", { roleId: "gunner" });
+    if (!(await _reserveGunnerCore("emergencyResupply"))) return;
     emitToGM("updateResource", { roleId: "gunner", key: "ammo", value: next });
   }
 }
@@ -438,7 +397,7 @@ export function buildGunnerContext(sys, opts = {}) {
   const ordnanceRolled  = gunner.ordnanceRolled ?? false;
   const remainingSL     = ordnanceSL - allocAccuracy - allocPenetration - allocFirepower;
 
-  const hasCoreAssigned = (sys.resources?.gunner?.coreCount ?? 0) > 0;
+  const hasCoreAssigned = getPowerCoreCount(sys, "gunner") > 0;
   const isCoreSpent     = false;  // deprecated  -  coreCount drives availability now
   const canConsumeCore  = hasCoreAssigned;
 

@@ -45,6 +45,8 @@ export { CORE_MODULE_ID, MACRO_FIRE_TIERS, buildChargeTiers, SHIP_CLASSIFICATION
 export { hullDisplay }                                       from "./constants.js";
 export {
   getStationOperatorRole,
+  getPowerCorePoolRole,
+  getPowerCoreCount,
   getStationOperatorUserId,
   resolveStationOperatorActor,
   resolveStationOperatorActorSync,

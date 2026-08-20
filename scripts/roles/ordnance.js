@@ -22,7 +22,7 @@ import { SystemAdapter } from "../systems/SystemAdapter.js";
 import { MODULE_ID, PAYLOAD_TYPES, PAYLOADS_BY_ROLE, ORDNANCE_MASTER_ACTIONS, ORDNANCE_MASTER_CORE_ACTIONS, ORDNANCE_4MAN_COSTS } from "../constants.js";
 import { RecoverCraftPopup } from "../apps/StrikeCraftPopups.js";
 import { isOrdnance, isTorpedo, isStrikeCraft, ordnanceSubtype } from "../actors/ordnance/ordnance-types.js";
-import { resolveStationOperatorActor } from "./crew-operators.js";
+import { getPowerCoreCount, resolveStationOperatorActor } from "./crew-operators.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -115,15 +115,7 @@ export function buildOrdnanceContext(sys, opts = {}) {
   const bosunRolled  = sys.resources?.ordnance?.bosunRolled  ?? false;
   const actionUsed   = sys.resources?.ordnance?.actionUsed   ?? false;
   const coreUsed     = sys.resources?.ordnance?.coreActionUsed ?? false;
-  // Single coreCount integer replaces the old captainFreeCores + assignedCores dual-variable system
-  // In reduced-crew modes the ordnance role is absorbed by another station:
-  //   crewSize = 5  → captain handles ordnance (fall back to captain.coreCount)
-  //   crewSize <= 4 → gunner handles ordnance  (fall back to gunner.coreCount)
-  const _ordCoreDirect = sys.resources?.ordnance?.coreCount ?? 0;
-  const _crewSz = sys.crewSize ?? 6;
-  const coreCount = _ordCoreDirect
-    || (_crewSz === 5  ? (sys.resources?.captain?.coreCount ?? 0) : 0)
-    || (_crewSz <= 4   ? (sys.resources?.gunner?.coreCount  ?? 0) : 0);
+  const coreCount = getPowerCoreCount(sys, "ordnance");
   const hasCoreAssigned     = coreCount > 0;
   const coreActionsPlayed   = sys.resources?.ordnance?.coreActionsPlayed ?? [];
   const coreActionsPlayedLabels = coreActionsPlayed.map(id => {
@@ -793,31 +785,22 @@ async function _onOrdnanceMasterCoreAction(event, target) {
   const sys      = SystemAdapter.current.getShipData(this.actor);
   const actionId = target.dataset.coreAction;
 
-  const ordCoreCount = sys.resources?.ordnance?.coreCount ?? 0;
-  const crewSizeLocal = sys.crewSize ?? 6;
-  // In reduced-crew modes the ordnance role is absorbed by another station:
-  //   crewSize = 5  → captain's core is consumed
-  //   crewSize <= 4 → gunner's core is consumed
-  let coreCount, coreRoleId;
-  if (ordCoreCount > 0) {
-    coreCount  = ordCoreCount;
-    coreRoleId = "ordnance";
-  } else if (crewSizeLocal === 5 && (sys.resources?.captain?.coreCount ?? 0) > 0) {
-    coreCount  = sys.resources.captain.coreCount;
-    coreRoleId = "captain";
-  } else if (crewSizeLocal <= 4 && (sys.resources?.gunner?.coreCount ?? 0) > 0) {
-    coreCount  = sys.resources.gunner.coreCount;
-    coreRoleId = "gunner";
-  } else {
-    coreCount  = 0;
-    coreRoleId = "ordnance";
-  }
+  const coreCount = getPowerCoreCount(sys, "ordnance");
   if (coreCount <= 0) {
     ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Ordnance.CoreActionUsed"));
     return;
   }
   const entry = ORDNANCE_MASTER_CORE_ACTIONS.find(a => a.id === actionId);
   if (!entry) return;
+  let coreReserved = false;
+  const reserveCore = async () => {
+    if (coreReserved) return true;
+    coreReserved = await emitToGM("consumePowerCore", { roleId: "ordnance", actionId });
+    if (!coreReserved) {
+      ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NeedsPowerCore"));
+    }
+    return coreReserved;
+  };
 
   // ── Combat Recovery Doctrine ──────────────────────────────────────────────
   if (actionId === "combatRecoveryDoctrine") {
@@ -859,6 +842,7 @@ async function _onOrdnanceMasterCoreAction(event, target) {
       });
       if (!choice || choice === "cancel") return;
     }
+    if (!(await reserveCore())) return;
 
     if (choice === "destroyed") {
       // First use on a destroyed craft: moves 1 airframe to partial repair
@@ -905,6 +889,7 @@ async function _onOrdnanceMasterCoreAction(event, target) {
 
     const removed = commitments.splice(idx, 1)[0];
     const manpower = sys.resources?.ordnance?.manpower ?? 0;
+    if (!(await reserveCore())) return;
 
     // Return crew and clear commitment
     emitToGM("updateResource", { roleId: "ordnance", key: "commitments", value: commitments });
@@ -977,6 +962,7 @@ async function _onOrdnanceMasterCoreAction(event, target) {
 
     const armedTorpedoes    = sys.resources?.ordnance?.armedTorpedoes    ?? 0;
     const availablePayloads = sys.resources?.ordnance?.availablePayloads ?? 0;
+    if (!(await reserveCore())) return;
     if (choice === "torpedo") {
       emitToGM("updateResource", { roleId: "gunner",   key: "ammo",              value: ammo - 6 });
       emitToGM("updateResource", { roleId: "ordnance", key: "armedTorpedoes",    value: armedTorpedoes + 1 });
@@ -1010,6 +996,7 @@ async function _onOrdnanceMasterCoreAction(event, target) {
         d.render(true);
       });
       if (!choice || choice === "cancel") return;
+      if (!(await reserveCore())) return;
 
       if (choice === "recover") {
         // Restore 10% of permanently lost crew (min 1), capped at original component capacity
@@ -1025,6 +1012,7 @@ async function _onOrdnanceMasterCoreAction(event, target) {
       }
     } else {
       // No permanent loss  -  temp bonus: 25% of manpower cap
+      if (!(await reserveCore())) return;
       const tempGain = Math.max(1, Math.ceil(manpowerMax * 0.25));
       emitToGM("updateResource", { roleId: "ordnance", key: "manpower", value: manpower + tempGain });
     }
@@ -1038,6 +1026,7 @@ async function _onOrdnanceMasterCoreAction(event, target) {
       return;
     }
     const crewSize = sys.crewSize ?? 6;
+    if (!(await reserveCore())) return;
 
     // Always: immediately arm 1 torpedo and reset the auto-arm cycle
     const armedTorpedoes = sys.resources?.ordnance?.armedTorpedoes ?? 0;
@@ -1062,10 +1051,9 @@ async function _onOrdnanceMasterCoreAction(event, target) {
     }
   }
 
-  // ── Finalize  -  record played action and consume core ──────────────────────
-  const coreActionsPlayed = [...(sys.resources?.ordnance?.coreActionsPlayed ?? []), actionId];
-  emitToGM("updateResource", { roleId: "ordnance", key: "coreActionsPlayed", value: coreActionsPlayed });
-  emitToGM("markOvercharge", { roleId: coreRoleId });
+  // Future core actions still reserve through the same atomic backend even if
+  // they do not need any branch-specific preparation.
+  if (!coreReserved) await reserveCore();
 }
 
 /**

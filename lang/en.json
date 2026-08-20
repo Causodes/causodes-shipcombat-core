@@ -84,6 +84,7 @@
       "ActionSelection": "Action Selection",
       "StatusTitle": "Reactor Status",
       "CoreBank": "Auxiliary Power",
+      "ReadyCores": "Ready ×{count}",
       "VentLocked": "Vent Locked",
       "VentLockedDesc": "Reactor Offline This Turn",
       "VentFired": "Vent Fired, Reactor Offline Next Turn",

@@ -76,7 +76,7 @@ async function _onPerformStandard(event, target) {
 
 async function _onPerformOvercharged(event, target) {
   const roleId = target.dataset.roleId;
-  if (roleId) emitToGM("markOvercharge", { roleId });
+  if (roleId) await emitToGM("consumePowerCore", { roleId });
 }
 
 // ── Engineer ───────────────────────────────────────────────────────────────
@@ -85,7 +85,7 @@ async function _onToggleCore(event, target) {
   const sys = SystemAdapter.current.getShipData(this.actor);
   const roleId = target.dataset.roleId;
   if (!roleId) return;
-  // Once dispatched (true) or core consumed this turn ("spent"), cannot toggle
+  // Once dispatched, the Engineer cannot assign another core to this role.
   if (sys.assignedCores?.[roleId]) return;
   const hasStaged = !!(sys.resources?.engineer?.stagedCores?.[roleId]);
   emitToGM(hasStaged ? "unstagePowerCore" : "stagePowerCore", { targetRoleId: roleId });

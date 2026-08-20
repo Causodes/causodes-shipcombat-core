@@ -1,6 +1,6 @@
 {{!-- Pilot: Overcharged Actions (single combined section — Flip and Burn / Full Plasma Burn / Strafe / Retrograde Thrust) --}}
-{{!-- hasCoreAssigned is sourced from @root.helm.hasCoreAssigned (buildHelmContext) which covers
-     both engineer-dispatched cores (assignedCores.pilot) AND captain-card cores (resources.pilot.coreCount). --}}
+{{!-- hasCoreAssigned is true whenever the resolved operator's coreCount > 0.
+     Captain grants and Engineer dispatches feed the same receiving-side pool. --}}
 <div class="sheet-list shipcombat-pilot-core-actions shipcombat-role-section">
     {{#unless helm.hasCoreAssigned}}
     <div class="shipcombat-section-overlay shipcombat-section-overlay--taken">

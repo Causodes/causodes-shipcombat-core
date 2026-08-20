@@ -25,11 +25,15 @@ import * as CaptainState   from "./captain-state.js";
 import { HelmPreview }     from "../canvas/HelmPreview.js";
 import { SystemAdapter }   from "../systems/SystemAdapter.js";
 import { recordPlayerShipInitiative } from "../initiative.js";
+import { POWER_CORE_STATION_ROLES, getPowerCoreCount, getPowerCorePoolRole } from "../roles/crew-operators.js";
 
 export class ShipCombatState {
 
   /** Suppresses the deleteToken hook's craftDestroyed counter during fullReset. */
   static _suppressDestroyTracking = false;
+
+  /** Serializes every Power Core count mutation per ship on the GM. */
+  static _powerCoreQueues = new Map();
 
   // ── Ship resolution ───────────────────────────────────────────────────────
 
@@ -130,12 +134,49 @@ export class ShipCombatState {
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
-  static async markOverchargeUsed(roleId) {
-    const data      = this.getData();
-    const coreCount = data.resources?.[roleId]?.coreCount ?? 0;
-    if (coreCount <= 0) return;
-    return this.update({
-      [`resources.${roleId}.coreCount`]: coreCount - 1,
+  /** Run a Power Core state mutation after all earlier mutations for this ship. */
+  static async withPowerCoreTransaction(operation) {
+    if (typeof operation !== "function") throw new TypeError("Power Core transaction requires a function.");
+    const shipKey = this.ship?.uuid ?? this.ship?.id ?? "active-ship";
+    const previous = this._powerCoreQueues.get(shipKey) ?? Promise.resolve();
+    const transaction = previous.catch(() => {}).then(operation);
+
+    this._powerCoreQueues.set(shipKey, transaction);
+    try {
+      return await transaction;
+    } finally {
+      if (this._powerCoreQueues.get(shipKey) === transaction) {
+        this._powerCoreQueues.delete(shipKey);
+      }
+    }
+  }
+
+  /**
+   * Reserve and consume one Power Core from a station's resolved operator.
+   * All grants, spends, and resets for the ship use the same transaction queue,
+   * preventing stale read-modify-write updates. Optional action telemetry is
+   * committed in the same update.
+   * @returns {Promise<boolean>} true only when a core was consumed
+   */
+  static async consumePowerCore(roleId, actionId = null) {
+    if (!POWER_CORE_STATION_ROLES.includes(roleId)) return false;
+    return this.withPowerCoreTransaction(async () => {
+      const data = this.getData();
+      const currentPoolRole = getPowerCorePoolRole(data, roleId);
+      const coreCount = getPowerCoreCount(data, roleId);
+      if (coreCount <= 0) return false;
+
+      const updates = {
+        [`resources.${currentPoolRole}.coreCount`]: coreCount - 1,
+      };
+      if (actionId) {
+        updates[`resources.${roleId}.coreActionsPlayed`] = [
+          ...(data.resources?.[roleId]?.coreActionsPlayed ?? []),
+          actionId,
+        ];
+      }
+      await this.update(updates);
+      return true;
     });
   }
 
@@ -284,6 +325,7 @@ export class ShipCombatState {
     updates["resources.pilot.hardOverActive"]           = false;
     updates["resources.sensors.sensorPriorityActive"]   = false;
     // ── Per-role power core count + played actions ──
+    updates["resources.engineer.coreCount"] = 0;
     for (const roleId of ["gunner", "pilot", "sensors", "ordnance"]) {
       updates[`resources.${roleId}.coreCount`]         = 0;
       updates[`resources.${roleId}.coreActionsPlayed`] = [];
@@ -484,7 +526,7 @@ export class ShipCombatState {
       }
     }
 
-    await this.update(updates);
+    await this.withPowerCoreTransaction(() => this.update(updates));
 
     if (overcapCount > 0) {
       await ChatMessage.create({
@@ -945,6 +987,7 @@ export class ShipCombatState {
     updates["resources.ordnance.allocEfficiency"]      = 0;
     updates["resources.ordnance.allocExpedience"]      = 0;
     // ── Per-role power core count + played actions ──
+    updates["resources.engineer.coreCount"] = 0;
     for (const roleId of ["gunner", "pilot", "sensors", "ordnance"]) {
       updates[`resources.${roleId}.coreCount`]         = 0;
       updates[`resources.${roleId}.coreActionsPlayed`] = [];
@@ -1000,7 +1043,7 @@ export class ShipCombatState {
     updates["resources.ordnance.availablePayloads"] = 1;
     updates["resources.ordnance.autoArmTimer"] = 3;
     updates["resources.ordnance.autoLoadTimer"] = 2;
-    await this.update(updates);
+    await this.withPowerCoreTransaction(() => this.update(updates));
     // ── Clear conditions on all NPC ships in the scene ──
     if (canvas?.scene) {
       const npcCondClear = { tier: null, lockedRole: null, blindedSectionId: null };
@@ -1095,14 +1138,18 @@ export class ShipCombatState {
 
     // ── Red Alert stance: +5 internal fire + grant 1 free core to each role ──────
     if (activeStance === "redAlert") {
-      const fresh = this.getData();
-      const redAlertUpdates = {
-        internalFire: (fresh.internalFire ?? 0) + 5,
-      };
-      for (const roleId of ["gunner", "pilot", "sensors", "ordnance", "captain"]) {
-        redAlertUpdates[`resources.${roleId}.coreCount`] = (fresh.resources?.[roleId]?.coreCount ?? 0) + 1;
-      }
-      await this.update(redAlertUpdates);
+      await this.withPowerCoreTransaction(async () => {
+        const fresh = this.getData();
+        const redAlertUpdates = {
+          internalFire: (fresh.internalFire ?? 0) + 5,
+        };
+        for (const stationRole of ["gunner", "pilot", "sensors", "ordnance", "captain"]) {
+          const poolRole = getPowerCorePoolRole(fresh, stationRole);
+          const key = `resources.${poolRole}.coreCount`;
+          redAlertUpdates[key] = (redAlertUpdates[key] ?? getPowerCoreCount(fresh, stationRole)) + 1;
+        }
+        await this.update(redAlertUpdates);
+      });
     }
 
     // ── Captain: auto-draw up to 3 cards (respecting hand cap of 5) ──────────
@@ -1184,6 +1231,12 @@ export class ShipCombatState {
     for (const uid of Object.keys(data.resources?.engineer?.stagedCores ?? {})) {
       updates[`resources.engineer.stagedCores.${uid}`] = false;
     }
+    for (const roleId of ["engineer", "captain", "gunner", "pilot", "sensors", "ordnance"]) {
+      updates[`resources.${roleId}.coreCount`] = 0;
+    }
+    for (const stationRole of ["gunner", "pilot", "sensors", "ordnance"]) {
+      updates[`resources.${stationRole}.coreActionsPlayed`] = [];
+    }
 
     // ── Ordnance Master: start with 1 armed torpedo / strike craft if allocated in config ──
     const ordnanceActors = data.ordnanceActors ?? {};
@@ -1197,7 +1250,7 @@ export class ShipCombatState {
     updates["resources.ordnance.autoArmTimer"] = 3;
     updates["resources.ordnance.autoLoadTimer"] = 2;
 
-    await this.update(updates);
+    await this.withPowerCoreTransaction(() => this.update(updates));
   }
 
   static async endCombat() {
@@ -1679,8 +1732,6 @@ ShipCombatState.confirmMovement  = PilotState.confirmMovement;
 ShipCombatState.apToThrust       = PilotState.apToThrust;
 
 // Engineer (power cores, heat/fire, shields, core bank, hull repair)
-ShipCombatState.assignPowerCore     = EngineerState.assignPowerCore;
-ShipCombatState.revokePowerCore     = EngineerState.revokePowerCore;
 ShipCombatState.stagePowerCore      = EngineerState.stagePowerCore;
 ShipCombatState.unstagePowerCore    = EngineerState.unstagePowerCore;
 ShipCombatState.dispatchStagedCores = EngineerState.dispatchStagedCores;

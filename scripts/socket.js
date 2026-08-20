@@ -7,7 +7,7 @@ export function setupSocket() {
   _socket = socketlib.registerModule(CORE_MODULE_ID);
   for (const action of [
     "assignRole",
-    "markOvercharge", "toggleTurnDone", "updateResource",
+    "consumePowerCore", "toggleTurnDone", "updateResource",
     "assignWeapon", "unassignComponent", "assignEquipment",
     "startCombat", "endCombat", "advanceRound", "endShipTurn",
     "confirmMovement", "resetHelmState", "fullReset",
@@ -60,9 +60,8 @@ async function _handleAction(action, payload = {}) {
       await ShipCombatState.assignRole(payload.userId, payload.roleId, payload.actorRef ?? null);
       break;
 
-    case "markOvercharge":
-      await ShipCombatState.markOverchargeUsed(payload.roleId);
-      break;
+    case "consumePowerCore":
+      return ShipCombatState.consumePowerCore(payload.roleId, payload.actionId ?? null);
 
     case "toggleTurnDone":
       await ShipCombatState.toggleTurnDone(payload.roleId);
@@ -496,10 +495,9 @@ function _handlePlayWeaponAnimation({ weaponCategory, fireMode, firingActorId, t
  */
 export function emitToGM(action, payload = {}) {
   if (game.user.isGM) {
-    _handleAction(action, payload);
-  } else {
-    _socket.executeAsGM(action, payload);
+    return _handleAction(action, payload);
   }
+  return _socket.executeAsGM(action, payload);
 }
 
 /**

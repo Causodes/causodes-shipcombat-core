@@ -178,6 +178,15 @@
   white-space: nowrap;
 }
 
+.shipcombat-core-ready-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin-left: 0.45rem;
+  color: #e6b84a;
+  font-weight: 600;
+}
+
 .shipcombat-core-alloc-ctrl {
   flex: 0 0 auto;
   display: flex;
@@ -686,4 +695,3 @@
   border-radius: 3px;
   transition: width 0.3s ease;
 }
-
