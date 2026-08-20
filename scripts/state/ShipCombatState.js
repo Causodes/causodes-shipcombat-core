@@ -1711,6 +1711,7 @@ ShipCombatState.stripQuadrantShields = SensorsState.stripQuadrantShields;
 ShipCombatState.hasSensorEffectOn    = SensorsState.hasSensorEffectOn;
 ShipCombatState.getDisruptionPenalty = SensorsState.getDisruptionPenalty;
 ShipCombatState.upgradeLock          = SensorsState.upgradeLock;
+ShipCombatState.upgradeAllLocks      = SensorsState.upgradeAllLocks;
 ShipCombatState.getLockTier          = SensorsState.getLockTier;
 ShipCombatState.getEffectiveLockTier = SensorsState.getEffectiveLockTier;
 ShipCombatState.consumeLock          = SensorsState.consumeLock;

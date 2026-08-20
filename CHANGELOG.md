@@ -1,3 +1,6 @@
+## 2.2.5 (UNRELEASED)
+- Fix Combat Telemetry only upgrading one target by applying all lock upgrades in one atomic GM-side actor update
+
 ## 2.2.4
 - Fix NPC ship weapon delete controls doing nothing by registering the shared embedded-item actions on both AppV2 and legacy AppV1 NPC sheets
 

@@ -194,12 +194,10 @@ async function _onSensorCoreAction(event, target) {
 
   // Combat Telemetry: upgrade ALL currently locked targets to tier 4
   if (actionId === "combatTelemetry") {
-    const locks = sys.resources?.sensors?.locks ?? [];
-    for (const lock of locks) {
-      if (lock.tier < 4) {
-        emitToGM("upgradeLock", { targetTokenId: lock.targetTokenId, tier: 4 });
-      }
-    }
+    // Apply every lock upgrade in one GM-side actor update. Emitting one
+    // upgradeLock request per target lets concurrent requests read the same
+    // stale lock array and overwrite one another.
+    emitToGM("upgradeAllLocks", { tier: 4 });
   }
 
   const played = [...(sys.resources?.sensors?.coreActionsPlayed ?? []), actionId];

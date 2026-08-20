@@ -20,6 +20,7 @@ export function setupSocket() {
     "addSensorEffect",
     "stripQuadrantShields",
     "upgradeLock",
+    "upgradeAllLocks",
     "spawnOrdnance",
     "setOrdnanceRtb",
     "setOrdnanceTurnDone",
@@ -301,6 +302,10 @@ async function _handleAction(action, payload = {}) {
 
     case "upgradeLock":
       await ShipCombatState.upgradeLock(payload);
+      break;
+
+    case "upgradeAllLocks":
+      await ShipCombatState.upgradeAllLocks(payload);
       break;
 
     case "spawnOrdnance":

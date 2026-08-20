@@ -110,6 +110,28 @@ export async function upgradeLock({ targetTokenId, tier }) {
 }
 
 /**
+ * Upgrade every existing sensor lock to at least the requested tier.
+ * The full lock array is calculated and persisted once so callers cannot lose
+ * upgrades through concurrent read/modify/write socket requests.
+ */
+export async function upgradeAllLocks({ tier }) {
+  const targetTier = Math.max(1, Math.min(4, Number(tier) || 1));
+  const data = this.getData();
+  const locks = data.resources?.sensors?.locks ?? [];
+  const decay = LOCK_DECAY_ROUNDS[targetTier] ?? 1;
+  let changed = false;
+
+  const upgradedLocks = locks.map(lock => {
+    if ((lock.tier ?? 0) >= targetTier) return lock;
+    changed = true;
+    return { ...lock, tier: targetTier, decayRounds: decay };
+  });
+
+  if (!changed) return;
+  return this.update({ "resources.sensors.locks": upgradedLocks });
+}
+
+/**
  * Return the explicit lock tier for a target token (0 if none).
  */
 export function getLockTier(targetTokenId) {
