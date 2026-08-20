@@ -24,6 +24,7 @@ import * as CritState      from "./crit-state.js";
 import * as CaptainState   from "./captain-state.js";
 import { HelmPreview }     from "../canvas/HelmPreview.js";
 import { SystemAdapter }   from "../systems/SystemAdapter.js";
+import { recordPlayerShipInitiative } from "../initiative.js";
 
 export class ShipCombatState {
 
@@ -540,13 +541,7 @@ export class ShipCombatState {
     }
     // When rolledInitiative is set (captain rolls initiative formula), update combatant initiative
     if (roleId === "captain" && key === "rolledInitiative") {
-      if (game.combat) {
-        const shipCombatant = game.combat.combatants.find(c => c.actor?.id === this.ship?.id);
-        if (shipCombatant) {
-          await game.combat.setInitiative(shipCombatant.id, Number(value));
-        }
-      }
-      return this.update({ "resources.captain.rolledInitiative": value });
+      return recordPlayerShipInitiative({ shipActor: this.ship, rawTotal: value });
     }
     // When captain's allocResolve changes, sync triageCount by the same delta
     if (roleId === "captain" && key === "allocResolve") {

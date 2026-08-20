@@ -21,6 +21,7 @@
 export { SystemAdapter }                                     from "./systems/SystemAdapter.js";
 export { emitToGM }                                          from "./socket.js";
 export { ShipCombatState }                                   from "./state/ShipCombatState.js";
+export { recordPlayerShipInitiative }                        from "./initiative.js";
 export { THEME, pixi }                                       from "./theme.js";
 export { isOrdnance }                                        from "./actors/ordnance/ordnance-types.js";
 export { classifyZone, getHitQuadrant, testArc }             from "./apps/TargetingPopup.js";
