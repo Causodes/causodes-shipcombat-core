@@ -130,7 +130,7 @@
       "SensorsStandardDesc": "Reveal enemy Hull Integrity and {{SHIPCOMBAT.Term.VoidShield}} status.",
       "SensorsOverchargedDesc": "Flood enemy sensors with Signal Ghosts, increasing enemy attack difficulty.",
       "GunnerStandard": "Snap Shot",
-      "GunnerStandardDesc": "Light weapon volley at a -10 penalty to hit.",
+      "GunnerStandardDesc": "Light weapon volley at a {{SHIPCOMBAT.ModifierCopy.HitPenalty}} penalty to hit.",
       "GunnerOvercharged": "Main Battery",
       "GunnerOverchargedDesc": "Full heavy fire. Spend SL to inflict Critical Effects on enemy subsystems.",
       "Overclock": "Overclock",
@@ -340,9 +340,9 @@
       "BreachAnalysis": "Breach Analysis",
       "DeepScan": "Deep Scan",
       "TargetingSolution": "Targeting Solution",
-      "TargetingSolutionDesc": "Upgrade to Lock 4. Reveals conditions and defenses (immunities, weaknesses, resistances). {{SHIPCOMBAT.Role.Gunner}} gets a bonus to accuracy against this target.",
+      "TargetingSolutionDesc": "Upgrade to Lock 4. Reveals conditions and defenses (immunities, weaknesses, resistances). {{SHIPCOMBAT.Role.Gunner}} gets {{SHIPCOMBAT.ModifierCopy.HitBonus}} to accuracy against this target.",
       "SensorDisruption": "Sensor Disruption",
-      "SensorDisruptionDesc": "Requires Lock 1. Designate one locked enemy. It suffers -10 (one range band) to all rolls (including accuracy) for 1 round.",
+      "SensorDisruptionDesc": "Requires Lock 1. Designate one locked enemy. It suffers {{SHIPCOMBAT.ModifierCopy.ModifierPenalty}} (one range band) to all rolls (including accuracy) for 1 round.",
       "LockHarmonics": "Lock Harmonics",
       "LockHarmonicsDesc": "Requires Lock 1. Stabilize lock resonance for 1 round. Lock decay is extended, but {{SHIPCOMBAT.Role.Gunner}} lock consumption still applies.",
       "SignalInversion": "Signal Inversion",
@@ -432,7 +432,7 @@
       "OrdnanceSL": "Ranged SL",
       "OrdnanceAllocation": "Ordnance Allocation",
       "OrdnanceSLTooltip": "Roll Ranged (Ordnance) to generate Gunnery SL for Accuracy, Penetration, and Firepower allocation.",
-      "AccuracyTooltip": "+5 to hit per point allocated",
+      "AccuracyTooltip": "{{SHIPCOMBAT.ModifierCopy.AccuracyAllocationBonus}} to hit per point allocated",
       "PenetrationTooltip": "+1 Armour Penetration per point allocated",
       "FirepowerTooltip": "+1 damage per hit per point allocated",
       "LockAllocation": "Lock Allocation",
@@ -461,7 +461,7 @@
         }
       },
       "RangingFire": "Ranging Fire",
-      "RangingFireDesc": "Fires half a salvo at −10 to hit for only 1 ready round. If any shot connects, it brackets the target - granting +10 to hit against that ship with ALL weapon batteries for the rest of the round.",
+      "RangingFireDesc": "Fires half a salvo at {{SHIPCOMBAT.ModifierCopy.HitPenalty}} to hit for only 1 ready round. If any shot connects, it brackets the target - granting {{SHIPCOMBAT.ModifierCopy.HitBonus}} to hit against that ship with ALL weapon batteries for the rest of the round.",
       "Salvo": "Salvo",
       "Volley": "Volley",
       "Broadside": "Broadside",
@@ -813,7 +813,7 @@
       "LockRetain4": "Lock 4 retained",
       "ResultLabel": "SL",
       "AdjustBearing": "Adjust Bearing",
-      "AdjustBearingDesc": "+10 to hit on the next attack with this weapon at this target.",
+      "AdjustBearingDesc": "{{SHIPCOMBAT.ModifierCopy.HitBonus}} to hit on the next attack with this weapon at this target.",
       "TargetWeakPoint": "Target Weak Point",
       "TargetWeakPointDesc": "+SL bonus to armour penetration on the next attack.",
       "FireForEffect": "Fire for Effect",
@@ -934,7 +934,7 @@
         "weaponsSensors": {
           "low": "One weapon section disabled.",
           "medium": "One weapon section disabled; sensor offline (lock upgrades blocked).",
-          "high": "All weapons: −20 to hit; one weapon section disabled; sensor offline."
+          "high": "All weapons: {{SHIPCOMBAT.ModifierCopy.DoubleModifierPenalty}} to hit; one weapon section disabled; sensor offline."
         }
       },
       "SensorBlindRadar": "Sensor offline"
@@ -947,8 +947,8 @@
         "redAlert": "Red Alert",
         "devastation": "Devastating Protocol",
         "StanceDesc": {
-          "aggressive": "+10 to hit both ways, −1 Speed, −1 Maneuverability.",
-          "defensive": "−10 to hit both ways, +1 Speed, +1 Maneuverability.",
+          "aggressive": "{{SHIPCOMBAT.ModifierCopy.ModifierBonus}} to hit both ways, −1 Speed, −1 Maneuverability.",
+          "defensive": "{{SHIPCOMBAT.ModifierCopy.ModifierPenalty}} to hit both ways, +1 Speed, +1 Maneuverability.",
           "redAlert": "Each role receives a free {{SHIPCOMBAT.Term.PowerCore}} at the start of each round; +5 internal fire per round.",
           "devastation": "All outgoing and incoming hits are automatic critical hits."
         }
@@ -981,7 +981,7 @@
         "devastationProtocol": "Devastating Protocol",
         "standDown": "Stand Down",
         "Desc": {
-          "inspiredTargeting": "+20 to hit on the {{SHIPCOMBAT.Role.{{SHIPCOMBAT.Role.Gunner}}}}'s next fire roll this round.",
+          "inspiredTargeting": "{{SHIPCOMBAT.ModifierCopy.HitBonus}} to hit on the {{SHIPCOMBAT.Role.{{SHIPCOMBAT.Role.Gunner}}}}'s next fire roll this round.",
           "gunsHot": "Grant the {{SHIPCOMBAT.Role.{{SHIPCOMBAT.Role.Gunner}}}} an additional {{SHIPCOMBAT.Term.PowerCore}}.",
           "overdriveCommand": "Grant every role an additional {{SHIPCOMBAT.Term.PowerCore}}. The {{SHIPCOMBAT.Role.{{SHIPCOMBAT.Role.Engineer}}}} may take an additional action this round.",
           "doubleShift": "Grant the {{SHIPCOMBAT.Role.{{SHIPCOMBAT.Role.Engineer}}}} an additional action this round.",
@@ -995,8 +995,8 @@
           "ventingSequence": "Vent 5 heat immediately. Starts internal fires equal to heat vented. No core lockout.",
           "hardenShields": "This round, weapons with the {{SHIPCOMBAT.Term.VoidShield}} Bypass trait cannot bypass the ship's shields.",
           "repairArmour": "Fully restore rend damage on one sector, resetting its effective armour to maximum.",
-          "aggressiveDoctrine": "Sets stance to Aggressive: +10 to hit both ways, −1 Speed, −1 Maneuverability.",
-          "defensiveFormation": "Sets stance to Defensive: −10 to hit both ways, +1 Speed, +1 Maneuverability.",
+          "aggressiveDoctrine": "Sets stance to Aggressive: {{SHIPCOMBAT.ModifierCopy.ModifierBonus}} to hit both ways, −1 Speed, −1 Maneuverability.",
+          "defensiveFormation": "Sets stance to Defensive: {{SHIPCOMBAT.ModifierCopy.ModifierPenalty}} to hit both ways, +1 Speed, +1 Maneuverability.",
           "redAlert": "Sets stance to Red Alert: each role receives a free {{SHIPCOMBAT.Term.PowerCore}} at the start of each round; +5 internal fire per round.",
           "devastationProtocol": "Sets stance to Devastating Protocol: all outgoing and incoming hits are automatic critical hits.",
           "standDown": "Clears the current combat stance, returning the ship to None.",
@@ -1054,7 +1054,7 @@
         "AlreadyUsed": "You have already used your command power this engagement.",
         "BCNoTargets": "No visible enemy tokens on the canvas.",
         "BCTitle": "Battle Clarity  -  Designate Target",
-        "BCPrompt": "Choose an enemy to designate as the priority target. All weapons fired at this target gain +10 accuracy, 2 armour penetration, and 2 shield burn this round.",
+        "BCPrompt": "Choose an enemy to designate as the priority target. All weapons fired at this target gain {{SHIPCOMBAT.ModifierCopy.HitBonus}} accuracy, 2 armour penetration, and 2 shield burn this round.",
         "BCDesignate": "Designate this target",
         "BCNeedLock": "Requires Lock 1 or higher to designate.",
         "ESEmptyDiscard": "The discard pile is empty - nothing to salvage.",
@@ -1078,7 +1078,7 @@
         },
         "BattleClarity": {
           "label": "Battle Clarity",
-          "desc": "Nominate one enemy token. All weapons striking that target gain +10 accuracy and pierce 2 shields this round."
+          "desc": "Nominate one enemy token. All weapons striking that target gain {{SHIPCOMBAT.ModifierCopy.HitBonus}} accuracy and pierce 2 shields this round."
         },
         "EmergencySalvage": {
           "label": "Emergency Salvage",

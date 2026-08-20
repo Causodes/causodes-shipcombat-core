@@ -345,6 +345,21 @@ export class SystemAdapter {
   getHitBonusStep() { return this.getModifierStepSize(); }
 
   /**
+   * Accuracy gained per point assigned from the Gunner's roll pool.
+   * Percentile systems use half a modifier step (+5 for a +10 step); d20
+   * adapters override this to keep bonuses on whole-number boundaries.
+   */
+  getAccuracyAllocationStep() { return this.getModifierStepSize() / 2; }
+
+  /**
+   * Convert the legacy d100 fire-tier scale (-10/0/+10/+20) into the active
+   * system's fixed hit-bonus scale.
+   */
+  getFireModeHitModifier(legacyHitModifier) {
+    return (Number(legacyHitModifier) || 0) / 10 * this.getHitBonusStep();
+  }
+
+  /**
    * Magnitude of the Sensor Disruption roll penalty, given the disrupting
    * ship's sensor rating.  Roll-under systems treat the sensor rating as a
    * base hit TARGET (not a flat modifier), so the default is one range band.

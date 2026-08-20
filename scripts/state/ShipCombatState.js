@@ -1329,6 +1329,8 @@ export class ShipCombatState {
       salvoRolls.push({
         roll:        roll.total,
         target:      accuracy,
+        displayRoll: targetAC !== null ? roll.total + accuracy : roll.total,
+        displayTarget: targetAC !== null ? targetAC : accuracy,
         hit,
         isCrit,
         isJam:       false,
@@ -1347,7 +1349,8 @@ export class ShipCombatState {
       fireModeLabel,
       targetName:       targetActor.name,
       hitQuadrantLabel: qLabel,
-      accuracy,
+      accuracy:          adapter.formatChatAccuracyDisplay(accuracy, targetAC),
+      hitModDisplay:     adapter.formatChatHitMod(accuracy, targetAC),
       hit:              totalHits > 0,
       isCrit:           anyCrit,
       hasSalvoRolls:    true,

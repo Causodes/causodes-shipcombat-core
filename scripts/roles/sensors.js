@@ -10,7 +10,7 @@
  *   1  -  Active Ping      (3 AP)   -  ship class visible, targetable by Gunner
  *   2  -  Breach Analysis   (6 AP)   -  shield presence revealed
  *   3  -  Deep Scan         (10 AP)  -  shield values, armour, hull, weapons revealed
- *   4  -  Targeting Solution (15 AP)  -  +10 accuracy, negates Zone 3 penalty
+ *   4  -  Targeting Solution (15 AP)  -  fixed hit bonus, negates Zone 3 penalty
  *
  * Locks are consumed when the Gunner fires at a locked target (drops to 0).
  * After fire, BDA becomes available  -  the Augur rolls to retain partial lock.
@@ -20,7 +20,7 @@
  *     SL 0+ = reveal damage card.  SL 2+ = retain Tier 1.
  *     SL 4+ = Tier 2.  SL 6+ = Tier 3.  SL 8+ = Tier 4.
  *   Then choose one Fire Correction:
- *     - Adjust Bearing: +10 to hit on next attack (same weapon, same target)
+ *     - Adjust Bearing: fixed hit bonus on next attack (same weapon, same target)
  *     - Target Weak Point: +SL to AP on next attack
  *     - Fire for Effect: crit threshold reduced by SL on next attack
  *     - Break Off, Reallocate: grants 20% max AP; gunner may retarget next turn
@@ -29,7 +29,7 @@
  *
  * Core Actions (require Power Core + AP):
  *   Combat Telemetry (12 AP)  -  all locked targets → Lock 4
- *   Sensor Overcharge (10 AP)  -  target weapon accuracy −20 for 2 rounds
+ *   Sensor Overcharge (10 AP)  -  restrict target weapons to auto-scan range
  *   Signal Inversion (10 AP)  -  strip shields from nearest quadrant
  *   Sensor Surge (8 AP)  -  BDA +30; fire correction applies to ALL weapons
  *   Deep Revelation (15 AP)  -  reveal ALL target stats permanently

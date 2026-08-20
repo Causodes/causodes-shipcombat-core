@@ -156,13 +156,15 @@ export class TargetingPopupV1 extends foundry.appv1.api.Application {
       const battleClarityBonus  = (priorityTargetId && priorityTargetId === candidate.id) ? hbs : 0;
       const battleClarityPierce = (priorityTargetId && priorityTargetId === candidate.id) ? 2    : 0;
 
+      const accuracyStep    = adapter.getAccuracyAllocationStep();
       const halfStep        = step / 2;
       const captainHitBonus = sys.resources?.gunner?.captainHitBonus ?? 0;
       const allocEvasion    = targetSys.resources?.pilot?.allocEvasion ?? 0;
+      const targetAC        = adapter.getTargetAC(candidate.document.actor);
       // d20 adapters fold evasion into the target's AC (getTargetAC); applying
       // it to accuracy as well would double-count it. Only roll-under systems
       // (getTargetAC → null) take it as an accuracy penalty.
-      const evasionPenalty  = adapter.getTargetAC(candidate.document.actor) === null
+      const evasionPenalty  = targetAC === null
         ? allocEvasion * -halfStep
         : 0;
 
@@ -170,7 +172,7 @@ export class TargetingPopupV1 extends foundry.appv1.api.Application {
         + finalZoneMod
         + (fireModeDetails.hitMod ?? 0)
         + lockAccuracyBonus
-        + (allocAccuracy * halfStep)
+        + (allocAccuracy * accuracyStep)
         + weaponHitMod
         + adjustBearingBonus
         + rangingFireBonus
@@ -191,7 +193,7 @@ export class TargetingPopupV1 extends foundry.appv1.api.Application {
       if ((fireModeDetails.hitMod ?? 0) !== 0) breakdownParts.push(`Fire Mode: ${adapter.formatModifier(fireModeDetails.hitMod ?? 0)}`);
       if (stanceHitMod !== 0)                 breakdownParts.push(`Stance: ${adapter.formatModifier(stanceHitMod)}`);
       if (lockAccuracyBonus !== 0)            breakdownParts.push(`Lock Tier: ${adapter.formatModifier(lockAccuracyBonus)}`);
-      if (allocAccuracy !== 0)                breakdownParts.push(`Accuracy SL: ${adapter.formatModifier(allocAccuracy * halfStep)}`);
+      if (allocAccuracy !== 0)                breakdownParts.push(`Accuracy SL: ${adapter.formatModifier(allocAccuracy * accuracyStep)}`);
       if (weaponHitMod !== 0)                 breakdownParts.push(`Weapon Rating: ${adapter.formatModifier(weaponHitMod)}`);
       if (adjustBearingBonus !== 0)           breakdownParts.push(`Adj. Bearing: ${adapter.formatModifier(adjustBearingBonus)}`);
       if (rangingFireBonus !== 0)             breakdownParts.push(`Ranging Fire: ${adapter.formatModifier(rangingFireBonus)}`);
@@ -255,7 +257,7 @@ export class TargetingPopupV1 extends foundry.appv1.api.Application {
         hitQuadrant,
         hitQuadrantLabel: game.i18n.localize(`SHIPCOMBAT.Sector.${hitQuadrant.charAt(0).toUpperCase() + hitQuadrant.slice(1)}`),
         totalAccuracy,
-        accuracyLabel: isAutoHit ? game.i18n.localize("SHIPCOMBAT.Targeting.Auto") : adapter.formatAccuracyDisplay(totalAccuracy),
+        accuracyLabel: isAutoHit ? game.i18n.localize("SHIPCOMBAT.Targeting.Auto") : adapter.formatAccuracyDisplay(totalAccuracy, targetAC),
         isAutoHit:    false,
         targetArmour,
         showArmour,
@@ -358,7 +360,7 @@ export class TargetingPopupV1 extends foundry.appv1.api.Application {
         label:         tier.label,
         salvoSize:     Math.ceil(baseSalvo * tier.salvoMult),
         cost:          tier.ammo,
-        hitMod:        tier.hitMod,
+        hitMod:        SystemAdapter.current.getFireModeHitModifier(tier.hitMod),
         resource:      "ammo",
         resourceLabel: game.i18n.localize("SHIPCOMBAT.Gunner.Ammo"),
       };

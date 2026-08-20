@@ -310,7 +310,7 @@ function _enrichWeapon(item, gunnerCtx) {
         label:      game.i18n.localize(tier.label),
         desc:       tier.desc ? game.i18n.localize(tier.desc) : null,
         ammo:       tier.ammo,
-        hitMod:     tier.hitMod,
+        hitMod:     SystemAdapter.current.getFireModeHitModifier(tier.hitMod),
         salvoSize:  totalSalvo,
         canAfford:  (gunnerCtx.ammo >= tier.ammo),
         isExclusive: tier.exclusive,

@@ -498,7 +498,7 @@ export async function fireWeapon({ weaponId, actorId, fireMode, targetToken, hit
     }
   }
 
-  // ── 7b. Ranging Fire: if any shot hit, store a persistent +10 bonus against this target ──
+  // ── 7b. Ranging Fire: if any shot hit, store a persistent fixed bonus against this target ──
   if (fireMode === "rangingFire" && totalHits > 0 && targetToken && !isNpcFire) {
     await this.update({
       "resources.sensors.fireCorrection": {

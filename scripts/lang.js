@@ -73,6 +73,22 @@ function _resolve(path, root) {
   return typeof node === "string" ? node : null;
 }
 
+/** Inject adapter-derived copy tokens before resolving translation references. */
+function _injectModifierCopy(tree) {
+  const adapter = SystemAdapter._current;
+  if (!adapter || !tree.SHIPCOMBAT) return;
+  const step = adapter.getModifierStepSize();
+  const hitStep = adapter.getHitBonusStep();
+  tree.SHIPCOMBAT.ModifierCopy = {
+    AccuracyAllocationBonus: adapter.formatModifier(adapter.getAccuracyAllocationStep()),
+    HitBonus:                 adapter.formatModifier(hitStep),
+    HitPenalty:               adapter.formatModifier(-hitStep),
+    ModifierBonus:            adapter.formatModifier(step),
+    ModifierPenalty:          adapter.formatModifier(-step),
+    DoubleModifierPenalty:    adapter.formatModifier(-2 * step),
+  };
+}
+
 /**
  * Wire token substitution into Foundry's i18n init. Call once during the
  * module's "init" hook.
@@ -81,6 +97,7 @@ export function registerLangSubstitution() {
   Hooks.once("i18nInit", () => {
     const tree = game.i18n.translations;
     if (!tree) return;
+    _injectModifierCopy(tree);
     // Two passes: lets a token resolve to a string that itself contains a
     // token (one level of indirection is enough for everything we do).
     _substituteTree(tree, tree);

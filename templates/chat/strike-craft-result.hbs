@@ -28,6 +28,9 @@
             {{#if accuracy}}
                 <span class="shipcombat-fire-tn-inline">vs {{accuracy}}</span>
             {{/if}}
+            {{#if hitModDisplay}}
+                <span class="shipcombat-fire-hitmod">{{hitModDisplay}}</span>
+            {{/if}}
         </div>
     </div>
     {{/if}}
@@ -38,8 +41,8 @@
         {{#each salvoRolls}}
         <span class="shipcombat-salvo-die shipcombat-salvo-reveal {{#if this.hit}}shipcombat-fire-success{{else}}shipcombat-fire-failure{{/if}}"
               style="{{{this.dieStyle}}}"
-              title="{{this.roll}} vs {{this.target}}">
-            {{this.roll}}
+              title="{{this.displayRoll}} vs {{this.displayTarget}}">
+            {{this.displayRoll}}
         </span>
         {{/each}}
     </div>

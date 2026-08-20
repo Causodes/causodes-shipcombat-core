@@ -173,8 +173,7 @@ export class StrikeCraftAttackPopup extends foundry.applications.api.HandlebarsA
 
       // Accuracy = craft's sensor rating + zone mod + lock-4 bonus + zone-1 half-miss
       const adapter      = SystemAdapter.current;
-      const step         = adapter.getModifierStepSize();
-      const lockBonus    = lockTier >= 4 ? step : 0;
+      const lockBonus    = lockTier >= 4 ? adapter.getHitBonusStep() : 0;
       const finalZoneMod = (zone.zone === 3 && lockTier >= 4) ? 0 : zone.modifier;
       let totalAccuracy  = sensor.rating + finalZoneMod + lockBonus;
 
@@ -197,6 +196,7 @@ export class StrikeCraftAttackPopup extends foundry.applications.api.HandlebarsA
       if (lockBonus    !== 0) breakdown.push(`Lock Tier: ${adapter.formatModifier(lockBonus)}`);
       if (zone1Bonus   !== 0) breakdown.push(`Close Scan: ${adapter.formatModifier(zone1Bonus)}`);
       const accuracyTooltip = breakdown.join("\n");
+      const targetAC = adapter.getTargetAC(candidate.document.actor);
 
       targets.push({
         tokenId:          candidate.id,
@@ -209,6 +209,7 @@ export class StrikeCraftAttackPopup extends foundry.applications.api.HandlebarsA
         hitQuadrant,
         hitQuadrantLabel,
         totalAccuracy,
+        accuracyLabel:     adapter.formatAccuracyDisplay(totalAccuracy, targetAC),
         lockTier,
         alreadyAttacked:  attackedThisTurn.includes(candidate.id),
         accuracyTooltip,

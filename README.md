@@ -164,8 +164,10 @@ non-salvo (single-fire) actions, core calls `resolveHitRoll()` instead.
 | Method | Kind | Default | Notes |
 | --- | --- | --- | --- |
 | `getRollFormula()` | overridable | `"1d100"` | Foundry roll formula for salvo shots. |
-| `getModifierStepSize()` | overridable | `1` | The engine's shared accuracy-step unit (10 for d100, 1 for d20). **One call site drives all of the following:** lock-tier 4 bonus, BDA adjust-bearing correction, ranging-fire correction, battle-clarity bonus, aggressive/defensive stance modifier, and per-SL pilot-evasion / gunner-allocation bonuses (applied at half this value per SL). If the host system uses a consistent bonus scale, this is the only method you need. |
+| `getModifierStepSize()` | overridable | `1` | The engine's general modifier unit (10 for d100, 1 for d20), used for range bands, stances, fire-control failure, and roll-under pilot evasion. |
 | `getHitBonusStep()` | overridable | `getModifierStepSize()` | Magnitude of a single fixed bonus step: lock-tier 4 accuracy, BDA adjust-bearing, ranging-fire correction, battle-clarity pierce, and the captain's Inspired Targeting action. Override when the system applies these fixed bonuses at a different scale than `getModifierStepSize()`. SF2e example: `getModifierStepSize()` returns `1` (d20 per-SL step) but `getHitBonusStep()` returns `2` (fixed bonuses always grant +2, regardless of SL scale). |
+| `getAccuracyAllocationStep()` | overridable | `getModifierStepSize() / 2` | Accuracy gained per Gunner allocation point. D20 adapters override with `1` so allocation never produces fractional modifiers. |
+| `getFireModeHitModifier(legacyValue)` | overridable | `(legacyValue / 10) × getHitBonusStep()` | Converts canonical macro-tier values (`−10/0/+10/+20`) to the active system's hit scale. |
 | `computeSuccessLevel(roll, target)` | overridable | `floor((target − total) / 10)` | SL from a roll result. Default is d100-style; override for d20 or custom systems. |
 | `formatModifier(value)` | overridable | signed number | UI display for a modifier (e.g. `"+10%"` for IM). |
 | `formatTargetNumber(target)` | overridable | bare number | UI display for a target number. |
