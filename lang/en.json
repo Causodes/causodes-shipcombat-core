@@ -988,7 +988,7 @@
           "doubleShift": "Grant the {{SHIPCOMBAT.Role.{{SHIPCOMBAT.Role.Engineer}}}} an additional action this round.",
           "pressTheAttack": "Grant the {{SHIPCOMBAT.Role.Pilot}} an additional {{SHIPCOMBAT.Term.PowerCore}}.",
           "hardOver": "Base maneuverability is doubled for this round.",
-          "sensorPriority": "Lock Level 1 and Lock Level 2 upgrades cost 0 AP this round.",
+          "sensorPriority": "Lock Level 1 and Lock Level 2 upgrades cost half AP this round, rounded up.",
           "armamentOrder": "Grant the {{SHIPCOMBAT.Role.Ordnance}} an additional {{SHIPCOMBAT.Term.PowerCore}}.",
           "acceleratedLoading": "All crew commitments advance one turn this round (a 2-turn action completes next round instead).",
           "emergencyReserves": "Replenish AP by 50% immediately.",

@@ -97,6 +97,18 @@ function _getSensorApCostMultiplier(shipActor) {
   return sensor?.system?.apCostMultiplier ?? 1;
 }
 
+/**
+ * Calculate a lock action's final AP cost. The sensor component modifies the
+ * base cost first; Sensor Priority then halves Lock 1/2 upgrades, rounding up.
+ * Telemetry Buoy remains the final discount in the existing cost pipeline.
+ */
+function _lockActionApCost(sys, lockEntry, apCostMultiplier) {
+  let adjustedCost = lockEntry.cost * apCostMultiplier;
+  const sensorPriorityActive = sys.resources?.sensors?.sensorPriorityActive ?? false;
+  if (sensorPriorityActive && lockEntry.setsTier <= 2) adjustedCost *= 0.5;
+  return _buoyDiscount(sys, Math.ceil(adjustedCost));
+}
+
 // ── Action handlers (static, `this` = sheet instance) ────────────────────────
 
 /**
@@ -112,9 +124,7 @@ async function _onSensorAction(event, target) {
   // Try lock upgrades first
   const lockEntry = LOCK_ACTIONS.find(a => a.id === actionId);
   if (lockEntry) {
-    const sensorPriorityActive = sys.resources?.sensors?.sensorPriorityActive ?? false;
-    const rawCost = (sensorPriorityActive && lockEntry.setsTier <= 2) ? 0 : lockEntry.cost;
-    const effectiveCost = _buoyDiscount(sys, Math.ceil(rawCost * apCostMultiplier));
+    const effectiveCost = _lockActionApCost(sys, lockEntry, apCostMultiplier);
     if (!_spendAP(sys, effectiveCost)) return;
     const targetTokenId = target.dataset.targetTokenId;
     if (!targetTokenId) return;
@@ -288,9 +298,7 @@ export function buildSensorsContext(sys, opts = {}) {
   // Build lock-action list with affordability + tier prereq status
   const apCostMultiplier = sensorStats.apCostMultiplier ?? 1;
   const lockActions = LOCK_ACTIONS.map(a => {
-    const rawCost = (sensorPriorityActive && a.setsTier <= 2) ? 0 : a.cost;
-    const scaledCost = Math.ceil(rawCost * apCostMultiplier);
-    const effectiveCost = _buoyDiscount(sys, scaledCost);
+    const effectiveCost = _lockActionApCost(sys, a, apCostMultiplier);
     return {
       ...a,
       cost:           effectiveCost,
