@@ -267,6 +267,8 @@ export const NpcShipSheetMixin = (BaseClass) => {
         });
       });
 
+      _wireNpcLaunchSizeInputs(this, this.element);
+
       this.element.querySelectorAll(".shipcombat-arc-val[data-sector]").forEach(el => {
         el.addEventListener("click", ev => {
           ev.preventDefault();
@@ -1229,8 +1231,8 @@ function _npcComputeSternSpawn(token) {
   };
 }
 
-async function _onNpcLaunchTorpedo()     { await _npcLaunchOrdnance.call(this, "torpedo"); }
-async function _onNpcLaunchStrikeCraft() { await _npcLaunchOrdnance.call(this, "strikeCraft"); }
+async function _onNpcLaunchTorpedo(event, target)     { await _npcLaunchOrdnance.call(this, "torpedo", target); }
+async function _onNpcLaunchStrikeCraft(event, target) { await _npcLaunchOrdnance.call(this, "strikeCraft", target); }
 
 async function _onNpcPanToOrdnance(event, target) {
   const tokenId = target.dataset.tokenId;
@@ -1285,10 +1287,49 @@ async function _onNpcRTB() {
   await canvas.scene.deleteEmbeddedDocuments("Token", [selectedTokenId]);
 }
 
-async function _npcLaunchOrdnance(type) {
+function _npcLaunchSize(input) {
+  return Math.max(1, Math.trunc(Number(input?.value) || 1));
+}
+
+async function _persistNpcLaunchSize(sheet, input) {
+  const slotKey = input?.dataset?.config === "squadronSize" ? "strikeCraft" : "torpedo";
+  const templateId = input?.dataset?.templateId;
+  if (!templateId) return;
+
+  const launchSize = _npcLaunchSize(input);
+  input.value = String(launchSize);
+  const templates = SystemAdapter.current.getShipData(sheet.actor).ordnanceActors?.[slotKey] ?? [];
+  if (!templates.some(template => template.id === templateId)) return;
+
+  const updatedTemplates = templates.map(template => {
+    if (template.id !== templateId) return template;
+    const actorData = foundry.utils.deepClone(template.actorData ?? {});
+    const hull = foundry.utils.getProperty(actorData, "system.hull") ?? {};
+    hull.max = launchSize;
+    hull.value = SystemAdapter.current.hullDisplayMode === "hpRemaining"
+      ? launchSize
+      : Math.min(Math.max(0, Number(hull.value) || 0), launchSize);
+    foundry.utils.setProperty(actorData, "system.hull", hull);
+    return { ...template, actorData };
+  });
+
+  await sheet.actor.update({
+    [SystemAdapter.current.systemPath(`ordnanceActors.${slotKey}`)]: updatedTemplates,
+  });
+}
+
+function _wireNpcLaunchSizeInputs(sheet, root) {
+  root?.querySelectorAll?.(".shipcombat-npc-launch-count").forEach(input => {
+    input.addEventListener("change", () => _persistNpcLaunchSize(sheet, input));
+  });
+}
+
+async function _npcLaunchOrdnance(type, target) {
   const slotKey   = type === "strikeCraft" ? "strikeCraft" : "torpedo";
   const templates = SystemAdapter.current.getShipData(this.actor).ordnanceActors?.[slotKey] ?? [];
   const tmpl      = templates[0];
+  const sizeInput = target?.closest?.(".shipcombat-npc-launch-row")?.querySelector?.(".shipcombat-npc-launch-count");
+  const launchSize = sizeInput ? _npcLaunchSize(sizeInput) : null;
   if (SystemAdapter.current.getShipData(this.actor).resources?.pilot?.prowGunLocked) {
     return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Ram.BowLaunchLocked"));
   }
@@ -1312,6 +1353,7 @@ async function _npcLaunchOrdnance(type) {
   foundry.utils.setProperty(actorData, SystemAdapter.current.systemPath("parentShipTokenId"), parentShipTokenId);
   if (actorData.system) actorData.system.turnComplete = (type === "torpedo");
   if (actorData.system?.hull) {
+    if (launchSize !== null) actorData.system.hull.max = launchSize;
     const _isHP = SystemAdapter.current.hullDisplayMode === "hpRemaining";
     actorData.system.hull.value = _isHP ? (actorData.system.hull.max ?? 0) : 0;
   }
@@ -1616,6 +1658,8 @@ export const NpcShipSheetV1Mixin = (BaseClass) => {
           });
         });
       });
+
+      _wireNpcLaunchSizeInputs(sheet, el);
 
       // Shield sector click / contextmenu / wheel
       el.querySelectorAll(".shipcombat-arc-val[data-sector]").forEach(arcEl => {

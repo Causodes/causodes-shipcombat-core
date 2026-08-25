@@ -13,6 +13,7 @@
 - Add a GM-only radar control that marks or clears Battle Clarity for testing without playing the Captain card or consuming a Power Core
 - Correct Sensor Radar heading transforms after the ship-forward convention change and rotate the true compass beneath relative/heading-up mode
 - Restyle Marked Target and Battle Clarity as high-opacity translucent pale teal/red indicators outside the shield and bow-indicator radius, with two-line, lock-coloured canvas labels and `Bandit-a: Name` contact formatting
+- Fix NPC ordnance salvo and flight-size fields being locked to 1 by persisting edits to the embedded template and applying the current field value when launching
 
 ## 2.2.4
 - Fix NPC ship weapon delete controls doing nothing by registering the shared embedded-item actions on both AppV2 and legacy AppV1 NPC sheets
