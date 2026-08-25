@@ -16,6 +16,7 @@
 import { MODULE_ID, CORE_MODULE_ID } from "../constants.js";
 import { emitToGM } from "../socket.js";
 import { ShipCombatState } from "../state/ShipCombatState.js";
+import { getContactDisplayName } from "../targeting/contact-intelligence.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
 import { THEME, pixi } from "../theme.js";
 import { classifyZone, getHitQuadrant } from "./TargetingPopup.js";
@@ -145,6 +146,8 @@ export class StrikeCraftAttackPopup extends foundry.applications.api.HandlebarsA
     });
 
     const targets = [];
+    const contactData = ShipCombatState.getData();
+    const sortedContactIds = candidates.map(target => target.id).filter(Boolean).sort();
     for (const candidate of candidates) {
       const cW = candidate.document.width  * gs;
       const cH = candidate.document.height * gs;
@@ -200,7 +203,11 @@ export class StrikeCraftAttackPopup extends foundry.applications.api.HandlebarsA
 
       targets.push({
         tokenId:          candidate.id,
-        name:             candidate.document.name ?? "Unknown",
+        name:             getContactDisplayName(contactData, candidate.id, {
+          currentTier: lockTier,
+          realName: candidate.document.name ?? "Unknown",
+          fallbackOrdinal: sortedContactIds.indexOf(candidate.id) + 1,
+        }),
         img:              candidate.document.texture?.src ?? "icons/svg/mystery-man.svg",
         distance:         Math.round(distSquares * 10) / 10,
         zone:             zone.zone,

@@ -10,6 +10,7 @@ import { emitToGM }
   from "../socket.js";
 import { ShipCombatState }
   from "../state/ShipCombatState.js";
+import { getContactDisplayName } from "../targeting/contact-intelligence.js";
 
 // ── Shared ───────────────────────────────────────────────────────────────────
 // Lock tier colour palette used by BattleClarityPopupV1 (mirrors Core).
@@ -20,6 +21,17 @@ const TIER_COLOUR = {
   3: "#dd44ff",
   4: "#44ccff",
 };
+
+function _effectiveTier(token) {
+  const own = ShipCombatState.ship?.getActiveTokens?.()?.[0];
+  const gs = canvas?.grid?.size;
+  if (!own || !gs) return ShipCombatState.getLockTier(token.id);
+  const tx = token.x + (token.document.width * gs) / 2;
+  const ty = token.y + (token.document.height * gs) / 2;
+  const sx = own.x + (own.document.width * gs) / 2;
+  const sy = own.y + (own.document.height * gs) / 2;
+  return ShipCombatState.getEffectiveLockTier(token.id, Math.hypot(tx - sx, ty - sy) / gs);
+}
 
 // ── BattleClarityPopupV1 ─────────────────────────────────────────────────────
 
@@ -44,8 +56,6 @@ export class BattleClarityPopupV1 extends foundry.appv1.api.Application {
     const context = await super.getData(options);
 
     const data    = ShipCombatState.getData();
-    const locks   = data?.resources?.sensors?.locks ?? [];
-    const lockMap = new Map(locks.map(l => [l.targetTokenId, l.tier ?? 0]));
 
     const candidates = canvas.tokens?.placeables?.filter(t => {
       if (!t.actor || !t.visible) return false;
@@ -54,19 +64,28 @@ export class BattleClarityPopupV1 extends foundry.appv1.api.Application {
           || disp === CONST.TOKEN_DISPOSITIONS.NEUTRAL;
     }) ?? [];
 
+    const sortedContactIds = candidates.map(target => target.id).filter(Boolean).sort();
+    const recommendedTargetId = data.resources?.sensors?.recommendedTargetId ?? null;
+    const priorityTargetId = data.resources?.captain?.priorityTargetId ?? null;
     const targets = candidates.map(t => {
-      const lockTier = lockMap.get(t.id) ?? 0;
+      const lockTier = _effectiveTier(t);
       if (lockTier < 1) return null;
       return {
         tokenId:    t.id,
-        name:       t.document.name ?? "Unknown",
+        name:       getContactDisplayName(data, t.id, {
+          currentTier: lockTier,
+          realName: t.document.name ?? "Unknown",
+          fallbackOrdinal: sortedContactIds.indexOf(t.id) + 1,
+        }),
         img:        t.document.texture?.src ?? "icons/svg/mystery-man.svg",
         lockTier,
         bearing:    Math.round(t.document.rotation),
         lockLabel:  `L${lockTier}`,
         lockColour: TIER_COLOUR[lockTier] ?? TIER_COLOUR[0],
+        isRecommended: recommendedTargetId === t.id,
+        isPriority: priorityTargetId === t.id,
       };
-    }).filter(Boolean).sort((a, b) => b.lockTier - a.lockTier);
+    }).filter(Boolean).sort((a, b) => Number(b.isRecommended) - Number(a.isRecommended) || b.lockTier - a.lockTier);
 
     return { ...context, targets, noTargets: targets.length === 0 };
   }

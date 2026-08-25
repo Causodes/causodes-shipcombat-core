@@ -18,6 +18,8 @@ import { isOrdnance }
   from "../actors/ordnance/ordnance-types.js";
 import { classifyZone, getHitQuadrant, testArc }
   from "./TargetingPopup.js";
+import { getContactDisplayName }
+  from "../targeting/contact-intelligence.js";
 
 // ── TargetingPopupV1 ─────────────────────────────────────────────────────────
 
@@ -114,6 +116,7 @@ export class TargetingPopupV1 extends foundry.appv1.api.Application {
     });
 
     const targets = [];
+    const sortedContactIds = candidates.map(target => target.id).filter(Boolean).sort();
     for (const candidate of candidates) {
       const cW = candidate.document.width  * gridSize;
       const cH = candidate.document.height * gridSize;
@@ -211,9 +214,11 @@ export class TargetingPopupV1 extends foundry.appv1.api.Application {
 
       targets.push({
         tokenId: candidate.id,
-        name:    lockTier >= 2
-          ? (candidate.document.name ?? "Unknown")
-          : (candidate.document.name ?? game.i18n.localize("SHIPCOMBAT.Targeting.UnknownContact")),
+        name:    getContactDisplayName(sys, candidate.id, {
+          currentTier: lockTier,
+          realName: candidate.document.name ?? "Unknown",
+          fallbackOrdinal: sortedContactIds.indexOf(candidate.id) + 1,
+        }),
         img: (() => {
           if (lockTier === 1 && isOrdnance(candidate.document.actor)) {
             const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><circle cx="20" cy="20" r="7" fill="#ff4444"/></svg>`;
@@ -267,6 +272,8 @@ export class TargetingPopupV1 extends foundry.appv1.api.Application {
         rangingFireBonus,
         battleClarityBonus,
         battleClarityPierce,
+        isRecommended: sys.resources?.sensors?.recommendedTargetId === candidate.id,
+        isPriority: priorityTargetId === candidate.id,
         activeCorrection,
         accuracyTooltip,
         targetX: tx,
@@ -274,7 +281,9 @@ export class TargetingPopupV1 extends foundry.appv1.api.Application {
       });
     }
 
-    targets.sort((a, b) => a.distance - b.distance);
+    targets.sort((a, b) => Number(b.isRecommended) - Number(a.isRecommended)
+      || Number(b.isPriority) - Number(a.isPriority)
+      || a.distance - b.distance);
     this.targets  = targets;
     this._shipPos = { x: cx, y: cy };
 

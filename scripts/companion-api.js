@@ -43,6 +43,7 @@ export { ShipComponentSchemaMixin }                          from "./items/ShipC
 export { ShipComponentSheetMixin, ShipComponentSheetV1Mixin } from "./items/ShipComponentSheetMixin.js";
 export { CORE_MODULE_ID, MACRO_FIRE_TIERS, buildChargeTiers, SHIP_CLASSIFICATIONS } from "./constants.js";
 export { hullDisplay }                                       from "./constants.js";
+export { getContactDisplayName, getContactDesignation, getContactRecord } from "./targeting/contact-intelligence.js";
 export {
   getStationOperatorRole,
   getPowerCorePoolRole,

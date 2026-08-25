@@ -19,6 +19,7 @@
 import { MODULE_ID, CAPTAIN_CARDS, CAPTAIN_CORE_ACTIONS, buildCaptainDeck } from "../constants.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
 import { getPowerCoreCount, getPowerCorePoolRole } from "../roles/crew-operators.js";
+import { ensureContactRecord } from "../targeting/contact-intelligence.js";
 
 const HAND_CAP   = 6;
 const DRAWS_PER_ROUND = 3;
@@ -468,6 +469,14 @@ export async function captainCoreAction({ actionId, tokenId, cardId, newPile } =
   else if (actionId === "battleClarity") {
     if (!tokenId) return;
     updates[SystemAdapter.current.systemPath("resources.captain.priorityTargetId")] = tokenId;
+    const lockTier = (sys.resources?.sensors?.locks ?? [])
+      .find(lock => lock.targetTokenId === tokenId)?.tier ?? 1;
+    const ensured = ensureContactRecord(sys, tokenId, {
+      tier: lockTier,
+      realName: canvas?.tokens?.get(tokenId)?.document?.name ?? null,
+    });
+    updates[SystemAdapter.current.systemPath("resources.sensors.contacts")] = ensured.contacts;
+    updates[SystemAdapter.current.systemPath("resources.sensors.nextContactOrdinal")] = ensured.nextContactOrdinal;
   }
 
   // ── Emergency Salvage: retrieve one card from discard to hand ──

@@ -15,6 +15,7 @@ import { ShipCombatState } from "../state/ShipCombatState.js";
 import { HelmPreview } from "../canvas/HelmPreview.js";
 import { getHitQuadrant } from "./TargetingPopup.js";
 import { THEME, pixi } from "../theme.js";
+import { getContactDisplayName } from "../targeting/contact-intelligence.js";
 
 export class RamTargetPopup extends foundry.applications.api.HandlebarsApplicationMixin(
   foundry.applications.api.ApplicationV2
@@ -111,6 +112,8 @@ export class RamTargetPopup extends foundry.applications.api.HandlebarsApplicati
     const rammingDmgBase   = rammingBowArmour + 0.25 * rammingHullMax;
 
     const targets = [];
+    const shipData = this.ship?.system ?? {};
+    const sortedContactIds = candidates.map(target => target.id).filter(Boolean).sort();
     for (const candidate of candidates) {
       const cW = candidate.document.width  * gridSize;
       const cH = candidate.document.height * gridSize;
@@ -167,7 +170,11 @@ export class RamTargetPopup extends foundry.applications.api.HandlebarsApplicati
 
       targets.push({
         tokenId:      candidate.id,
-        name:         lockTier >= 2 ? (candidate.document.name ?? "Unknown") : game.i18n.localize("SHIPCOMBAT.Targeting.UnknownContact"),
+        name:         getContactDisplayName(shipData, candidate.id, {
+          currentTier: lockTier,
+          realName: candidate.document.name ?? "Unknown",
+          fallbackOrdinal: sortedContactIds.indexOf(candidate.id) + 1,
+        }),
         img:          candidate.document.texture?.src ?? "icons/svg/mystery-man.svg",
         distance:     distVU,
         bearingDeg:   reach.bearingDeg,

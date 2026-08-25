@@ -24,6 +24,7 @@ import { HelmPreview } from "./scripts/canvas/HelmPreview.js";
 import { ShieldArcOverlay } from "./scripts/canvas/ShieldArcOverlay.js";
 import { WeaponArcOverlay } from "./scripts/canvas/WeaponArcOverlay.js";
 import { StrikeCraftArcOverlay } from "./scripts/canvas/StrikeCraftArcOverlay.js";
+import { TargetDesignationOverlay } from "./scripts/canvas/TargetDesignationOverlay.js";
 import { refreshTokenVisibility, applyTokenVisibility } from "./scripts/canvas/TokenVisibility.js";
 
 import { SystemAdapter } from "./scripts/systems/SystemAdapter.js";
@@ -272,6 +273,7 @@ Hooks.on("canvasTearDown", () => {
   ShieldArcOverlay.destroyAll();
   WeaponArcOverlay.destroyAll();
   StrikeCraftArcOverlay.destroyAll();
+  TargetDesignationOverlay.destroyAll();
 });
 
 // ── Ship token defaults ──────────────────────────────────────────────────────
@@ -331,6 +333,7 @@ Hooks.on("preUpdateActor", (actor, changes) => {
 Hooks.on("canvasReady", () => {
   ShieldArcOverlay.refresh();
   refreshTokenVisibility();
+  TargetDesignationOverlay.refresh();
 
   // Auto-link any existing unlinked ship tokens so that world-actor data
   // and token-actor data stay in sync (role assignments, combat state, etc.).
@@ -350,6 +353,7 @@ Hooks.on("updateActor", (actor) => {
   if (actor.type === `${MODULE_ID}.ship` || actor.type === `${MODULE_ID}.npcShip`) {
     ShieldArcOverlay.refresh();
     refreshTokenVisibility();
+    TargetDesignationOverlay.refresh();
   }
 });
 
@@ -361,6 +365,7 @@ Hooks.on("refreshToken", (token) => {
   ShieldArcOverlay._redrawToken(token);
   WeaponArcOverlay.onRefreshToken(token);
   applyTokenVisibility(token);
+  TargetDesignationOverlay.onRefreshToken(token);
 });
 
 // When a ship token's committed position changes (drag released, animation end),
@@ -372,13 +377,16 @@ Hooks.on("updateToken", (tokenDoc, changes) => {
   if (actor.type === `${MODULE_ID}.ship` || actor.type === `${MODULE_ID}.npcShip`) {
     ShieldArcOverlay.refresh();
     refreshTokenVisibility();
+    TargetDesignationOverlay.refresh();
   }
 });
 
 // When a token is deleted, destroy its shield overlay immediately.
 Hooks.on("deleteToken", (tokenDoc) => {
   ShieldArcOverlay._destroyToken(tokenDoc.id);
+  TargetDesignationOverlay._destroyToken(tokenDoc.id);
   WeaponArcOverlay.destroyAll();
+  if (game.user.isGM) ShipCombatState.clearTargetReferences(tokenDoc.id);
 
   // Auto-delete world actors spawned by ordnance launch
   if (game.user.isGM && tokenDoc.actor?.flags?.[MODULE_ID]?.fromOrdnanceMaster) {

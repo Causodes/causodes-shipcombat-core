@@ -10,6 +10,7 @@ import { isOrdnance } from "../actors/ordnance/ordnance-types.js";
 import { rollCrit } from "./crit-state.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
 import { getSensorsOperatorUserId } from "../roles/crew-operators.js";
+import { getContactDisplayName } from "../targeting/contact-intelligence.js";
 
 /** Allocate an opaque BDA key without ever overwriting a live attack record. */
 export function allocateBdaAttackId(existingAttacks = {}) {
@@ -147,7 +148,23 @@ export async function fireWeapon({ weaponId, actorId, fireMode, targetToken, hit
   }
 
   const targetTok  = canvas.tokens.get(targetToken);
-  const targetName  = targetTok?.document?.name ?? "Unknown";
+  const targetRealName = targetTok?.document?.name ?? "Unknown";
+  let targetDisplayTier = this.getLockTier(targetToken);
+  const ownToken = this.ship?.getActiveTokens?.()?.[0];
+  const gs = canvas?.grid?.size;
+  if (!isNpcFire && targetTok && ownToken && gs) {
+    const tx = targetTok.x + (targetTok.document.width * gs) / 2;
+    const ty = targetTok.y + (targetTok.document.height * gs) / 2;
+    const sx = ownToken.x + (ownToken.document.width * gs) / 2;
+    const sy = ownToken.y + (ownToken.document.height * gs) / 2;
+    targetDisplayTier = this.getEffectiveLockTier(targetToken, Math.hypot(tx - sx, ty - sy) / gs);
+  }
+  const targetName = isNpcFire
+    ? targetRealName
+    : getContactDisplayName(sys, targetToken, {
+        currentTier: targetDisplayTier,
+        realName: targetRealName,
+      });
   // Resolve the target actor to apply damage/crits to the correct ship
   const targetActor = targetTok?.document?.actor ?? null;
   const targetSys   = SystemAdapter.current.getShipData(targetActor) ?? sys;

@@ -15,9 +15,18 @@ import { MODULE_ID, CORE_MODULE_ID, LOCK_DECAY_ROUNDS, hullDisplay } from "../co
 import { ShipCombatState } from "../state/ShipCombatState.js";
 import { emitToGM } from "../socket.js";
 import { refreshTokenVisibility } from "./TokenVisibility.js";
+import { getContactDisplayName } from "../targeting/contact-intelligence.js";
 import { SENSORS_ACTIONS } from "../roles/sensors.js";
 import { isOrdnance as _isOrdnanceActor, ordnanceSubtype as _ordnanceSubtype, actorTypeIsOrdnance, actorTypeIsTorpedo, actorTypeIsStrikeCraft } from "../actors/ordnance/ordnance-types.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
+import {
+  compassBearingOnRadar,
+  radarAngleToSweepPhase,
+  relativeBearingDegrees,
+  tokenHeadingOnRadar,
+  tokenRotationToCanvasHeading,
+  worldAngleToRadar,
+} from "./radar-geometry.js";
 
 // ── Visual constants ──────────────────────────────────────────────────────
 
@@ -86,13 +95,10 @@ const EFFECT_VIS = {
   rangeAmplifier:     { abbr: "RA", col: "#22ccbb" },
 };
 
-// ── Greek alphabet for contact designation ────────────────────────────────
-
-const GREEK = "αβγδεζηθικλμνξοπρστυφχψω";
-
 // ── Module state ──────────────────────────────────────────────────────────
 
 let _selectedTokenId  = null;
+const _pendingContactIds = new Set();
 let _blips            = [];
 let _activeSheet      = null;
 let _activeSensorsCtx = null;
@@ -238,7 +244,7 @@ function _paint(el, sheet) {
   const tokenH  = token.document.height * gridSize;
   const cx0     = token.document.x + tokenW / 2;
   const cy0     = token.document.y + tokenH / 2;
-  const heading = (token.document.rotation + 90) * (Math.PI / 180);
+  const heading = tokenRotationToCanvasHeading(token.document.rotation);
 
   // Discover other tokens (include hidden tokens  -  visibility is managed by
   // TokenVisibility based on lock tier; the radar must always see all contacts)
@@ -251,7 +257,9 @@ function _paint(el, sheet) {
     (ship.getActiveTokens?.() ?? []).map(t => t.id)
   );
 
-  const locks = SystemAdapter.current.getShipData(ship).resources?.sensors?.locks ?? [];
+  const shipData = SystemAdapter.current.getShipData(ship) ?? {};
+  const locks = shipData.resources?.sensors?.locks ?? [];
+  const sortedContactIds = candidates.map(candidate => candidate.id).filter(Boolean).sort();
 
   const rawBlips = [];
   for (const c of candidates) {
@@ -264,7 +272,6 @@ function _paint(el, sheet) {
     const distPx = Math.sqrt(dx * dx + dy * dy);
     const distSq = distPx / gridSize;
     const angle    = Math.atan2(dy, dx);
-    const relAngle = angle - heading;
     const tokenId  = c.id;
 
     // Check if this is friendly ordnance (torpedo / strike craft launched by us)
@@ -288,9 +295,12 @@ function _paint(el, sheet) {
     rawBlips.push({
       tokenId,
       realName:   c.document.name ?? "?",
-      name:       friendly ? (c.document.name ?? "?") : _contactName(tokenId, lockTier, candidates),
+      name:       friendly ? (c.document.name ?? "?") : getContactDisplayName(shipData, tokenId, {
+        currentTier: lockTier,
+        realName: c.document.name ?? "?",
+        fallbackOrdinal: sortedContactIds.indexOf(tokenId) + 1,
+      }),
       distSq,
-      relAngle,
       absAngle:   angle,
       lockTier,
       friendly,
@@ -300,8 +310,42 @@ function _paint(el, sheet) {
       selected:   c.id === _selectedTokenId,
       // Target heading: relative for REL radar, absolute for TRUE radar.
       // Both stored so the rendering code can pick the right one.
-      targetHeadingRel: (c.document.rotation + 90) * (Math.PI / 180) - heading - Math.PI / 2,
-      targetHeadingAbs: (c.document.rotation + 90) * (Math.PI / 180),
+      targetHeadingRel: tokenHeadingOnRadar(c.document.rotation, heading, false),
+      targetHeadingAbs: tokenHeadingOnRadar(c.document.rotation, heading, true),
+    });
+  }
+
+  // Auto-scan contacts do not pass through upgradeLock, so register them as a
+  // batch the first time the radar detects them. This keeps designations stable
+  // when other tokens later enter or leave the scene.
+  const detectedIds = rawBlips
+    .filter(blip => !blip.friendly && blip.lockTier >= 1)
+    .map(blip => blip.tokenId)
+    .sort();
+  const existingContacts = shipData.resources?.sensors?.contacts ?? {};
+  const missingIds = detectedIds.filter(tokenId => {
+    if (existingContacts[tokenId]) {
+      _pendingContactIds.delete(tokenId);
+      return false;
+    }
+    return !_pendingContactIds.has(tokenId);
+  });
+  if (missingIds.length > 0) {
+    for (const tokenId of missingIds) _pendingContactIds.add(tokenId);
+    emitToGM("registerSensorContacts", { targetTokenIds: missingIds });
+    setTimeout(() => {
+      for (const tokenId of missingIds) _pendingContactIds.delete(tokenId);
+    }, 3000);
+  }
+
+  const pendingBase = Number(shipData.resources?.sensors?.nextContactOrdinal) || 1;
+  const unregisteredIds = detectedIds.filter(tokenId => !existingContacts[tokenId]);
+  for (const blip of rawBlips) {
+    if (blip.friendly || blip.lockTier < 1 || existingContacts[blip.tokenId]) continue;
+    blip.name = getContactDisplayName(shipData, blip.tokenId, {
+      currentTier: blip.lockTier,
+      realName: blip.realName,
+      fallbackOrdinal: pendingBase + unregisteredIds.indexOf(blip.tokenId),
     });
   }
 
@@ -317,8 +361,8 @@ function _paint(el, sheet) {
 
     for (const b of rawBlips) {
       // Use absolute angle (+π/2 to match sweep coordinate system) in TRUE mode
-      const sweepRef = _trueBearing ? (b.absAngle + Math.PI / 2) : b.relAngle;
-      const bNorm = ((sweepRef % TWO_PI) + TWO_PI) % TWO_PI;
+      const radarAngle = worldAngleToRadar(b.absAngle, heading, _trueBearing);
+      const bNorm = radarAngleToSweepPhase(radarAngle);
       const swept = sweepGating ? _wasSwept(prevNorm, currNorm, bNorm) : true;
 
       if (swept) {
@@ -395,15 +439,11 @@ function _paint(el, sheet) {
   ctx.globalAlpha = 0.5;
   ctx.beginPath();
   ctx.moveTo(half, half);
-  if (_trueBearing) {
-    // TRUE mode: draw heading line in the ship's actual compass direction
-    const hx = half + half * Math.cos(heading);
-    const hy = half + half * Math.sin(heading);
-    ctx.lineTo(hx, hy);
-  } else {
-    // REL mode: heading is always straight up
-    ctx.lineTo(half, 0);
-  }
+  const headingOnRadar = worldAngleToRadar(heading, heading, _trueBearing);
+  ctx.lineTo(
+    half + half * Math.cos(headingOnRadar),
+    half + half * Math.sin(headingOnRadar),
+  );
   ctx.stroke();
   ctx.setLineDash([]);
   ctx.globalAlpha = 1;
@@ -456,8 +496,6 @@ function _paint(el, sheet) {
     const edgeR  = half - 2;
     const tickIn = edgeR - 8;          // inner end of tick
     const labelR = edgeR - 16;         // label centre distance
-    const bearingOffset = 0; // North is always at top in both modes
-
     ctx.strokeStyle = _pal.ringLabel;
     ctx.lineWidth   = 1;
     ctx.fillStyle   = _pal.ringLabel;
@@ -466,7 +504,9 @@ function _paint(el, sheet) {
     ctx.textBaseline = "middle";
 
     for (let deg = 0; deg < 360; deg += 30) {
-      const rad   = (deg * Math.PI / 180) - Math.PI / 2 - bearingOffset;
+      // TRUE keeps north at the top. REL rotates the true compass beneath the
+      // heading-up display, so the label at the bow is the ship's true course.
+      const rad   = compassBearingOnRadar(deg, heading, _trueBearing);
       const ox    = Math.cos(rad);
       const oy    = Math.sin(rad);
       const isMajor = deg % 90 === 0;
@@ -536,8 +576,7 @@ function _paint(el, sheet) {
 
   _blips = [];
   for (const b of _displayedBlips.values()) {
-    // REL mode: heading-up (relAngle - π/2).  TRUE mode: north-up (absAngle).
-    const radarAngle = _trueBearing ? b.absAngle : (b.relAngle - Math.PI / 2);
+    const radarAngle = worldAngleToRadar(b.absAngle, heading, _trueBearing);
     const r  = b.distSq * pxPerSq;
     const bx = half + r * Math.cos(radarAngle);
     const by = half + r * Math.sin(radarAngle);
@@ -548,8 +587,7 @@ function _paint(el, sheet) {
 
     // Sweep proximity  -  blip colour shifts toward green when the sweep arm
     // passes, then decays back to the original tier colour over ~2 seconds.
-    const sweepRef      = _trueBearing ? (b.absAngle + Math.PI / 2) : b.relAngle;
-    const blipAngleNorm = ((sweepRef % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+    const blipAngleNorm = radarAngleToSweepPhase(radarAngle);
     const sweepNorm     = ((_sweepAngle % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
     let sweepDelta      = (sweepNorm - blipAngleNorm + Math.PI * 2) % (Math.PI * 2);
     // sweepBoost: 1 at sweep arm, decays to 0 over ~2s worth of angular distance
@@ -767,25 +805,16 @@ function _paint(el, sheet) {
   ctx.fillStyle   = _pal.friendly;
   ctx.shadowColor = _pal.friendly;
   ctx.shadowBlur  = 8;
-  if (_trueBearing) {
-    ctx.save();
-    ctx.translate(half, half);
-    ctx.rotate(heading + Math.PI / 2);
-    ctx.beginPath();
-    ctx.moveTo(0, -7);
-    ctx.lineTo(-5, 4);
-    ctx.lineTo(5, 4);
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
-  } else {
-    ctx.beginPath();
-    ctx.moveTo(half, half - 7);
-    ctx.lineTo(half - 5, half + 4);
-    ctx.lineTo(half + 5, half + 4);
-    ctx.closePath();
-    ctx.fill();
-  }
+  ctx.save();
+  ctx.translate(half, half);
+  ctx.rotate(headingOnRadar + Math.PI / 2);
+  ctx.beginPath();
+  ctx.moveTo(0, -7);
+  ctx.lineTo(-5, 4);
+  ctx.lineTo(5, 4);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
   ctx.shadowBlur = 0;
 
   ctx.restore();
@@ -1083,7 +1112,9 @@ function _buildPopupHTML(blip, ctx, blipEffects) {
 
   // Bearing (tier 1+)
   if (tier >= 1) {
-    const bearingDeg = Math.round((((blip.relAngle * 180 / Math.PI) % 360) + 360) % 360);
+    const bearingDeg = Math.round(relativeBearingDegrees(blip.absAngle, tokenRotationToCanvasHeading(
+      _activeSheet?.actor?.getActiveTokens?.()?.[0]?.document?.rotation ?? 0,
+    ))) % 360;
     h += `<div class="shipcombat-rpop-bearing"><i class="fa-solid fa-compass"></i> Bearing: ${bearingDeg.toString().padStart(3, '0')}°</div>`;
   }
 
@@ -1169,6 +1200,24 @@ function _buildPopupHTML(blip, ctx, blipEffects) {
         if (a.cost) h += `<span class="shipcombat-rpop-cost">${a.cost}</span>`;
         h += `</button>`;
       }
+    }
+  }
+
+  // ── Shared crew targeting ──────────────────────────────────────
+  const recommended = ctx.recommendedTargetId === blip.tokenId;
+  const priority = ctx.priorityTargetId === blip.tokenId;
+  if (!blip.friendly && (tier >= 1 || recommended || (ctx.isGM && priority))) {
+    h += `<div class="shipcombat-rpop-divider"></div>`;
+    if (tier >= 1 || recommended) {
+      h += `<button class="shipcombat-rpop-btn shipcombat-rpop-btn--recommend${recommended ? " is-active" : ""}" `;
+      h += `data-action="recommendTarget" data-target-token-id="${blip.tokenId}" data-radar-action>`;
+      h += `<i class="fa-solid fa-flag"></i> ${recommended ? loc("SHIPCOMBAT.Sensors.ClearRecommendation") : loc("SHIPCOMBAT.Sensors.RecommendTarget")}</button>`;
+    }
+    if (ctx.isGM && (tier >= 1 || priority)) {
+      h += `<button class="shipcombat-rpop-btn shipcombat-rpop-btn--debug${priority ? " is-active" : ""}" `;
+      h += `data-action="debugBattleClarity" data-target-token-id="${blip.tokenId}" data-radar-action `;
+      h += `title="GM debug control; does not consume a Power Core">`;
+      h += `<i class="fa-solid fa-bug"></i> ${priority ? loc("SHIPCOMBAT.Sensors.ClearDebugBattleClarity") : loc("SHIPCOMBAT.Sensors.DebugBattleClarity")}</button>`;
     }
   }
 
@@ -1708,41 +1757,6 @@ function _startSweepLoop(el, sheet) {
   }
 
   _animFrameId = requestAnimationFrame(_loop);
-}
-
-// ── Contact naming ────────────────────────────────────────────────────────
-
-/**
- * Return the display name for a blip based on lock tier and module setting.
- *   Tier 0-1 (Contact/Ping): designation only (no real name)
- *   Tier 2: same designation (Breach Analysis reveals shields, not name)
- *   Tier 3+: real ship name
- */
-function _contactName(tokenId, lockTier, candidates) {
-  if (lockTier >= 3) {
-    // Deep Scan  -  show actual name
-    const tok = candidates.find(c => c.id === tokenId);
-    return tok?.document?.name ?? "?";
-  }
-
-  // Assign a stable index based on sorted token IDs
-  const sortedIds = candidates.map(c => c.id).filter(Boolean).sort();
-  const idx = sortedIds.indexOf(tokenId);
-
-  let mode;
-  try { mode = game.settings.get(MODULE_ID, "contactDesignation"); }
-  catch { mode = "naval-greek"; }
-
-  const useGreek = mode.includes("greek") || mode === "naval-greek";
-  const suffix   = useGreek
-    ? (GREEK[idx % GREEK.length] ?? String(idx + 1))
-    : String(idx + 1);
-
-  if (mode.startsWith("naval")) {
-    // Naval mode: Bogey (tier 0), Bandit (tier 1+)
-    return lockTier >= 1 ? `Bandit-${suffix}` : `Bogey-${suffix}`;
-  }
-  return `Contact-${suffix}`;
 }
 
 // ── Sweep gate detection ──────────────────────────────────────────────────

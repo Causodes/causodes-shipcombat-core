@@ -40,6 +40,7 @@ import { LOCK_DECAY_ROUNDS, AUGUR_LOCK_COSTS, AUGUR_CORE_ACTIONS, BDA_CORRECTION
 import { SensorRadar } from "../canvas/SensorRadar.js";
 import { BDAPopup, launchBDAFromChat } from "../apps/BDAPopup.js";
 import { getPowerCoreCount } from "./crew-operators.js";
+import { ShipCombatState } from "../state/ShipCombatState.js";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -218,6 +219,21 @@ async function _onSensorCoreAction(event, target) {
   if (actionId === "signalInversion" && targetTokenId) {
     emitToGM("stripQuadrantShields", { targetTokenId });
   }
+}
+
+/** Share one non-mechanical target recommendation with the whole crew. */
+async function _onRecommendTarget(event, target) {
+  const targetTokenId = target.dataset.targetTokenId;
+  if (!targetTokenId) return;
+  await emitToGM("setRecommendedTarget", { targetTokenId });
+}
+
+/** GM-only diagnostic toggle; bypasses Captain core consumption. */
+async function _onDebugBattleClarity(event, target) {
+  if (!game.user.isGM) return;
+  const targetTokenId = target.dataset.targetTokenId;
+  if (!targetTokenId) return;
+  await ShipCombatState.setDebugBattleClarityTarget({ targetTokenId });
 }
 
 /**
@@ -399,6 +415,9 @@ export function buildSensorsContext(sys, opts = {}) {
     locks,
     sensorBlind,
     sensorPriorityActive,
+    recommendedTargetId: sys.resources?.sensors?.recommendedTargetId ?? null,
+    priorityTargetId: sys.resources?.captain?.priorityTargetId ?? null,
+    isGM: !!game.user?.isGM,
     captainBoosts,
     // NPC conditions: visible when Sensors holds an active L3+ lock on that token
     npcConditions: _buildNpcConditions(locks),
@@ -466,6 +485,8 @@ function _onPopOutRadar() {
 export const SENSORS_ACTIONS = {
   sensorAction:       _onSensorAction,
   sensorCoreAction:   _onSensorCoreAction,
+  recommendTarget:    _onRecommendTarget,
+  debugBattleClarity: _onDebugBattleClarity,
   toggleBearing:      _onToggleBearing,
   popOutRadar:        _onPopOutRadar,
   openBDAPopup:       _onOpenBDAPopup,

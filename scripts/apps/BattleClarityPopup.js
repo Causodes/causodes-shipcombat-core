@@ -7,6 +7,7 @@
 import { MODULE_ID, CORE_MODULE_ID } from "../constants.js";
 import { emitToGM }  from "../socket.js";
 import { ShipCombatState } from "../state/ShipCombatState.js";
+import { getContactDisplayName } from "../targeting/contact-intelligence.js";
 
 // Lock tier palette (matches SensorRadar TIER_COLOUR)
 const TIER_COLOUR = {
@@ -16,6 +17,17 @@ const TIER_COLOUR = {
   3: "#dd44ff",
   4: "#44ccff",
 };
+
+function _effectiveTier(token) {
+  const own = ShipCombatState.ship?.getActiveTokens?.()?.[0];
+  const gs = canvas?.grid?.size;
+  if (!own || !gs) return ShipCombatState.getLockTier(token.id);
+  const tx = token.x + (token.document.width * gs) / 2;
+  const ty = token.y + (token.document.height * gs) / 2;
+  const sx = own.x + (own.document.width * gs) / 2;
+  const sy = own.y + (own.document.height * gs) / 2;
+  return ShipCombatState.getEffectiveLockTier(token.id, Math.hypot(tx - sx, ty - sy) / gs);
+}
 
 export class BattleClarityPopup extends foundry.applications.api.HandlebarsApplicationMixin(
   foundry.applications.api.ApplicationV2
@@ -45,8 +57,6 @@ export class BattleClarityPopup extends foundry.applications.api.HandlebarsAppli
 
     // Sensor lock data from combat state
     const data  = ShipCombatState.getData();
-    const locks = data?.resources?.sensors?.locks ?? [];
-    const lockMap = new Map(locks.map(l => [l.targetTokenId, l.tier ?? 0]));
 
     // Gather enemy / neutral tokens visible on the scene
     const candidates = canvas.tokens?.placeables?.filter(t => {
@@ -56,19 +66,28 @@ export class BattleClarityPopup extends foundry.applications.api.HandlebarsAppli
           || disp === CONST.TOKEN_DISPOSITIONS.NEUTRAL;
     }) ?? [];
 
+    const sortedContactIds = candidates.map(target => target.id).filter(Boolean).sort();
+    const recommendedTargetId = data.resources?.sensors?.recommendedTargetId ?? null;
+    const priorityTargetId = data.resources?.captain?.priorityTargetId ?? null;
     const targets = candidates.map(t => {
-      const lockTier     = lockMap.get(t.id) ?? 0;
+      const lockTier     = _effectiveTier(t);
       if (lockTier < 1) return null;   // Lock 0 targets not shown
       return {
         tokenId:      t.id,
-        name:         t.document.name ?? "Unknown",
+        name:         getContactDisplayName(data, t.id, {
+          currentTier: lockTier,
+          realName: t.document.name ?? "Unknown",
+          fallbackOrdinal: sortedContactIds.indexOf(t.id) + 1,
+        }),
         img:          t.document.texture?.src ?? "icons/svg/mystery-man.svg",
         lockTier,
         bearing:      Math.round(t.document.rotation),
         lockLabel:    `L${lockTier}`,
         lockColour:   TIER_COLOUR[lockTier] ?? TIER_COLOUR[0],
+        isRecommended: recommendedTargetId === t.id,
+        isPriority: priorityTargetId === t.id,
       };
-    }).filter(Boolean).sort((a, b) => b.lockTier - a.lockTier);
+    }).filter(Boolean).sort((a, b) => Number(b.isRecommended) - Number(a.isRecommended) || b.lockTier - a.lockTier);
 
     return {
       ...context,

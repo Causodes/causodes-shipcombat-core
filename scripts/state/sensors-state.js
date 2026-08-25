@@ -7,6 +7,39 @@
 
 import { MODULE_ID, CORE_MODULE_ID, LOCK_DECAY_ROUNDS } from "../constants.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
+import { ensureContactRecord, getContactDisplayName } from "../targeting/contact-intelligence.js";
+
+function _targetName(targetTokenId) {
+  return canvas?.tokens?.get(targetTokenId)?.document?.name ?? null;
+}
+
+function _contactUpdates(data, targets) {
+  let sensors = {
+    ...(data.resources?.sensors ?? {}),
+    contacts: foundry.utils.deepClone(data.resources?.sensors?.contacts ?? {}),
+  };
+
+  for (const { targetTokenId, tier = 0 } of targets) {
+    const workingData = {
+      ...data,
+      resources: { ...(data.resources ?? {}), sensors },
+    };
+    const ensured = ensureContactRecord(workingData, targetTokenId, {
+      tier,
+      realName: _targetName(targetTokenId),
+    });
+    sensors = {
+      ...sensors,
+      contacts: ensured.contacts,
+      nextContactOrdinal: ensured.nextContactOrdinal,
+    };
+  }
+
+  return {
+    "resources.sensors.contacts": sensors.contacts,
+    "resources.sensors.nextContactOrdinal": sensors.nextContactOrdinal ?? 1,
+  };
+}
 
 /**
  * Add a sensor effect targeting an enemy token.
@@ -85,9 +118,13 @@ export async function stripQuadrantShields({ targetTokenId }) {
   const quadrantLabel = game.i18n.localize(
     `SHIPCOMBAT.Sector.${quadrant.charAt(0).toUpperCase() + quadrant.slice(1)}`
   );
+  const targetName = getContactDisplayName(this.getData(), targetTokenId, {
+    currentTier: this.getEffectiveLockTier(targetTokenId, Math.hypot(tx - sx, ty - sy) / gs),
+    realName: targetToken.document.name ?? "Unknown",
+  });
   await ChatMessage.create({
     flavor:  game.i18n.localize("SHIPCOMBAT.Sensors.SignalInversion"),
-    content: `<p><b>${targetToken.document.name}</b>: ${quadrantLabel} shields stripped (${current} → 0).</p>`,
+    content: `<p><b>${targetName}</b>: ${quadrantLabel} shields stripped (${current} → 0).</p>`,
   });
 }
 
@@ -106,7 +143,10 @@ export async function upgradeLock({ targetTokenId, tier }) {
   } else {
     locks.push({ targetTokenId, tier, decayRounds: decay });
   }
-  return this.update({ "resources.sensors.locks": locks });
+  return this.update({
+    "resources.sensors.locks": locks,
+    ..._contactUpdates(data, [{ targetTokenId, tier }]),
+  });
 }
 
 /**
@@ -128,7 +168,97 @@ export async function upgradeAllLocks({ tier }) {
   });
 
   if (!changed) return;
-  return this.update({ "resources.sensors.locks": upgradedLocks });
+  return this.update({
+    "resources.sensors.locks": upgradedLocks,
+    ..._contactUpdates(data, upgradedLocks.map(lock => ({
+      targetTokenId: lock.targetTokenId,
+      tier: lock.tier ?? targetTier,
+    }))),
+  });
+}
+
+/** Persist stable designations for newly detected contacts in one update. */
+export async function registerSensorContacts({ targetTokenIds = [] } = {}) {
+  const data = this.getData();
+  const contacts = data.resources?.sensors?.contacts ?? {};
+  const missingIds = [...new Set(targetTokenIds)]
+    .filter(targetTokenId => targetTokenId && canvas?.tokens?.get(targetTokenId) && !contacts[targetTokenId])
+    .sort();
+  const detected = missingIds.map(targetTokenId => ({
+    targetTokenId,
+    tier: this.getEffectiveLockTier(
+      targetTokenId,
+      _distanceSquaresToTarget(targetTokenId, this.ship),
+    ),
+  })).filter(contact => contact.tier >= 1);
+  if (detected.length === 0) return false;
+
+  return this.update(_contactUpdates(data, detected));
+}
+
+function _distanceSquaresToTarget(targetTokenId, ship) {
+  const target = canvas?.tokens?.get(targetTokenId);
+  const own = ship?.getActiveTokens?.()?.[0];
+  if (!target || !own || !canvas?.grid?.size) return Infinity;
+  const gs = canvas.grid.size;
+  const tx = target.x + (target.document.width * gs) / 2;
+  const ty = target.y + (target.document.height * gs) / 2;
+  const sx = own.x + (own.document.width * gs) / 2;
+  const sy = own.y + (own.document.height * gs) / 2;
+  return Math.sqrt((tx - sx) ** 2 + (ty - sy) ** 2) / gs;
+}
+
+/** Toggle the Sensors Officer's non-mechanical crew recommendation. */
+export async function setRecommendedTarget({ targetTokenId } = {}) {
+  const data = this.getData();
+  const current = data.resources?.sensors?.recommendedTargetId ?? null;
+  if (!targetTokenId || current === targetTokenId) {
+    return this.update({ "resources.sensors.recommendedTargetId": null });
+  }
+
+  const tier = this.getEffectiveLockTier(
+    targetTokenId,
+    _distanceSquaresToTarget(targetTokenId, this.ship),
+  );
+  if (tier < 1) return false;
+
+  return this.update({
+    "resources.sensors.recommendedTargetId": targetTokenId,
+    ..._contactUpdates(data, [{ targetTokenId, tier }]),
+  });
+}
+
+/** GM-only debug toggle that bypasses Captain core consumption. */
+export async function setDebugBattleClarityTarget({ targetTokenId } = {}) {
+  if (!game.user.isGM) return false;
+  const data = this.getData();
+  const current = data.resources?.captain?.priorityTargetId ?? null;
+  if (!targetTokenId || current === targetTokenId) {
+    return this.update({ "resources.captain.priorityTargetId": null });
+  }
+  if (!canvas?.tokens?.get(targetTokenId)) return false;
+  const tier = Math.max(1, this.getEffectiveLockTier(
+    targetTokenId,
+    _distanceSquaresToTarget(targetTokenId, this.ship),
+  ));
+  return this.update({
+    "resources.captain.priorityTargetId": targetTokenId,
+    ..._contactUpdates(data, [{ targetTokenId, tier }]),
+  });
+}
+
+/** Clear targeting references when their token leaves the scene. */
+export async function clearTargetReferences(targetTokenId) {
+  if (!targetTokenId) return;
+  const data = this.getData();
+  const updates = {};
+  if (data.resources?.sensors?.recommendedTargetId === targetTokenId) {
+    updates["resources.sensors.recommendedTargetId"] = null;
+  }
+  if (data.resources?.captain?.priorityTargetId === targetTokenId) {
+    updates["resources.captain.priorityTargetId"] = null;
+  }
+  if (Object.keys(updates).length > 0) return this.update(updates);
 }
 
 /**
@@ -235,6 +365,7 @@ export async function resolveBDA({ attackId, sl, messageId }) {
       locks.push({ targetTokenId, tier: retainedTier, decayRounds: decay });
     }
     updates["resources.sensors.locks"] = locks;
+    Object.assign(updates, _contactUpdates(data, [{ targetTokenId, tier: retainedTier }]));
   }
 
   // If a BDA message exists the player client already embedded the fire result in it.

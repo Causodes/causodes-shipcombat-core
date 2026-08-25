@@ -96,6 +96,8 @@ export const THEME = Object.freeze({
     helmGhost:    [  0, 255, 136, 1],  // 0x00ff88
     attackVector: [255,  68,  68, 1],  // 0xff4444
     helmRam:      [255,  48,  48, 1],  // 0xff3030 – ram-course preview (red)
+    sensorRecommendation: [167, 243, 230, 1], // 0xa7f3e6 – pale mint-teal crew mark
+    battleClarity:       [255, 143, 163, 1], // 0xff8fa3 – pale signal-red command mark
   },
 
   // ── Weapon-trait tag borders & text ─────────────────────────────────────

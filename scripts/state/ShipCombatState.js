@@ -26,6 +26,7 @@ import { HelmPreview }     from "../canvas/HelmPreview.js";
 import { SystemAdapter }   from "../systems/SystemAdapter.js";
 import { recordPlayerShipInitiative } from "../initiative.js";
 import { POWER_CORE_STATION_ROLES, getPowerCoreCount, getPowerCorePoolRole } from "../roles/crew-operators.js";
+import { getContactDisplayName } from "../targeting/contact-intelligence.js";
 
 export class ShipCombatState {
 
@@ -926,6 +927,9 @@ export class ShipCombatState {
       "resources.sensors.payload": "",
       "resources.sensors.locks": [],
       "resources.sensors.effects": [],
+      "resources.sensors.contacts": {},
+      "resources.sensors.nextContactOrdinal": 1,
+      "resources.sensors.recommendedTargetId": null,
       "resources.sensors.actionUsed": false,
       "resources.sensors.coreActionUsed": false,
       "resources.sensors.bdaAttacks": {},
@@ -1223,7 +1227,11 @@ export class ShipCombatState {
       "resources.captain.rolledInitiative":      0,
       "resources.captain.allocInspire":          0,
       "resources.captain.allocResolve":          0,
+      "resources.captain.priorityTargetId":      null,
     };
+    updates["resources.sensors.contacts"] = {};
+    updates["resources.sensors.nextContactOrdinal"] = 1;
+    updates["resources.sensors.recommendedTargetId"] = null;
     for (const roleId of Object.keys(data.turnDone ?? {})) updates[`turnDone.${roleId}`] = false;
     for (const roleId of Object.keys(data.overchargeUsed ?? {})) updates[`overchargeUsed.${roleId}`] = false;
     for (const uid of Object.keys(data.assignedCores ?? {})) updates[`assignedCores.${uid}`] = false;
@@ -1367,6 +1375,20 @@ export class ShipCombatState {
     const adapter    = SystemAdapter.current;
     const formula    = adapter.getRollFormula();
     const targetAC   = adapter.getTargetAC(targetActor);
+    const ownToken = this.ship?.getActiveTokens?.()?.[0];
+    const gs = canvas?.grid?.size;
+    let contactTier = this.getLockTier(targetTokenId);
+    if (ownToken && gs) {
+      const tx = targetTok.x + (targetTok.document.width * gs) / 2;
+      const ty = targetTok.y + (targetTok.document.height * gs) / 2;
+      const sx = ownToken.x + (ownToken.document.width * gs) / 2;
+      const sy = ownToken.y + (ownToken.document.height * gs) / 2;
+      contactTier = this.getEffectiveLockTier(targetTokenId, Math.hypot(tx - sx, ty - sy) / gs);
+    }
+    const targetName = getContactDisplayName(this.getData(), targetTokenId, {
+      currentTier: contactTier,
+      realName: targetActor.name ?? "Unknown",
+    });
     const salvoRolls = [];
     for (let i = 0; i < salvoSize; i++) {
       if (i > 0) await _delay(100);
@@ -1395,7 +1417,7 @@ export class ShipCombatState {
       weaponImg:        craftImg,
       weaponName:       craftName,
       fireModeLabel,
-      targetName:       targetActor.name,
+      targetName,
       hitQuadrantLabel: qLabel,
       accuracy:          adapter.formatChatAccuracyDisplay(accuracy, targetAC),
       hitModDisplay:     adapter.formatChatHitMod(accuracy, targetAC),
@@ -1755,8 +1777,12 @@ ShipCombatState.hasSensorEffectOn    = SensorsState.hasSensorEffectOn;
 ShipCombatState.getDisruptionPenalty = SensorsState.getDisruptionPenalty;
 ShipCombatState.upgradeLock          = SensorsState.upgradeLock;
 ShipCombatState.upgradeAllLocks      = SensorsState.upgradeAllLocks;
+ShipCombatState.registerSensorContacts = SensorsState.registerSensorContacts;
 ShipCombatState.getLockTier          = SensorsState.getLockTier;
 ShipCombatState.getEffectiveLockTier = SensorsState.getEffectiveLockTier;
+ShipCombatState.setRecommendedTarget = SensorsState.setRecommendedTarget;
+ShipCombatState.setDebugBattleClarityTarget = SensorsState.setDebugBattleClarityTarget;
+ShipCombatState.clearTargetReferences = SensorsState.clearTargetReferences;
 ShipCombatState.consumeLock          = SensorsState.consumeLock;
 ShipCombatState.removeLock           = SensorsState.removeLock;
 ShipCombatState.resolveBDA           = SensorsState.resolveBDA;
