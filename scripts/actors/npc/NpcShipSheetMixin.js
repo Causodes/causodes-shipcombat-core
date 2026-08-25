@@ -736,6 +736,9 @@ function _npcHelmOnRender(sheet) {
 
 async function _onNpcRollPiloting() {
   const sys     = SystemAdapter.current.getShipData(this.actor);
+  if (sys.resources?.pilot?.pilotingMessageId) {
+    return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.AlreadyRolledPiloting"));
+  }
   const adapter = SystemAdapter.current;
   // Sensor Disruption: penalty = disruptor's sensor hit modifier (min one band)
   const target  = (sys.attributes?.piloting ?? 40) - ShipCombatState.getDisruptionPenalty(this.actor);
@@ -770,25 +773,30 @@ async function _onNpcRollInitiative() {
   }
 }
 
-function _onNpcAllocBonus(event, target) {
+async function _onNpcAllocBonus(event, target) {
   const stat  = target.dataset.stat;
-  const delta = parseInt(target.dataset.delta) || 0;
+  const delta = Number(target.dataset.delta);
+  if (!Number.isInteger(delta) || !["speed", "mano", "evasion"].includes(stat)) return;
   const sys   = SystemAdapter.current.getShipData(this.actor);
   const pilot = sys.resources?.pilot ?? {};
   const pilotingSL   = pilot.pilotingSL   ?? 0;
   const allocSpeed   = pilot.allocSpeed   ?? 0;
   const allocMano    = pilot.allocMano    ?? 0;
   const allocEvasion = pilot.allocEvasion ?? 0;
-  if (delta > 0 && pilot.pilotingMessageId) {
-    const totalAlloc = allocSpeed + allocMano + allocEvasion;
-    if (totalAlloc >= pilotingSL) return;
-  }
+  if ((pilot.fuelBurned ?? 0) > 0 || pilot.ramAllocLocked) return;
+  if (delta > 0 && !pilot.pilotingMessageId) return;
+  const proposed = {
+    speed: Math.max(0, allocSpeed + (stat === "speed" ? delta : 0)),
+    mano: Math.max(0, allocMano + (stat === "mano" ? delta : 0)),
+    evasion: Math.max(0, allocEvasion + (stat === "evasion" ? delta : 0)),
+  };
+  if (proposed.speed + proposed.mano + proposed.evasion > pilotingSL) return;
   if (stat === "speed") {
-    this.actor.update({ [SystemAdapter.current.systemPath("resources.pilot.allocSpeed")]:   Math.max(0, allocSpeed + delta) });
+    await this.actor.update({ [SystemAdapter.current.systemPath("resources.pilot.allocSpeed")]: proposed.speed });
   } else if (stat === "mano") {
-    this.actor.update({ [SystemAdapter.current.systemPath("resources.pilot.allocMano")]:    Math.max(0, allocMano + delta) });
+    await this.actor.update({ [SystemAdapter.current.systemPath("resources.pilot.allocMano")]: proposed.mano });
   } else if (stat === "evasion") {
-    this.actor.update({ [SystemAdapter.current.systemPath("resources.pilot.allocEvasion")]: Math.max(0, allocEvasion + delta) });
+    await this.actor.update({ [SystemAdapter.current.systemPath("resources.pilot.allocEvasion")]: proposed.evasion });
   }
 }
 
@@ -942,6 +950,7 @@ async function _onNpcAllocGunnerSL(event, target) {
   if (gunner.slLocked || !gunner.ordnanceRolled) return;
   const stat  = target.dataset.stat;
   const delta = Number(target.dataset.delta);
+  if (!Number.isInteger(delta) || !["accuracy", "penetration", "firepower"].includes(stat)) return;
   const pool  = gunner.ordnanceSL ?? 0;
   const acc   = gunner.allocAccuracy ?? 0;
   const pen   = gunner.allocPenetration ?? 0;

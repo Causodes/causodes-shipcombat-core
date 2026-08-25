@@ -183,6 +183,23 @@
 
 /* ── Captain: Card Hand Grid ─────────────────────────────────────────────── */
 
+/* System-level Captain-card theme contract. Companion modules override the
+   shared variables once; every card consumer then receives the same visual
+   surface without consumer-specific styling. */
+:root {
+  --shipcombat-pile-surface-color: #090909;
+  --shipcombat-pile-surface-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 3px,
+    rgba(0,0,0,0.08) 3px,
+    rgba(0,0,0,0.08) 4px
+  );
+  --shipcombat-pile-border: 1px solid rgba(255,255,255,0.12);
+  --shipcombat-pile-color: #bbb;
+  --shipcombat-pile-shadow: 0 4px 20px rgba(0,0,0,0.85), inset 0 0 40px rgba(0,0,0,0.4);
+}
+
 .shipcombat-captain-hand-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -197,17 +214,34 @@
 .shipcombat-captain-card--gambit   { --shipcombat-card-color: #e74c3c; --shipcombat-card-rgb: 231, 76, 60;  }
 .shipcombat-captain-card--unknown  { --shipcombat-card-color: #888;    --shipcombat-card-rgb: 136, 136, 136;}
 
-/* The card tile  -  digital/scanline aesthetic */
+.shipcombat-captain-card-salvaged {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  color: #f1c40f;
+  border: 1px solid rgba(241, 196, 15, 0.5);
+  border-radius: 3px;
+  padding: 1px 4px;
+  font-size: 0.58rem;
+  letter-spacing: 0.06em;
+}
+
+.shipcombat-es-popup { padding: 0.4rem; }
+.shipcombat-es-prompt { opacity: 0.75; }
+.shipcombat-es-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+  max-height: 65vh;
+  overflow-y: auto;
+}
+.shipcombat-es-grid button { margin-top: 0.45rem; width: 100%; }
+
+/* Universal Captain-card surface. Every consumer (sheet, chat, salvage, and
+   Dead Reckoning) uses this class; companion systems override the theme
+   variables instead of restyling individual contexts. */
 .shipcombat-captain-card {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  border: 1px solid rgba(var(--shipcombat-card-rgb), 0.45);
-  border-radius: 4px;
-  padding: 0.45rem 0.55rem 0.4rem;
-  overflow: hidden;
-  background:
+  --shipcombat-card-surface:
     repeating-linear-gradient(
       to bottom,
       transparent 0px,
@@ -221,17 +255,42 @@
       rgba(var(--shipcombat-card-rgb), 0.04) 60%,
       rgba(0, 0, 0, 0.25) 100%
     );
-  box-shadow:
+  --shipcombat-card-hover-surface: var(--shipcombat-card-surface);
+  --shipcombat-card-shadow:
     0 0 6px rgba(var(--shipcombat-card-rgb), 0.18),
     inset 0 0 12px rgba(0, 0, 0, 0.35);
+  --shipcombat-card-hover-shadow:
+    0 0 12px rgba(var(--shipcombat-card-rgb), 0.32),
+    inset 0 0 12px rgba(0, 0, 0, 0.28);
+  --shipcombat-card-padding: 0.45rem 0.55rem 0.4rem;
+  --shipcombat-card-border-style: solid;
+  --shipcombat-card-border-image-source: none;
+  --shipcombat-card-border-image-slice: 100%;
+  --shipcombat-card-border-image-width: 1;
+  --shipcombat-card-border-image-repeat: stretch;
+
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  border: 1px solid rgba(var(--shipcombat-card-rgb), 0.45);
+  border-style: var(--shipcombat-card-border-style);
+  border-image-source: var(--shipcombat-card-border-image-source);
+  border-image-slice: var(--shipcombat-card-border-image-slice);
+  border-image-width: var(--shipcombat-card-border-image-width);
+  border-image-repeat: var(--shipcombat-card-border-image-repeat);
+  border-radius: 4px;
+  padding: var(--shipcombat-card-padding);
+  overflow: hidden;
+  background: var(--shipcombat-card-surface);
+  box-shadow: var(--shipcombat-card-shadow);
   transition: box-shadow 0.15s, border-color 0.15s;
 }
 
 .shipcombat-captain-card:hover {
   border-color: rgba(var(--shipcombat-card-rgb), 0.75);
-  box-shadow:
-    0 0 12px rgba(var(--shipcombat-card-rgb), 0.32),
-    inset 0 0 12px rgba(0, 0, 0, 0.28);
+  background: var(--shipcombat-card-hover-surface);
+  box-shadow: var(--shipcombat-card-hover-shadow);
 }
 
 /* Card header row: category badge + target role icon + stance pin */
@@ -426,22 +485,15 @@
   max-width: 280px;
   max-height: 260px;
   overflow-y: auto;
-  background: #090909;
-  border: 1px solid rgba(255,255,255,0.12);
+  background-color: var(--shipcombat-pile-surface-color);
+  background-image: var(--shipcombat-pile-surface-image);
+  border: var(--shipcombat-pile-border);
   border-radius: 3px;
   padding: 5px 6px 6px;
   font-size: 0.65rem;
   font-family: 'Courier New', Courier, monospace;
-  color: #bbb;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.85), inset 0 0 40px rgba(0,0,0,0.4);
-  /* scanline overlay */
-  background-image: repeating-linear-gradient(
-    to bottom,
-    transparent 0px,
-    transparent 3px,
-    rgba(0,0,0,0.08) 3px,
-    rgba(0,0,0,0.08) 4px
-  );
+  color: var(--shipcombat-pile-color);
+  box-shadow: var(--shipcombat-pile-shadow);
 }
 
 /* right-aligned popup: JS sets right/left instead of CSS */
@@ -490,43 +542,6 @@
   padding: 4px 0;
 }
 
-/* Mulligan (icon-only) and draw buttons in the actions group */
-.shipcombat-full-redraw-btn {
-  font-size: 0.7rem;
-  padding: 2px 7px;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-/* Draw row: number input + draw button side-by-side */
-.shipcombat-draw-row {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-.shipcombat-draw-count-input {
-  width: 2.4rem;
-  min-width: 0;
-  flex-shrink: 0;
-  font-size: 0.7rem;
-  padding: 2px 4px;
-  border: 1px solid rgba(255,255,255,0.2);
-  border-radius: 3px;
-  background: rgba(0,0,0,0.25);
-  color: #ddd;
-  text-align: center;
-  box-sizing: border-box;
-}
-.shipcombat-draw-row button {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size: 0.7rem;
-  padding: 2px 6px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 /* ── Captain: Hand Count Badge ──────────────────────────────────────────── */
 
 .shipcombat-hand-count {
@@ -559,9 +574,7 @@
   gap: 0.4rem;
 }
 
-
-/* ── Captain: Active Orders (played cards this round) ─────────────────────── */
-
+/* Optional Active Orders partial retained for companion/custom layouts. */
 .shipcombat-played-cards-row {
   display: flex;
   flex-wrap: wrap;
@@ -647,20 +660,18 @@
   flex-direction: column;
   gap: 0.25rem;
 }
+.shipcombat-dr-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-height: 68vh;
+  overflow-y: auto;
+  padding: 2px;
+}
 .shipcombat-dr-card {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.4rem 0.6rem;
-  border-radius: 4px;
-  border: 1px solid rgba(255,255,255,0.12);
-  background: rgba(255,255,255,0.04);
+  min-height: 8rem;
   cursor: grab;
   user-select: none;
   transition: background 0.1s, border-color 0.1s;
-}
-.shipcombat-dr-card:hover {
-  background: rgba(255,255,255,0.08);
 }
 .shipcombat-dr-card.shipcombat-dr-dragging {
   opacity: 0.45;
@@ -668,7 +679,9 @@
 }
 .shipcombat-dr-card.shipcombat-dr-drag-over {
   border-color: #00ff88;
-  background: rgba(0,255,136,0.08);
+  box-shadow:
+    0 0 12px rgba(0, 255, 136, 0.25),
+    inset 0 0 12px rgba(0, 255, 136, 0.08);
 }
 .shipcombat-dr-pos {
   min-width: 1.4rem;
@@ -685,6 +698,7 @@
   font-size: 0.85rem;
 }
 .shipcombat-dr-grip {
+  margin-left: auto;
   opacity: 0.35;
   font-size: 0.85rem;
 }

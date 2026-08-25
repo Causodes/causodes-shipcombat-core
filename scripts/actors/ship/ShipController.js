@@ -32,6 +32,7 @@ import { HelmPreview } from "../../canvas/HelmPreview.js";
 import { WeaponArcOverlay } from "../../canvas/WeaponArcOverlay.js";
 import { SensorRadar } from "../../canvas/SensorRadar.js";
 import { SystemAdapter } from "../../systems/SystemAdapter.js";
+import { normalizeCaptainZone } from "../../captain/card-instances.js";
 import { SHIP_PARTS, SHIP_TABS } from "./parts.js";
 
 // ── Module-level constants ────────────────────────────────────────────────
@@ -131,7 +132,7 @@ function _resolveSlLabel(sys, roleId, fallbackLocKey) {
     const spec = effective.slice(idx + 1);
     const key  = effective.slice(0, idx);
     const skillName = SystemAdapter.current.getSkillLabel(key);
-    return `${spec || skillName} SL`;
+    return `${spec || skillName} ${SystemAdapter.current.allocationUnitLabel}`;
   }
   return game.i18n.localize(fallbackLocKey);
 }
@@ -149,7 +150,7 @@ function _resolveSlTooltip(sys, roleId, fallbackLocKey) {
   const allocStr = allocs.length === 2
     ? `${allocs[0]} and ${allocs[1]}`
     : `${allocs.slice(0, -1).join(", ")}, and ${allocs[allocs.length - 1]}`;
-  return `Roll ${skillDisplay} to generate ${cfg.slName} SL for ${allocStr} allocation.`;
+  return `Roll ${skillDisplay} to generate ${cfg.slName} ${SystemAdapter.current.allocationUnitLabel} for ${allocStr} allocation.`;
 }
 
 function buildSectionedItems(definitions, items, slotConfig, keyFn = getComponentSlot) {
@@ -997,9 +998,9 @@ export class ShipController {
 
     {
       let _dragCardId = null;
-      rootEl.querySelectorAll(".shipcombat-captain-card[data-card-id]").forEach(card => {
+      rootEl.querySelectorAll(".shipcombat-captain-card[data-card-instance-id]").forEach(card => {
         card.addEventListener("dragstart", ev => {
-          _dragCardId = card.dataset.cardId;
+          _dragCardId = card.dataset.cardInstanceId;
           ev.dataTransfer.effectAllowed = "move";
           ev.dataTransfer.setData("text/plain", _dragCardId);
           requestAnimationFrame(() => card.classList.add("shipcombat-captain-card--dragging"));
@@ -1010,7 +1011,7 @@ export class ShipController {
           _dragCardId = null;
         });
         card.addEventListener("dragover", ev => {
-          if (!_dragCardId || card.dataset.cardId === _dragCardId) return;
+          if (!_dragCardId || card.dataset.cardInstanceId === _dragCardId) return;
           ev.preventDefault();
           ev.dataTransfer.dropEffect = "move";
           rootEl.querySelectorAll(".shipcombat-captain-card--drag-over").forEach(el => el.classList.remove("shipcombat-captain-card--drag-over"));
@@ -1019,13 +1020,13 @@ export class ShipController {
         card.addEventListener("dragleave", () => card.classList.remove("shipcombat-captain-card--drag-over"));
         card.addEventListener("drop", ev => {
           ev.preventDefault();
-          if (!_dragCardId || card.dataset.cardId === _dragCardId) return;
-          const hand = [...(SystemAdapter.current.getShipData(this.actor).resources?.captain?.hand ?? [])];
-          const fromIdx = hand.indexOf(_dragCardId);
-          const toIdx   = hand.indexOf(card.dataset.cardId);
+          if (!_dragCardId || card.dataset.cardInstanceId === _dragCardId) return;
+          const hand = normalizeCaptainZone(SystemAdapter.current.getShipData(this.actor).resources?.captain?.hand, "hand");
+          const fromIdx = hand.findIndex(entry => entry.instanceId === _dragCardId);
+          const toIdx   = hand.findIndex(entry => entry.instanceId === card.dataset.cardInstanceId);
           if (fromIdx === -1 || toIdx === -1) return;
-          hand.splice(fromIdx, 1);
-          hand.splice(toIdx, 0, _dragCardId);
+          const [movedCard] = hand.splice(fromIdx, 1);
+          hand.splice(toIdx, 0, movedCard);
           _dragCardId = null;
           card.classList.remove("shipcombat-captain-card--drag-over");
           emitToGM("updateResource", { roleId: "captain", key: "hand", value: hand });

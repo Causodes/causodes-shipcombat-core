@@ -28,7 +28,7 @@
                 <div class="shipcombat-alloc-row">
                     <button type="button" class="shipcombat-alloc-btn" data-action="allocLeadershipSL" data-stat="resolve" data-delta="-1"
                             {{#unless captainCtx.leadershipRolled}}disabled{{/unless}}
-                            {{#if captainCtx.hasPlayedCards}}disabled{{/if}}
+                            {{#if captainCtx.allocationLocked}}disabled{{/if}}
                             {{#if ordnanceCtx.actionUsed}}disabled{{/if}}
                             {{#unless captainCtx.allocResolve}}disabled{{/unless}}>
                         &minus;
@@ -36,7 +36,7 @@
                     <span class="shipcombat-helm-stat-value">{{captainCtx.allocResolve}}</span>
                     <button type="button" class="shipcombat-alloc-btn" data-action="allocLeadershipSL" data-stat="resolve" data-delta="1"
                             {{#unless captainCtx.leadershipRolled}}disabled{{/unless}}
-                            {{#if captainCtx.hasPlayedCards}}disabled{{/if}}
+                            {{#if captainCtx.allocationLocked}}disabled{{/if}}
                             {{#if ordnanceCtx.actionUsed}}disabled{{/if}}
                             {{#if (gte (add (add captainCtx.allocResolve ordnanceCtx.allocEfficiency) ordnanceCtx.allocExpedience) captainCtx.leadershipSL)}}disabled{{/if}}>
                         +
@@ -50,7 +50,7 @@
                 <div class="shipcombat-alloc-row">
                     <button type="button" class="shipcombat-alloc-btn" data-action="allocOrdnanceSL" data-stat="efficiency" data-delta="-1"
                             {{#unless captainCtx.leadershipRolled}}disabled{{/unless}}
-                            {{#if captainCtx.hasPlayedCards}}disabled{{/if}}
+                            {{#if captainCtx.allocationLocked}}disabled{{/if}}
                             {{#if ordnanceCtx.actionUsed}}disabled{{/if}}
                             {{#unless ordnanceCtx.allocEfficiency}}disabled{{/unless}}>
                         &minus;
@@ -58,7 +58,7 @@
                     <span class="shipcombat-helm-stat-value">{{ordnanceCtx.allocEfficiency}}</span>
                     <button type="button" class="shipcombat-alloc-btn" data-action="allocOrdnanceSL" data-stat="efficiency" data-delta="1"
                             {{#unless captainCtx.leadershipRolled}}disabled{{/unless}}
-                            {{#if captainCtx.hasPlayedCards}}disabled{{/if}}
+                            {{#if captainCtx.allocationLocked}}disabled{{/if}}
                             {{#if ordnanceCtx.actionUsed}}disabled{{/if}}
                             {{#if (gte (add (add captainCtx.allocResolve ordnanceCtx.allocEfficiency) ordnanceCtx.allocExpedience) captainCtx.leadershipSL)}}disabled{{/if}}>
                         +
@@ -72,7 +72,7 @@
                 <div class="shipcombat-alloc-row">
                     <button type="button" class="shipcombat-alloc-btn" data-action="allocOrdnanceSL" data-stat="expedience" data-delta="-1"
                             {{#unless captainCtx.leadershipRolled}}disabled{{/unless}}
-                            {{#if captainCtx.hasPlayedCards}}disabled{{/if}}
+                            {{#if captainCtx.allocationLocked}}disabled{{/if}}
                             {{#if ordnanceCtx.actionUsed}}disabled{{/if}}
                             {{#unless ordnanceCtx.allocExpedience}}disabled{{/unless}}>
                         &minus;
@@ -80,7 +80,7 @@
                     <span class="shipcombat-helm-stat-value">{{ordnanceCtx.allocExpedience}}</span>
                     <button type="button" class="shipcombat-alloc-btn" data-action="allocOrdnanceSL" data-stat="expedience" data-delta="1"
                             {{#unless captainCtx.leadershipRolled}}disabled{{/unless}}
-                            {{#if captainCtx.hasPlayedCards}}disabled{{/if}}
+                            {{#if captainCtx.allocationLocked}}disabled{{/if}}
                             {{#if ordnanceCtx.actionUsed}}disabled{{/if}}
                             {{#if (gte (add (add captainCtx.allocResolve ordnanceCtx.allocEfficiency) ordnanceCtx.allocExpedience) captainCtx.leadershipSL)}}disabled{{/if}}>
                         +

@@ -561,13 +561,17 @@ async function _onRollOrdnanceMaster(event, target) {
  */
 async function _onAllocOrdnanceSL(event, target) {
   const sys = SystemAdapter.current.getShipData(this.actor);
+  const captain = sys.resources?.captain ?? {};
+  const ordnance = sys.resources?.ordnance ?? {};
+  if (ordnance.actionUsed) return;
+  if ((sys.crewSize ?? 6) <= 5 && (captain.allocationLocked || (captain.playedCards ?? []).length > 0)) return;
   const stat = target.dataset.stat;
   const delta = Number(target.dataset.delta);
 
   if (Number.isNaN(delta) || !["efficiency", "expedience"].includes(stat)) return;
 
-  const allocEfficiency = sys.resources?.ordnance?.allocEfficiency ?? 0;
-  const allocExpedience = sys.resources?.ordnance?.allocExpedience ?? 0;
+  const allocEfficiency = ordnance.allocEfficiency ?? 0;
+  const allocExpedience = ordnance.allocExpedience ?? 0;
   let newEfficiency = allocEfficiency;
   let newExpedience = allocExpedience;
   if (stat === "efficiency") newEfficiency = Math.max(0, allocEfficiency + delta);
@@ -575,14 +579,14 @@ async function _onAllocOrdnanceSL(event, target) {
 
   if ((sys.crewSize ?? 6) <= 5) {
     // 5-man: Efficiency/Expedience draw from the shared Leadership pool
-    const captain = sys.resources?.captain ?? {};
     if (!captain.leadershipRolled) return;
-    const available = Math.max(0, (captain.leadershipSL ?? 0) - (captain.allocResolve ?? 0));
+    const captainAllocated = (captain.allocInspire ?? 0) + (captain.allocResolve ?? 0) + (captain.allocInitiative ?? 0);
+    const available = Math.max(0, (captain.leadershipSL ?? 0) - captainAllocated);
     if (newEfficiency + newExpedience > available) return;
   } else {
     // 6-man: dedicated bosun roll pool
-    if (!sys.resources?.ordnance?.bosunRolled) return;
-    const bosunSL = sys.resources?.ordnance?.bosunSL ?? 0;
+    if (!ordnance.bosunRolled) return;
+    const bosunSL = ordnance.bosunSL ?? 0;
     if (newEfficiency + newExpedience > bosunSL) return;
   }
 
@@ -603,24 +607,13 @@ async function _onOrdnanceMasterAction(event, target) {
   const entry    = ORDNANCE_MASTER_ACTIONS[actionId];
   if (!entry) return;
 
-  const manpower = _availableManpower(sys);
-  const allocEfficiency = sys.resources?.ordnance?.allocEfficiency ?? 0;
-  const allocExpedience = sys.resources?.ordnance?.allocExpedience ?? 0;
-  const crewCost = _effectiveCrewCost(entry.crew, allocEfficiency);
-  const duration = _effectiveDuration(entry.duration, allocExpedience);
-
-  if (manpower < crewCost) {
-    ui.notifications.warn(game.i18n.format("SHIPCOMBAT.Ordnance.InsufficientCrew", { need: crewCost, have: manpower }));
+  const committed = await emitToGM("commitOrdnanceAction", { actionId });
+  if (!committed?.ok) {
+    if (committed?.reason === "insufficientCrew") {
+      ui.notifications.warn(game.i18n.format("SHIPCOMBAT.Ordnance.InsufficientCrew", { need: committed.need, have: committed.have }));
+    }
     return;
   }
-
-  emitToGM("updateResource", { roleId: "ordnance", key: "manpower",    value: manpower - crewCost });
-  emitToGM("updateResource", { roleId: "ordnance", key: "actionUsed", value: true });
-
-  const commitments = [...(sys.resources?.ordnance?.commitments ?? [])];
-  commitments.push({ action: actionId, crewCount: crewCost, turnsRemaining: duration, addedRound: sys.round ?? 0 });
-  emitToGM("updateResource", { roleId: "ordnance", key: "commitments", value: commitments });
-
 
   // ── Side effects: some actions directly trigger ordnance spawning ──
 

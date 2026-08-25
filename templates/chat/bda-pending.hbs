@@ -34,10 +34,10 @@
     {{!-- SL / Outcome block --}}
     <div class="shipcombat-fire-roll">
         {{#if success}}
-            <div class="shipcombat-fire-sl shipcombat-fire-success">{{signedSL}} SL</div>
+        <div class="shipcombat-fire-sl shipcombat-fire-success">{{signedSL}} {{shipcombatAllocationUnit sl}}</div>
             <div class="shipcombat-fire-outcome shipcombat-fire-success">{{outcome}}</div>
         {{else}}
-            <div class="shipcombat-fire-sl shipcombat-fire-failure">{{signedSL}} SL</div>
+        <div class="shipcombat-fire-sl shipcombat-fire-failure">{{signedSL}} {{shipcombatAllocationUnit sl}}</div>
             <div class="shipcombat-fire-outcome shipcombat-fire-failure">{{outcome}}</div>
         {{/if}}
     </div>

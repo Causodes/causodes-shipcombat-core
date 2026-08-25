@@ -89,6 +89,11 @@ different behaviour.
 | --- | --- | --- | --- |
 | `get moduleId` | abstract | `string` | Companion module's Foundry ID. Used for socket scopes, flag namespaces, and template paths. |
 | `get systemName` | abstract | `string` | Foundry system ID (e.g. `"impmal"`, `"pf2e"`). Used for gate-checks. |
+| `get allocationUnitTerms` | overridable | `{ singular, plural }` | Global player-facing allocation terminology. Default: `{ singular: "SL", plural: "SL" }`. Override once (for example `{ singular: "point", plural: "points" }`) to update localized descriptions, templates, badges, and generated copy. |
+
+Use `formatAllocationUnit(count)` for generated text whose number is known;
+it selects the singular form only when the absolute count is exactly 1. The
+legacy `allocationUnitLabel` getter remains a derived, title-cased plural alias.
 
 ### Application bases
 

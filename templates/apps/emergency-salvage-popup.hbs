@@ -1,0 +1,17 @@
+<div class="shipcombat-es-popup">
+  <p class="shipcombat-es-prompt">{{localize "SHIPCOMBAT.Captain.Core.ESPrompt"}}</p>
+  <div class="shipcombat-es-grid">
+    {{#each cards}}
+    <article class="shipcombat-captain-card shipcombat-captain-card--{{category}}">
+      <div class="shipcombat-captain-card-header">
+        <span class="shipcombat-captain-card-cat">{{catLabel}}</span>
+      </div>
+      <div class="shipcombat-captain-card-name">{{label}}</div>
+      <div class="shipcombat-captain-card-desc">{{desc}}</div>
+      <button type="button" data-action="salvageCard" data-card-instance-id="{{instanceId}}">
+        <i class="fa-solid fa-recycle"></i> {{localize "SHIPCOMBAT.Captain.Core.ESRecover"}}
+      </button>
+    </article>
+    {{/each}}
+  </div>
+</div>

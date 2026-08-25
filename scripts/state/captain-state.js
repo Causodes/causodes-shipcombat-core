@@ -7,22 +7,23 @@
  * Captain resource shape (in sys.resources.captain):
  *   stance           : string  – "none" | "aggressive" | "defensive" | "redAlert" | "devastation"
  *   pendingStance    : string  – next-round stance set by a Gambit card; promoted to stance at advanceRound
- *   hand             : string[] – card IDs currently held (cap 5)
- *   drawPile         : string[] – remaining undrawn cards
- *   discardPile      : string[] – played / discarded cards
+ *   hand/drawPile/discardPile : Captain card instance objects
  *   triageCount      : number  – triages remaining this round (max 2)
  *   triageConditionsUsed : string[] – location IDs already triaged this round (max 1 per location)
  *   cardPlaysUsed    : number  – (legacy, no longer checked)
- *   mulliganUsed     : boolean – whether the free mulligan was already used this round
+ *   mulligansSpent   : number – Resolve-funded mulligans spent this round
+ *   allocationLocked : boolean – Captain/shared SL allocation is committed
  */
 
 import { MODULE_ID, CAPTAIN_CARDS, CAPTAIN_CORE_ACTIONS, buildCaptainDeck } from "../constants.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
 import { getPowerCoreCount, getPowerCorePoolRole } from "../roles/crew-operators.js";
 import { ensureContactRecord } from "../targeting/contact-intelligence.js";
+import { normalizeCaptainZone, shuffleCaptainCards } from "../captain/card-instances.js";
 
-const HAND_CAP   = 6;
+const HAND_CAP   = 3;
 const DRAWS_PER_ROUND = 3;
+const BASE_MULLIGANS_PER_ROUND = 1;
 const TRIAGE_MAX = 2;
 const CORE_GRANT_CARD_IDS = new Set([
   "gunsHot",
@@ -31,6 +32,8 @@ const CORE_GRANT_CARD_IDS = new Set([
   "armamentOrder",
   "overdriveCommand",
 ]);
+const DEAD_RECKONING_RESERVATIONS = new Map();
+const DEAD_RECKONING_PREVIEW_LIMIT = 12;
 
 function _grantCore(sys, updates, stationRole, count = 1) {
   const poolRole = getPowerCorePoolRole(sys, stationRole);
@@ -43,16 +46,20 @@ function _findCardDef(cardId) {
   return CAPTAIN_CARDS.find(c => c.id === cardId) ?? null;
 }
 
-// ── Shuffle helper (Fisher-Yates) ─────────────────────────────────────────────
-function _shuffle(arr) {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
+async function _announceCoreAction(actionId) {
+  const actionDef = CAPTAIN_CORE_ACTIONS.find(action => action.id === actionId);
+  try {
+    await ChatMessage.create({
+      flavor: game.i18n.localize(actionDef?.label ?? actionId),
+      content: `<p>${game.i18n.localize(actionDef?.desc ?? "")}</p>`,
+      speaker: { alias: SystemAdapter.current.getShipData(this.ship)?.roleTitles?.captain || game.i18n.localize("SHIPCOMBAT.Role.Captain") },
+    });
+  } catch (error) {
+    console.error(`${MODULE_ID} | Failed to announce Captain core action`, error);
   }
-  return a;
 }
 
+// ── Shuffle helper (Fisher-Yates) ─────────────────────────────────────────────
 // ── Draw cards from the pile, reshuffling discard if needed ──────────────────
 function _drawFrom(drawPile, discardPile, count) {
   let pile = [...drawPile];
@@ -62,7 +69,7 @@ function _drawFrom(drawPile, discardPile, count) {
   for (let i = 0; i < count; i++) {
     if (pile.length === 0) {
       if (discard.length === 0) break;           // truly empty
-      pile = _shuffle(discard);
+      pile = shuffleCaptainCards(discard);
       discard = [];
     }
     drawn.push(pile.shift());
@@ -138,8 +145,8 @@ export async function triageCondition({ locId }) {
 export async function drawCards({ count = DRAWS_PER_ROUND } = {}) {
   const sys     = this.getData();
   const captain = sys.resources?.captain ?? {};
-  const hand    = [...(captain.hand ?? [])];
-  const cap      = HAND_CAP + (captain.handCapBonus ?? 0) + (captain.allocInspire ?? 0);
+  const hand    = normalizeCaptainZone(captain.hand, "hand");
+  const cap      = (captain.currentHandCap ?? HAND_CAP) + (captain.handCapBonus ?? 0);
   const headroom = cap - hand.length;
   if (headroom <= 0) {
     ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.CaptainHandFull"));
@@ -150,8 +157,8 @@ export async function drawCards({ count = DRAWS_PER_ROUND } = {}) {
   const _excl = (sys.crewSize ?? 6) <= 4 ? ["ordnance", "sensors"] : (sys.crewSize ?? 6) <= 5 ? ["ordnance"] : [];
   const _exclCards = (sys.crewSize ?? 6) <= 3 ? ["pressTheAttack"] : [];
   const { drawn, drawPile, discardPile } = _drawFrom(
-    captain.drawPile   ?? buildCaptainDeck(_excl, _exclCards),
-    captain.discardPile ?? [],
+    normalizeCaptainZone(captain.drawPile ?? buildCaptainDeck(_excl, _exclCards), "draw"),
+    normalizeCaptainZone(captain.discardPile, "discard"),
     toDraw,
   );
 
@@ -166,18 +173,25 @@ export async function drawCards({ count = DRAWS_PER_ROUND } = {}) {
 // playCard({ cardId })
 // ─────────────────────────────────────────────────────────────────────────────
 export async function playCard(payload) {
-  if (CORE_GRANT_CARD_IDS.has(payload?.cardId)) {
-    return this.withPowerCoreTransaction(() => _playCard.call(this, payload));
-  }
-  return _playCard.call(this, payload);
+  return this.withAllocationTransaction(() => {
+    if (CORE_GRANT_CARD_IDS.has(payload?.cardId)) {
+      return this.withPowerCoreTransaction(() => _playCard.call(this, payload));
+    }
+    return _playCard.call(this, payload);
+  });
 }
 
-async function _playCard({ cardId, sector }) {
+async function _playCard({ cardId, cardInstanceId, sector }) {
   const sys     = this.getData();
   const captain = sys.resources?.captain ?? {};
-  const hand    = [...(captain.hand ?? [])];
-  const cardIdx = hand.indexOf(cardId);
+  const hand    = normalizeCaptainZone(captain.hand, "hand");
+  const cardIdx = cardInstanceId
+    ? hand.findIndex(card => card.instanceId === cardInstanceId)
+    : hand.findIndex(card => card.cardId === cardId);
   if (cardIdx === -1) return;   // card not in hand
+
+  const playedCard = hand[cardIdx];
+  cardId = playedCard.cardId;
 
   const cardDef = _findCardDef(cardId);
   if (!cardDef) return;
@@ -186,11 +200,19 @@ async function _playCard({ cardId, sector }) {
 
   // Remove from hand, add to discard
   hand.splice(cardIdx, 1);
-  const discardPile = [...(captain.discardPile ?? []), cardId];
+  const drawPile = normalizeCaptainZone(captain.drawPile, "draw");
+  const discardPile = normalizeCaptainZone(captain.discardPile, "discard");
+  if (playedCard.salvaged) {
+    drawPile.push({ ...playedCard, salvaged: false });
+  } else {
+    discardPile.push(playedCard);
+  }
   const updates = {
     "resources.captain.hand":        hand,
+    "resources.captain.drawPile":    drawPile,
     "resources.captain.discardPile": discardPile,
     "resources.captain.playedCards": [...(captain.playedCards ?? []), cardId],
+    "resources.captain.allocationLocked": true,
   };
 
   // Apply card effect
@@ -214,7 +236,7 @@ async function _playCard({ cardId, sector }) {
     case "hardOver":
       updates["resources.pilot.hardOverActive"] = true;
       break;
-    // Sensors: L1/L2 lock costs 0 AP
+    // Sensors: halve L1/L2 lock costs after component modifiers
     case "sensorPriority":
       updates["resources.sensors.sensorPriorityActive"] = true;
       break;
@@ -299,84 +321,79 @@ async function _playCard({ cardId, sector }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// mulligan({ cardId })   -  Discard one card and draw one replacement
-//   Free once per round. Second mulligan would cost triage, but is not offered.
+// mulligan({ cardId, cardInstanceId }) - replace one slot using a Resolve point
 // ─────────────────────────────────────────────────────────────────────────────
-export async function mulligan({ cardId }) {
+export async function mulligan(payload) {
+  return this.withAllocationTransaction(() => _mulligan.call(this, payload));
+}
+
+async function _mulligan({ cardId, cardInstanceId }) {
   const sys     = this.getData();
   const captain = sys.resources?.captain ?? {};
-  const hand    = [...(captain.hand ?? [])];
-
-  if (captain.mulliganUsed) {
+  const hand    = normalizeCaptainZone(captain.hand, "hand");
+  const mulligansSpent = captain.mulligansSpent ?? 0;
+  if (mulligansSpent >= BASE_MULLIGANS_PER_ROUND + (captain.allocResolve ?? 0)) {
     ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.CaptainMulliganUsed"));
     return;
   }
-  const cardIdx = hand.indexOf(cardId);
+  const cardIdx = cardInstanceId
+    ? hand.findIndex(card => card.instanceId === cardInstanceId)
+    : hand.findIndex(card => card.cardId === cardId);
   if (cardIdx === -1) return;
 
-  // Remove from hand → discard, then draw 1 replacement
-  hand.splice(cardIdx, 1);
-  const discard = [...(captain.discardPile ?? []), cardId];
+  const replacedCard = hand[cardIdx];
+  let drawPile = normalizeCaptainZone(captain.drawPile, "draw");
+  let discardPile = normalizeCaptainZone(captain.discardPile, "discard");
 
+  // Draw before discarding the replaced card so a depleted pile cannot return
+  // the exact same physical card as its own replacement.
   const _excl = (sys.crewSize ?? 6) <= 4 ? ["ordnance", "sensors"] : (sys.crewSize ?? 6) <= 5 ? ["ordnance"] : [];
   const _exclCards = (sys.crewSize ?? 6) <= 3 ? ["pressTheAttack"] : [];
-  const { drawn, drawPile, discardPile } = _drawFrom(
-    captain.drawPile   ?? buildCaptainDeck(_excl, _exclCards),
-    discard,
+  const result = _drawFrom(
+    drawPile.length ? drawPile : normalizeCaptainZone(captain.drawPile ?? buildCaptainDeck(_excl, _exclCards), "draw"),
+    discardPile,
     1,
   );
+  drawPile = result.drawPile;
+  discardPile = result.discardPile;
+  if (!result.drawn.length) return;
+  hand[cardIdx] = result.drawn[0];
+
+  if (replacedCard.salvaged) drawPile.push({ ...replacedCard, salvaged: false });
+  else discardPile.push(replacedCard);
 
   await this.update({
-    "resources.captain.hand":         [...hand, ...drawn],
+    "resources.captain.hand":         hand,
     "resources.captain.drawPile":     drawPile,
     "resources.captain.discardPile":  discardPile,
-    "resources.captain.mulliganUsed": true,
+    "resources.captain.mulligansSpent": mulligansSpent + 1,
+    "resources.captain.allocationLocked": true,
   });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // discardCard({ cardId })   -  Remove one card from hand to the discard pile.
 // ─────────────────────────────────────────────────────────────────────────────
-export async function discardCard({ cardId }) {
+export async function discardCard({ cardId, cardInstanceId }) {
   const sys     = this.getData();
   const captain = sys.resources?.captain ?? {};
-  const hand    = [...(captain.hand ?? [])];
-  const cardIdx = hand.indexOf(cardId);
+  const hand    = normalizeCaptainZone(captain.hand, "hand");
+  const cardIdx = cardInstanceId
+    ? hand.findIndex(card => card.instanceId === cardInstanceId)
+    : hand.findIndex(card => card.cardId === cardId);
   if (cardIdx === -1) return;
-  hand.splice(cardIdx, 1);
-  const discardPile = [...(captain.discardPile ?? []), cardId];
+  const [discardedCard] = hand.splice(cardIdx, 1);
+  const drawPile = normalizeCaptainZone(captain.drawPile, "draw");
+  const discardPile = normalizeCaptainZone(captain.discardPile, "discard");
+  if (discardedCard.salvaged) drawPile.push({ ...discardedCard, salvaged: false });
+  else discardPile.push(discardedCard);
   await this.update({
     "resources.captain.hand":        hand,
+    "resources.captain.drawPile":    drawPile,
     "resources.captain.discardPile": discardPile,
   });
 }
 
-// fullRedraw()   -  Discard entire hand, draw fresh up to 5. Costs both triages.
-// ─────────────────────────────────────────────────────────────────────────────
-export async function fullRedraw() {
-  const sys     = this.getData();
-  const captain = sys.resources?.captain ?? {};
-
-  // Burn both triages
-  const discard = [...(captain.discardPile ?? []), ...(captain.hand ?? [])];
-  const _excl = (sys.crewSize ?? 6) <= 4 ? ["ordnance", "sensors"] : (sys.crewSize ?? 6) <= 5 ? ["ordnance"] : [];
-  const _exclCards = (sys.crewSize ?? 6) <= 3 ? ["pressTheAttack"] : [];
-  const { drawn, drawPile, discardPile } = _drawFrom(
-    captain.drawPile ?? buildCaptainDeck(_excl, _exclCards),
-    discard,
-    HAND_CAP + (captain.handCapBonus ?? 0) + (captain.allocInspire ?? 0),
-  );
-
-  await this.update({
-    "resources.captain.hand":                drawn,
-    "resources.captain.drawPile":            drawPile,
-    "resources.captain.discardPile":         discardPile,
-    "resources.captain.triageCount":         0,
-    "resources.captain.triageConditionsUsed": [],
-  });
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // captainPayloadActivate({ payloadId })  -  GM applies an immediate captain payload effect.
 // ─────────────────────────────────────────────────────────────────────────────
 export async function captainPayloadActivate({ payloadId } = {}) {
@@ -430,7 +447,7 @@ export async function captainPayloadActivate({ payloadId } = {}) {
 // captainCoreAction({ actionId, ...payload })
 // Runs on GM. Validates, applies the effect, marks core spent.
 // ─────────────────────────────────────────────────────────────────────────────
-export async function captainCoreAction({ actionId, tokenId, cardId, newPile } = {}) {
+export async function captainCoreAction({ actionId, tokenId, cardInstanceId } = {}) {
   const sys     = this.getData();
   const captain = sys.resources?.captain ?? {};
 
@@ -446,8 +463,15 @@ export async function captainCoreAction({ actionId, tokenId, cardId, newPile } =
     for (const [locId, cond] of Object.entries(conditions)) {
       if (cond.tier === "low") updates[SystemAdapter.current.systemPath(`conditions.${locId}`)] = { tier: null };
     }
-    const discard = [...(captain.discardPile ?? []), ...(captain.hand ?? [])];
+    const hand = normalizeCaptainZone(captain.hand, "hand");
+    const drawPile = normalizeCaptainZone(captain.drawPile, "draw");
+    const discard = normalizeCaptainZone(captain.discardPile, "discard");
+    for (const card of hand) {
+      if (card.salvaged) drawPile.push({ ...card, salvaged: false });
+      else discard.push(card);
+    }
     updates[SystemAdapter.current.systemPath("resources.captain.hand")]         = [];
+    updates[SystemAdapter.current.systemPath("resources.captain.drawPile")]     = drawPile;
     updates[SystemAdapter.current.systemPath("resources.captain.discardPile")]  = discard;
   }
 
@@ -460,8 +484,15 @@ export async function captainCoreAction({ actionId, tokenId, cardId, newPile } =
       // High (idx 2) → Medium (idx 1), Medium (idx 1) → Low (idx 0)
       updates[SystemAdapter.current.systemPath(`conditions.${locId}`)] = { ...cond, tier: TIER_ORDER[idx - 1] };
     }
-    const discard = [...(captain.discardPile ?? []), ...(captain.hand ?? [])];
+    const hand = normalizeCaptainZone(captain.hand, "hand");
+    const drawPile = normalizeCaptainZone(captain.drawPile, "draw");
+    const discard = normalizeCaptainZone(captain.discardPile, "discard");
+    for (const card of hand) {
+      if (card.salvaged) drawPile.push({ ...card, salvaged: false });
+      else discard.push(card);
+    }
     updates[SystemAdapter.current.systemPath("resources.captain.hand")]         = [];
+    updates[SystemAdapter.current.systemPath("resources.captain.drawPile")]     = drawPile;
     updates[SystemAdapter.current.systemPath("resources.captain.discardPile")]  = discard;
   }
 
@@ -481,15 +512,20 @@ export async function captainCoreAction({ actionId, tokenId, cardId, newPile } =
 
   // ── Emergency Salvage: retrieve one card from discard to hand ──
   else if (actionId === "emergencySalvage") {
-    if (!cardId) return;
-    const hand    = [...(captain.hand ?? [])];
-    const discard = [...(captain.discardPile ?? [])];
-    const idx = discard.indexOf(cardId);
+    if (!cardInstanceId) return;
+    const hand    = normalizeCaptainZone(captain.hand, "hand");
+    const discard = normalizeCaptainZone(captain.discardPile, "discard");
+    const idx = discard.findIndex(card => card.instanceId === cardInstanceId);
     if (idx === -1) return;
-    discard.splice(idx, 1);
-    hand.push(cardId);
+    const [salvagedCard] = discard.splice(idx, 1);
+    hand.push({ ...salvagedCard, salvaged: true });
+    const drawPile = shuffleCaptainCards([
+      ...normalizeCaptainZone(captain.drawPile, "draw"),
+      ...discard,
+    ]);
     updates[SystemAdapter.current.systemPath("resources.captain.hand")]        = hand;
-    updates[SystemAdapter.current.systemPath("resources.captain.discardPile")] = discard;
+    updates[SystemAdapter.current.systemPath("resources.captain.drawPile")]    = drawPile;
+    updates[SystemAdapter.current.systemPath("resources.captain.discardPile")] = [];
   }
 
   // ── Command Override: promote pendingStance immediately ──
@@ -498,13 +534,6 @@ export async function captainCoreAction({ actionId, tokenId, cardId, newPile } =
     if (!pending) return;
     updates[SystemAdapter.current.systemPath("resources.captain.stance")]        = pending;
     updates[SystemAdapter.current.systemPath("resources.captain.pendingStance")] = "";
-  }
-
-  // ── Dead Reckoning: reorder top 12 draw pile cards; block mulligan ──
-  else if (actionId === "deadReckoning") {
-    if (!newPile) return;
-    updates[SystemAdapter.current.systemPath("resources.captain.drawPile")]    = newPile;
-    updates[SystemAdapter.current.systemPath("resources.captain.mulliganUsed")] = true; // block mulligan this round
   }
 
   else return; // unknown actionId
@@ -516,10 +545,80 @@ export async function captainCoreAction({ actionId, tokenId, cardId, newPile } =
   await this.ship.update(updates);
 
   // Chat notification
-  const actionDef = CAPTAIN_CORE_ACTIONS.find(a => a.id === actionId);
-  await ChatMessage.create({
-    flavor:  game.i18n.localize(actionDef?.label ?? actionId),
-    content: `<p>${game.i18n.localize(actionDef?.desc ?? "")}</p>`,
-    speaker: { alias: SystemAdapter.current.getShipData(this.ship)?.roleTitles?.captain || game.i18n.localize("SHIPCOMBAT.Role.Captain") },
+  await _announceCoreAction.call(this, actionId);
+}
+
+/** Spend Dead Reckoning's core before disclosing its authoritative preview. */
+export async function beginDeadReckoning() {
+  return this.withPowerCoreTransaction(async () => {
+    const sys = this.getData();
+    const captain = sys.resources?.captain ?? {};
+    const drawPile = normalizeCaptainZone(captain.drawPile, "draw");
+    if (!drawPile.length) return { ok: false, reason: "emptyPile" };
+
+    const poolRole = getPowerCorePoolRole(sys, "captain");
+    const coreCount = getPowerCoreCount(sys, "captain");
+    if (coreCount <= 0) return { ok: false, reason: "noCore" };
+
+    let reservationId;
+    do reservationId = foundry.utils.randomID(20);
+    while (DEAD_RECKONING_RESERVATIONS.has(reservationId));
+    const cards = drawPile.slice(0, DEAD_RECKONING_PREVIEW_LIMIT);
+    const shipId = this.ship?.uuid ?? this.ship?.id;
+
+    await this.update({
+      [`resources.${poolRole}.coreCount`]: coreCount - 1,
+      "resources.captain.coreActionsPlayed": [
+        ...(captain.coreActionsPlayed ?? []),
+        "deadReckoning",
+      ],
+    });
+    DEAD_RECKONING_RESERVATIONS.set(reservationId, {
+      shipId,
+      cardInstanceIds: cards.map(card => card.instanceId),
+    });
+    await _announceCoreAction.call(this, "deadReckoning");
+
+    return {
+      ok: true,
+      reservationId,
+      cards,
+      tailCount: Math.max(0, drawPile.length - cards.length),
+    };
   });
+}
+
+/** Apply a paid Dead Reckoning reservation without charging a second core. */
+export async function completeDeadReckoning({ reservationId, orderedInstanceIds } = {}) {
+  const reservation = DEAD_RECKONING_RESERVATIONS.get(reservationId);
+  if (!reservation) return { ok: false };
+  DEAD_RECKONING_RESERVATIONS.delete(reservationId);
+
+  const shipId = this.ship?.uuid ?? this.ship?.id;
+  if (!shipId || reservation.shipId !== shipId || !Array.isArray(orderedInstanceIds)) return { ok: false };
+  if (orderedInstanceIds.length !== reservation.cardInstanceIds.length) return { ok: false };
+  if (new Set(orderedInstanceIds).size !== orderedInstanceIds.length) return { ok: false };
+  const reservedIds = new Set(reservation.cardInstanceIds);
+  if (orderedInstanceIds.some(instanceId => !reservedIds.has(instanceId))) return { ok: false };
+
+  const captain = this.getData().resources?.captain ?? {};
+  const drawPile = normalizeCaptainZone(captain.drawPile, "draw");
+  const currentPreview = drawPile.slice(0, reservation.cardInstanceIds.length);
+  if (currentPreview.length !== reservation.cardInstanceIds.length
+      || currentPreview.some(card => !reservedIds.has(card.instanceId))) return { ok: false };
+
+  const cardsById = new Map(currentPreview.map(card => [card.instanceId, card]));
+  const reordered = orderedInstanceIds.map(instanceId => cardsById.get(instanceId));
+  await this.update({
+    "resources.captain.drawPile": [...reordered, ...drawPile.slice(currentPreview.length)],
+  });
+  return { ok: true };
+}
+
+/** Close a reservation without refunding the already-spent preview cost. */
+export async function cancelDeadReckoning({ reservationId } = {}) {
+  const reservation = DEAD_RECKONING_RESERVATIONS.get(reservationId);
+  const shipId = this.ship?.uuid ?? this.ship?.id;
+  if (reservation?.shipId === shipId) DEAD_RECKONING_RESERVATIONS.delete(reservationId);
+  return { ok: true };
 }

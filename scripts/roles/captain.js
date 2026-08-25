@@ -3,7 +3,7 @@
  *
  * Responsibilities:
  *   - Ship condition visibility + triage (step-down per location)
- *   - Card hand management (draw, play, mulligan, full redraw)
+ *   - Card hand management (play and Resolve-funded slot mulligans)
  *   - Stance tracking (set via Gambit cards)
  */
 
@@ -12,7 +12,9 @@ import { emitToGM }                               from "../socket.js";
 import { SystemAdapter }                          from "../systems/SystemAdapter.js";
 import { BattleClarityPopup }                     from "../apps/BattleClarityPopup.js";
 import { DeadReckoningPopup }                     from "../apps/DeadReckoningPopup.js";
+import { EmergencySalvagePopup }                  from "../apps/EmergencySalvagePopup.js";
 import { getPowerCoreCount, resolveStationOperatorActor } from "./crew-operators.js";
+import { normalizeCaptainZone, projectCaptainHandCount } from "../captain/card-instances.js";
 
 // Card definition lookup map (built once)
 const CARD_DEFS = Object.fromEntries(CAPTAIN_CARDS.map(c => [c.id, c]));
@@ -20,7 +22,8 @@ const CARD_DEFS = Object.fromEntries(CAPTAIN_CARDS.map(c => [c.id, c]));
 const CRIT_LOCATIONS_ORDERED = ["hull", "engines", "manoeuvring", "coreSystems", "weaponsSensors"];
 const TIER_ORDER = ["low", "medium", "high"];
 
-const BASE_HAND_CAP = 6;
+const BASE_HAND_CAP = 3;
+const BASE_MULLIGANS_PER_ROUND = 1;
 
 function _buildShieldSectors(sys, opts) {
   const ztMap = opts.shieldStats?.zoneThresholds ?? { bow: 0, stern: 0, port: 0, starboard: 0 };
@@ -37,14 +40,16 @@ function _buildShieldSectors(sys, opts) {
   };
 }
 
-function _resolvePileCards(pile) {
-  return (pile ?? [])
-    .map(id => {
-      const def = CARD_DEFS[id];
+function _resolvePileCards(pile, zoneKey) {
+  return normalizeCaptainZone(pile, zoneKey)
+    .map(card => {
+      const def = CARD_DEFS[card.cardId];
       if (!def) return null;
       return {
-        id,
-        label:    game.i18n.localize(`SHIPCOMBAT.Captain.Card.${id}`),
+        ...card,
+        id:       card.cardId,
+        label:    game.i18n.localize(`SHIPCOMBAT.Captain.Card.${card.cardId}`),
+        desc:     game.i18n.localize(`SHIPCOMBAT.Captain.Card.Desc.${card.cardId}`),
         catLabel: game.i18n.localize(`SHIPCOMBAT.Captain.Category.${def.category}`),
         category: def.category,
       };
@@ -90,10 +95,13 @@ export function buildCaptainContext(sys, opts = {}) {
   const activeConditions = conditionsList.filter(c => c.hasCondition);
 
   // ── Card hand ─────────────────────────────────────────────────────────────
-  const hand = (captain.hand ?? []).map(cardId => {
+  const hand = normalizeCaptainZone(captain.hand, "hand").map(card => {
+    const cardId = card.cardId;
     const def = CARD_DEFS[cardId] ?? { id: cardId, category: "unknown" };
     return {
       cardId,
+      instanceId:      card.instanceId,
+      salvaged:        card.salvaged,
       label:           game.i18n.localize(`SHIPCOMBAT.Captain.Card.${cardId}`),
       desc:            game.i18n.localize(`SHIPCOMBAT.Captain.Card.Desc.${cardId}`),
       category:        def.category,
@@ -109,13 +117,18 @@ export function buildCaptainContext(sys, opts = {}) {
   const drawPileCount    = (captain.drawPile    ?? []).length;
   const discardPileCount = (captain.discardPile ?? []).length;
   const handCount        = hand.length;
-  const effectiveHandCap = BASE_HAND_CAP + (captain.handCapBonus ?? 0) + (captain.allocInspire ?? 0);
-  const canDraw          = handCount < effectiveHandCap;
-  const canFullRedraw    = triageCount >= 2;
-  const drawCount        = Math.min(3 + (captain.allocInspire ?? 0), effectiveHandCap - handCount);
-  const drawPileCards    = _resolvePileCards(captain.drawPile);
-  const discardPileCards = _resolvePileCards(captain.discardPile);
-  const mulliganUsed      = captain.mulliganUsed  ?? false;
+  const effectiveHandCap = (captain.currentHandCap ?? BASE_HAND_CAP) + (captain.handCapBonus ?? 0);
+  const nextHandCap      = BASE_HAND_CAP + (captain.allocInspire ?? 0);
+  const nextHandCount    = projectCaptainHandCount({
+    hand: captain.hand,
+    drawPile: captain.drawPile,
+    discardPile: captain.discardPile,
+    nextHandCap,
+  });
+  const mulligansRemaining = Math.max(0, BASE_MULLIGANS_PER_ROUND + (captain.allocResolve ?? 0) - (captain.mulligansSpent ?? 0));
+  const allocationLocked = !!captain.allocationLocked || (captain.playedCards ?? []).length > 0;
+  const drawPileCards    = _resolvePileCards(captain.drawPile, "draw");
+  const discardPileCards = _resolvePileCards(captain.discardPile, "discard");
   const coreActionUsed    = captain.coreActionUsed ?? false;
   const hasCoreAssigned   = getPowerCoreCount(sys, "captain") > 0;
   const selectedCoreActionLabel = (coreActionUsed && captain.selectedCoreAction)
@@ -159,12 +172,13 @@ export function buildCaptainContext(sys, opts = {}) {
   const pendingLabel  = pending ? game.i18n.localize(`SHIPCOMBAT.Captain.Stance.${pending}`) : "";
   const stanceDesc = (stance !== "none") ? game.i18n.localize(`SHIPCOMBAT.Captain.Stance.StanceDesc.${stance}`) : "";
 
-  // ── Played cards this round ────────────────────────────────────────────────
+  // Retained in sheet context for companion/custom templates even though the
+  // core Captain tab no longer renders the redundant Active Orders panel.
   const playedCards = (captain.playedCards ?? []).map(cardId => {
     const def = CARD_DEFS[cardId] ?? { id: cardId, category: "unknown" };
     return {
-      id:       cardId,
-      label:    game.i18n.localize(`SHIPCOMBAT.Captain.Card.${cardId}`),
+      id: cardId,
+      label: game.i18n.localize(`SHIPCOMBAT.Captain.Card.${cardId}`),
       category: def.category,
       catClass: `shipcombat-chip--${def.category}`,
     };
@@ -177,20 +191,20 @@ export function buildCaptainContext(sys, opts = {}) {
     hasAnyCondition:   activeConditions.length > 0,
     triageCount,
     triageUsed,
-    triageMax:         2 + (captain.allocResolve ?? 0),
+    triageMax:         2,
     // Cards
     hand,
     handCount,
     drawPileCount,
     discardPileCount,
-    canDraw,
-    drawCount,
-    canFullRedraw,
     drawPileCards,
     discardPileCards,
-    mulliganUsed,
+    mulligansRemaining,
     effectiveHandCap,
-    handCapBonus:      (captain.handCapBonus ?? 0) + (captain.allocInspire ?? 0),
+    nextHandCap,
+    nextHandCount,
+    allocationLocked,
+    handCapBonus:      captain.handCapBonus ?? 0,
     coreActionUsed,
     hasCoreAssigned,
     coreActions,
@@ -210,8 +224,7 @@ export function buildCaptainContext(sys, opts = {}) {
     allocInitiative:        captain.allocInitiative   ?? 0,
     remainingLeadershipSL:  (captain.leadershipSL ?? 0) - (captain.allocInspire ?? 0) - (captain.allocResolve ?? 0) - (captain.allocInitiative ?? 0)
       - ((sys.crewSize ?? 6) <= 5 ? ((sys.resources?.ordnance?.allocEfficiency ?? 0) + (sys.resources?.ordnance?.allocExpedience ?? 0)) : 0),
-    allocLocked:            captain.leadershipRolled  ?? false,
-    // Played cards this round
+    allocLocked:            allocationLocked,
     playedCards,
     hasPlayedCards:         playedCards.length > 0,
     holdTheLineActive:      captain.holdTheLineActive ?? false,
@@ -246,20 +259,10 @@ async function _onTriage(event, target) {
   emitToGM("triageCondition", { locId });
 }
 
-async function _onDrawCards(event, target) {
-  const captain = SystemAdapter.current.getShipData(this.actor).resources?.captain ?? {};
-  const baseDraws  = 3;
-  const bonusDraws = captain.allocInspire ?? 0;
-  const maxDraw    = Math.min(baseDraws + bonusDraws, BASE_HAND_CAP + (captain.handCapBonus ?? 0) + bonusDraws - (captain.hand ?? []).length);
-
-  // Read player-chosen count from the adjacent number input, clamped to [1, maxDraw]
-  const input = target.closest(".shipcombat-draw-row")?.querySelector(".shipcombat-draw-count-input");
-  const chosen = input ? Math.max(1, Math.min(maxDraw, parseInt(input.value) || maxDraw)) : maxDraw;
-  emitToGM("drawCards", { count: chosen });
-}
-
 async function _onPlayCard(event, target) {
-  const cardId = target.closest("[data-card-id]")?.dataset?.cardId;
+  const card = target.closest("[data-card-id]");
+  const cardId = card?.dataset?.cardId;
+  const cardInstanceId = card?.dataset?.cardInstanceId;
   if (!cardId) return;
 
   // Armour Repair: show sector selection dialog before emitting
@@ -282,27 +285,27 @@ async function _onPlayCard(event, target) {
       d.render(true);
     });
     if (!sector || sector === "cancel") return;
-    emitToGM("playCard", { cardId, sector });
+    emitToGM("playCard", { cardId, cardInstanceId, sector });
     return;
   }
 
-  emitToGM("playCard", { cardId });
+  emitToGM("playCard", { cardId, cardInstanceId });
 }
 
 async function _onDiscardCard(event, target) {
-  const cardId = target.closest("[data-card-id]")?.dataset?.cardId;
+  const card = target.closest("[data-card-id]");
+  const cardId = card?.dataset?.cardId;
+  const cardInstanceId = card?.dataset?.cardInstanceId;
   if (!cardId) return;
-  emitToGM("discardCard", { cardId });
+  emitToGM("discardCard", { cardId, cardInstanceId });
 }
 
 async function _onMulligan(event, target) {
-  const cardId = target.closest("[data-card-id]")?.dataset?.cardId;
+  const card = target.closest("[data-card-id]");
+  const cardId = card?.dataset?.cardId;
+  const cardInstanceId = card?.dataset?.cardInstanceId;
   if (!cardId) return;
-  emitToGM("mulligan", { cardId });
-}
-
-async function _onFullRedraw(event, _target) {
-  emitToGM("fullRedraw", {});
+  emitToGM("mulligan", { cardId, cardInstanceId });
 }
 
 /**
@@ -367,6 +370,7 @@ async function _onRollLeadershipSL() {
 async function _onAllocLeadershipSL(event, target) {
   const sys = SystemAdapter.current.getShipData(this.actor);
   const captain = sys.resources?.captain ?? {};
+  if (captain.allocationLocked) return;
   if (!captain.leadershipRolled) return;
 
   const stat  = target.dataset.stat;   // "inspire" | "resolve" | "initiative"
@@ -447,31 +451,7 @@ async function _onCaptainCoreAction(event, target) {
       ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Captain.Core.ESEmptyDiscard"));
       return;
     }
-    const seen = new Set();
-    const buttons = discard
-      .filter(id => { if (seen.has(id)) return false; seen.add(id); return true; })
-      .map((id, i) => ({
-        action: String(i),
-        label:  game.i18n.localize(`SHIPCOMBAT.Captain.Card.${id}`),
-        icon:   "fa-solid fa-rotate-left",
-      }));
-    buttons.push({ action: "cancel", label: game.i18n.localize("Cancel"), icon: "fa-solid fa-xmark" });
-    // Map button index back to first matching discard index
-    const uniqueIds = [...new Set(discard)];
-    const result = await new Promise(resolve => {
-      const d = new foundry.applications.api.DialogV2({
-        window:  { title: game.i18n.localize("SHIPCOMBAT.Captain.Core.ESTitle") },
-        content: `<p>${game.i18n.localize("SHIPCOMBAT.Captain.Core.ESPrompt")}</p>`,
-        buttons,
-        close:  () => resolve(null),
-        submit: r  => resolve(r),
-      });
-      d.render(true);
-    });
-    if (result === null || result === "cancel") return;
-    const cardId = uniqueIds[Number(result)];
-    if (!cardId) return;
-    emitToGM("captainCoreAction", { actionId, cardId });
+    new EmergencySalvagePopup({ cards: _resolvePileCards(discard, "discard") }).render(true);
     return;
   }
 
@@ -487,15 +467,23 @@ async function _onCaptainCoreAction(event, target) {
 
   // ── Dead Reckoning: reorder top 12 draw pile cards via a drag-and-drop popup ──
   if (actionId === "deadReckoning") {
-    const drawPile = [...(captain.drawPile ?? [])];
-    if (!drawPile.length) {
+    if (!(captain.drawPile ?? []).length) {
       ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Captain.Core.DREmptyPile"));
       return;
     }
-    const PEEK = Math.min(12, drawPile.length);
-    const topCards = drawPile.slice(0, PEEK);
-    const rest     = drawPile.slice(PEEK);
-    const popup = new DeadReckoningPopup({ cards: topCards, rest });
+    const reservation = await emitToGM("beginDeadReckoning");
+    if (!reservation?.ok) {
+      const warningKey = reservation?.reason === "emptyPile"
+        ? "SHIPCOMBAT.Captain.Core.DREmptyPile"
+        : "SHIPCOMBAT.Captain.Core.NoCoreAssigned";
+      ui.notifications.warn(game.i18n.localize(warningKey));
+      return;
+    }
+    const popup = new DeadReckoningPopup({
+      cards: _resolvePileCards(reservation.cards, "dead-reckoning"),
+      reservationId: reservation.reservationId,
+      tailCount: reservation.tailCount,
+    });
     popup.render(true);
     return;
   }
@@ -508,13 +496,13 @@ async function _onFluxToCharge() {
 }
 
 async function _onCaptainReorderCard(event, target) {
-  const card = target.closest("[data-card-id]");
+  const card = target.closest("[data-card-instance-id]");
   if (!card) return;
-  const cardId    = card.dataset.cardId;
+  const cardInstanceId = card.dataset.cardInstanceId;
   const direction = target.dataset.direction;
   const captain   = SystemAdapter.current.getShipData(this.actor).resources?.captain ?? {};
-  const hand      = [...(captain.hand ?? [])];
-  const idx       = hand.indexOf(cardId);
+  const hand      = normalizeCaptainZone(captain.hand, "hand");
+  const idx       = hand.findIndex(entry => entry.instanceId === cardInstanceId);
   if (idx === -1) return;
 
   if (direction === "up" && idx > 0) {
@@ -530,11 +518,9 @@ async function _onCaptainReorderCard(event, target) {
 
 export const CAPTAIN_ACTIONS = {
   captainTriage:        _onTriage,
-  captainDraw:          _onDrawCards,
   captainPlayCard:      _onPlayCard,
   captainDiscardCard:   _onDiscardCard,
   captainMulligan:      _onMulligan,
-  captainFullRedraw:    _onFullRedraw,
   rollInitiative:       _onRollInitiative,
   rollLeadershipSL:     _onRollLeadershipSL,
   allocLeadershipSL:    _onAllocLeadershipSL,

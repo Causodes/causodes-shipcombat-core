@@ -153,6 +153,9 @@ Handlebars.registerHelper("multiply", (a, b) => a * b);
 // Role names (Helmsman, Ordnance Master, etc.) live in SHIPCOMBAT.Role.*
 Handlebars.registerHelper("shipcombatTerm", key => game.i18n.localize(`SHIPCOMBAT.Term.${key}`));
 Handlebars.registerHelper("shipcombatRole", key => game.i18n.localize(`SHIPCOMBAT.Role.${key}`));
+Handlebars.registerHelper("shipcombatAllocationUnit", (count, options) =>
+  SystemAdapter.current.formatAllocationUnit(count, { capitalize: options?.hash?.capitalize === true })
+);
 // Adapter-controlled dice icon: fa-dice (default) or fa-dice-d20 (d20 systems).
 Handlebars.registerHelper("shipCombatDiceIcon", () => SystemAdapter.current?.getRollDiceIcon() ?? "fa-dice");
 

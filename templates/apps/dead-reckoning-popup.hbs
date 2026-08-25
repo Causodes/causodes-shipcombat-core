@@ -6,12 +6,17 @@
         Drag cards to set the draw order. Position 1 will be drawn next.
     </p>
 
-    <ol class="shipcombat-dr-list">
+    <ol class="shipcombat-dr-list shipcombat-dr-preview-grid">
         {{#each cards}}
-        <li class="shipcombat-dr-card" draggable="true" data-card-id="{{id}}">
-            <span class="shipcombat-dr-pos">{{pos}}</span>
-            <span class="shipcombat-dr-label">{{label}}</span>
-            <i class="fa-solid fa-grip-lines shipcombat-dr-grip"></i>
+        <li class="shipcombat-dr-card shipcombat-captain-card shipcombat-captain-card--{{category}}"
+            draggable="true" data-card-id="{{id}}" data-card-instance-id="{{instanceId}}">
+            <div class="shipcombat-captain-card-header">
+                <span class="shipcombat-dr-pos">{{pos}}</span>
+                <span class="shipcombat-captain-card-cat">{{catLabel}}</span>
+                <i class="fa-solid fa-grip-lines shipcombat-dr-grip"></i>
+            </div>
+            <div class="shipcombat-captain-card-name"><i class="{{icon}}"></i> {{label}}</div>
+            <div class="shipcombat-captain-card-desc">{{desc}}</div>
         </li>
         {{/each}}
     </ol>

@@ -24,14 +24,14 @@
                 <div class="shipcombat-alloc-row">
                     <button type="button" class="shipcombat-alloc-btn" data-action="allocLeadershipSL" data-stat="inspire" data-delta="-1"
                             {{#unless captainCtx.leadershipRolled}}disabled{{/unless}}
-                            {{#if captainCtx.hasPlayedCards}}disabled{{/if}}
+                            {{#if captainCtx.allocationLocked}}disabled{{/if}}
                             {{#unless captainCtx.allocInspire}}disabled{{/unless}}>
                         &minus;
                     </button>
                     <span class="shipcombat-helm-stat-value">{{captainCtx.allocInspire}}</span>
                     <button type="button" class="shipcombat-alloc-btn" data-action="allocLeadershipSL" data-stat="inspire" data-delta="1"
                             {{#unless captainCtx.leadershipRolled}}disabled{{/unless}}
-                            {{#if captainCtx.hasPlayedCards}}disabled{{/if}}
+                            {{#if captainCtx.allocationLocked}}disabled{{/if}}
                             {{#if (gte (add (add captainCtx.allocInspire captainCtx.allocResolve) captainCtx.allocInitiative) captainCtx.leadershipSL)}}disabled{{/if}}>
                         +
                     </button>
@@ -42,14 +42,14 @@
                 <div class="shipcombat-alloc-row">
                     <button type="button" class="shipcombat-alloc-btn" data-action="allocLeadershipSL" data-stat="resolve" data-delta="-1"
                             {{#unless captainCtx.leadershipRolled}}disabled{{/unless}}
-                            {{#if captainCtx.hasPlayedCards}}disabled{{/if}}
+                            {{#if captainCtx.allocationLocked}}disabled{{/if}}
                             {{#unless captainCtx.allocResolve}}disabled{{/unless}}>
                         &minus;
                     </button>
                     <span class="shipcombat-helm-stat-value">{{captainCtx.allocResolve}}</span>
                     <button type="button" class="shipcombat-alloc-btn" data-action="allocLeadershipSL" data-stat="resolve" data-delta="1"
                             {{#unless captainCtx.leadershipRolled}}disabled{{/unless}}
-                            {{#if captainCtx.hasPlayedCards}}disabled{{/if}}
+                            {{#if captainCtx.allocationLocked}}disabled{{/if}}
                             {{#if (gte (add (add captainCtx.allocInspire captainCtx.allocResolve) captainCtx.allocInitiative) captainCtx.leadershipSL)}}disabled{{/if}}>
                         +
                     </button>
@@ -60,14 +60,14 @@
                 <div class="shipcombat-alloc-row">
                     <button type="button" class="shipcombat-alloc-btn" data-action="allocLeadershipSL" data-stat="initiative" data-delta="-1"
                             {{#unless captainCtx.leadershipRolled}}disabled{{/unless}}
-                            {{#if captainCtx.hasPlayedCards}}disabled{{/if}}
+                            {{#if captainCtx.allocationLocked}}disabled{{/if}}
                             {{#unless captainCtx.allocInitiative}}disabled{{/unless}}>
                         &minus;
                     </button>
                     <span class="shipcombat-helm-stat-value">{{captainCtx.allocInitiative}}</span>
                     <button type="button" class="shipcombat-alloc-btn" data-action="allocLeadershipSL" data-stat="initiative" data-delta="1"
                             {{#unless captainCtx.leadershipRolled}}disabled{{/unless}}
-                            {{#if captainCtx.hasPlayedCards}}disabled{{/if}}
+                            {{#if captainCtx.allocationLocked}}disabled{{/if}}
                             {{#if (gte (add (add captainCtx.allocInspire captainCtx.allocResolve) captainCtx.allocInitiative) captainCtx.leadershipSL)}}disabled{{/if}}>
                         +
                     </button>

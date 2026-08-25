@@ -37,6 +37,25 @@ export class SystemAdapter {
   get systemName() { throw new Error("Not implemented"); }
 
   /**
+   * Player-facing terminology for allocatable roll results.
+   * Companion systems override this one value to update labels, tooltips,
+   * localization tokens, and generated chat copy everywhere.
+   */
+  get allocationUnitTerms() { return { singular: "SL", plural: "SL" }; }
+
+  /** Backwards-compatible title-cased plural label for existing integrations. */
+  get allocationUnitLabel() { return this.formatAllocationUnit(2, { capitalize: true }); }
+
+  /** Return the correctly pluralized allocation-unit name for a count. */
+  formatAllocationUnit(count, { capitalize = false } = {}) {
+    const terms = this.allocationUnitTerms ?? {};
+    const value = Math.abs(Number(count)) === 1
+      ? (terms.singular ?? terms.plural ?? "SL")
+      : (terms.plural ?? terms.singular ?? "SL");
+    return capitalize ? value.charAt(0).toUpperCase() + value.slice(1) : value;
+  }
+
+  /**
    * The English spelling variant preferred by this system's companion module.
    * Applied once at `i18nInit` to every string in the `SHIPCOMBAT` translation
    * tree before any template or UI code reads it.
@@ -406,13 +425,12 @@ export class SystemAdapter {
   formatTargetNumber(target) { return String(target); }
 
   /**
-   * Format the BDA result SL as a sensor-tab button badge.
-   * Default: "SL N". SF2e overrides to "(N Points)".
+   * Format the BDA result as a sensor-tab button badge.
    *
    * @param {number} sl
    * @returns {string}
    */
-  formatBdaBadge(sl) { return `SL ${sl}`; }
+  formatBdaBadge(sl) { return `${this.formatAllocationUnit(sl, { capitalize: true })} ${sl}`; }
 
   /**
    * Format the accuracy value for display in the targeting popup.

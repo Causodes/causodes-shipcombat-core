@@ -304,7 +304,7 @@ export class TargetingPopup extends foundry.applications.api.HandlebarsApplicati
       if ((fireModeDetails.hitMod ?? 0) !== 0) breakdownParts.push(`Fire Mode: ${adapter.formatModifier(fireModeDetails.hitMod ?? 0)}`);
       if (stanceHitMod !== 0) breakdownParts.push(`Stance: ${adapter.formatModifier(stanceHitMod)}`);
       if (lockAccuracyBonus !== 0) breakdownParts.push(`Lock Tier: ${adapter.formatModifier(lockAccuracyBonus)}`);
-      if (allocAccuracy !== 0) breakdownParts.push(`Accuracy SL: ${adapter.formatModifier(allocAccuracy * accuracyStep)}`);
+      if (allocAccuracy !== 0) breakdownParts.push(`Accuracy ${adapter.allocationUnitLabel}: ${adapter.formatModifier(allocAccuracy * accuracyStep)}`);
       if (weaponHitMod !== 0) breakdownParts.push(`Weapon Rating: ${adapter.formatModifier(weaponHitMod)}`);
       if (adjustBearingBonus !== 0) breakdownParts.push(`Adj. Bearing: ${adapter.formatModifier(adjustBearingBonus)}`);
       if (rangingFireBonus !== 0) breakdownParts.push(`Ranging Fire: ${adapter.formatModifier(rangingFireBonus)}`);

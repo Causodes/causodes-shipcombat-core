@@ -89,6 +89,22 @@ function _injectModifierCopy(tree) {
   };
 }
 
+/** Inject singular/plural allocation terminology from the active adapter. */
+function _injectAllocationTerms(tree) {
+  const adapter = SystemAdapter._current;
+  if (!adapter || !tree.SHIPCOMBAT) return;
+  const terms = adapter.allocationUnitTerms ?? { singular: "SL", plural: "SL" };
+  const singular = String(terms.singular ?? terms.plural ?? "SL");
+  const plural = String(terms.plural ?? terms.singular ?? "SL");
+  tree.SHIPCOMBAT.Term ??= {};
+  Object.assign(tree.SHIPCOMBAT.Term, {
+    AllocationUnit: singular,
+    AllocationUnits: plural,
+    AllocationUnitTitle: singular.charAt(0).toUpperCase() + singular.slice(1),
+    AllocationUnitsTitle: plural.charAt(0).toUpperCase() + plural.slice(1),
+  });
+}
+
 /**
  * Wire token substitution into Foundry's i18n init. Call once during the
  * module's "init" hook.
@@ -98,6 +114,7 @@ export function registerLangSubstitution() {
     const tree = game.i18n.translations;
     if (!tree) return;
     _injectModifierCopy(tree);
+    _injectAllocationTerms(tree);
     // Two passes: lets a token resolve to a string that itself contains a
     // token (one level of indirection is enough for everything we do).
     _substituteTree(tree, tree);

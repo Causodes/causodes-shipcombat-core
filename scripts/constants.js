@@ -1,5 +1,6 @@
 import { THEME, hex } from "./theme.js";
 import { SystemAdapter } from "./systems/SystemAdapter.js";
+import { createCaptainCard, shuffleCaptainCards } from "./captain/card-instances.js";
 
 // The core module's own ID — used for template paths, CSS, and other static
 // assets that always live in this module regardless of which companion activated it.
@@ -193,7 +194,7 @@ export const DEFAULT_COMBAT_STATE = {
     sensors:   { actionUsed: false, coreActionUsed: false, bdaAttacks: {}, locks: [], effects: [], contacts: {}, nextContactOrdinal: 1, recommendedTargetId: null, fireCorrection: null, payload: "", coreCount: 0, coreActionsPlayed: [] },
     gunner:    { ammo: 0, power: 0, ordnanceSL: 0, allocAccuracy: 0, allocPenetration: 0, allocFirepower: 0, slLocked: false, ordnanceRolled: false, arcOverlayActive: false, payload: "", coreCount: 0, coreActionsPlayed: [] },
     ordnance:  { manpower: 0, manpowerMax: 0, armedTorpedoes: 0, armedCraft: 0, craftDestroyed: 0, craftRecovering: 0, craftPartialRecovery: 0, bosunSL: 0, bosunRolled: false, allocEfficiency: 0, allocExpedience: 0, actionUsed: false, coreActionUsed: false, commitments: [], stagedPayloads: {}, availablePayloads: 0, coreCount: 0, coreActionsPlayed: [] },
-    captain:   { stance: "none", pendingStance: "", hand: [], drawPile: [], discardPile: [], triageCount: 2, triageConditionsUsed: [], handCapBonus: 0, playedCards: [], holdTheLineActive: false, priorityTargetId: null, payload: "", coreCount: 0, allocInitiative: 0, rolledInitiative: 0 },
+    captain:   { stance: "none", pendingStance: "", hand: [], drawPile: [], discardPile: [], currentHandCap: 3, triageCount: 2, triageConditionsUsed: [], handCapBonus: 0, mulligansSpent: 0, allocationLocked: false, playedCards: [], holdTheLineActive: false, priorityTargetId: null, payload: "", coreCount: 0, allocInitiative: 0, rolledInitiative: 0 },
   },
   turnDone: {},
   overchargeUsed: {},
@@ -592,11 +593,7 @@ export function buildCaptainDeck(excludeRoles = [], excludeCards = []) {
   for (const card of CAPTAIN_CARDS) {
     if (excludeRoles.includes(card.targetRole ?? "")) continue;
     if (excludeCards.includes(card.id)) continue;
-    for (let i = 0; i < (card.copies ?? 1); i++) deck.push(card.id);
+    for (let i = 0; i < (card.copies ?? 1); i++) deck.push(createCaptainCard(card.id));
   }
-  for (let i = deck.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [deck[i], deck[j]] = [deck[j], deck[i]];
-  }
-  return deck;
+  return shuffleCaptainCards(deck);
 }

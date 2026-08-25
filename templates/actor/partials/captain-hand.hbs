@@ -3,7 +3,7 @@
     <div class="list-header row-content">
         <div class="list-name">
             {{localize "SHIPCOMBAT.Captain.Hand"}}
-            <span class="shipcombat-hand-count">({{captainCtx.handCount}}/6)</span>
+            <span class="shipcombat-hand-count">({{captainCtx.handCount}}/{{captainCtx.effectiveHandCap}}) → ({{captainCtx.nextHandCount}}/{{captainCtx.nextHandCap}})</span>
         </div>
         {{#if captainCtx.handCapBonus}}
         <span class="shipcombat-hand-cap-note" data-tooltip="{{localize 'SHIPCOMBAT.Captain.HandCapNoteTooltip'}}">
@@ -15,9 +15,10 @@
         {{#if captainCtx.hand.length}}
         <div class="shipcombat-captain-hand-grid">
         {{#each captainCtx.hand}}
-        <div class="shipcombat-captain-card shipcombat-captain-card--{{category}}" data-card-id="{{cardId}}" draggable="true">
+        <div class="shipcombat-captain-card shipcombat-captain-card--{{category}}" data-card-id="{{cardId}}" data-card-instance-id="{{instanceId}}" draggable="true">
             <div class="shipcombat-captain-card-header">
                 <span class="shipcombat-captain-card-cat">{{catLabel}}</span>
+                {{#if salvaged}}<span class="shipcombat-captain-card-salvaged"><i class="fa-solid fa-recycle"></i> {{localize "SHIPCOMBAT.Captain.Salvaged"}}</span>{{/if}}
                 {{#if targetRole}}
                 <span class="shipcombat-captain-card-target" data-tooltip="{{targetRoleLabel}}">
                     <i class="{{targetRoleIcon}}"></i>
@@ -60,13 +61,13 @@
                    data-tooltip="{{localize 'SHIPCOMBAT.Captain.DiscardCard'}}">
                     <i class="fa-solid fa-trash-can"></i>
                 </a>
-                {{#unless @root.captainCtx.mulliganUsed}}
+                {{#if @root.captainCtx.mulligansRemaining}}
                 <a class="shipcombat-captain-card-action shipcombat-captain-card-action--mulligan"
                    data-action="captainMulligan" data-card-id="{{cardId}}"
                    data-tooltip="{{localize 'SHIPCOMBAT.Captain.Mulligan'}}">
                     <i class="fa-solid fa-rotate"></i>
                 </a>
-                {{/unless}}
+                {{/if}}
             </div>
         </div>
         {{/each}}
@@ -94,24 +95,10 @@
             </span>
         </div>
         <div class="shipcombat-deck-footer-actions">
-            <button type="button"
-                    data-action="captainFullRedraw"
-                    class="shipcombat-full-redraw-btn"
-                    {{#unless captainCtx.canFullRedraw}}disabled{{/unless}}
-                    data-tooltip="{{localize 'SHIPCOMBAT.Captain.FullRedrawHint'}}">
-                <i class="fa-solid fa-arrows-rotate"></i>
-                {{localize "SHIPCOMBAT.Captain.FullRedraw"}}
-            </button>
-            {{#if captainCtx.canDraw}}
-            <span class="shipcombat-draw-row">
-                <button type="button" data-action="captainDraw"
-                        data-tooltip="{{localize 'SHIPCOMBAT.Captain.DrawCard'}} ({{localize 'SHIPCOMBAT.Captain.DrawMax'}}: {{captainCtx.drawCount}})">
-                    <i class="fa-solid fa-hand"></i> {{localize "SHIPCOMBAT.Captain.DrawCard"}}
-                </button>
-                <input type="number" class="shipcombat-draw-count-input" min="1" max="{{captainCtx.drawCount}}"
-                       value="{{captainCtx.drawCount}}" data-max-draw="{{captainCtx.drawCount}}">
+            <span class="shipcombat-mulligan-counter">
+                <i class="fa-solid fa-rotate"></i>
+                {{localize "SHIPCOMBAT.Captain.Mulligans"}}: {{captainCtx.mulligansRemaining}}
             </span>
-            {{/if}}
         </div>
     </div>
 </div>

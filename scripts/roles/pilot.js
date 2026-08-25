@@ -26,8 +26,10 @@ async function _onAllocBonus(event, target) {
   const allocMano    = sys.resources?.pilot?.allocMano    ?? 0;
   const allocEvasion = sys.resources?.pilot?.allocEvasion ?? 0;
   const fuelBurned   = sys.resources?.pilot?.fuelBurned   ?? 0;
+  const ramAllocLocked = sys.resources?.pilot?.ramAllocLocked ?? false;
+  const hasRolledPiloting = !!sys.resources?.pilot?.pilotingMessageId;
 
-  if (fuelBurned > 0) return;
+  if (fuelBurned > 0 || ramAllocLocked || (delta > 0 && !hasRolledPiloting)) return;
 
   let newAllocSpeed   = allocSpeed;
   let newAllocMano    = allocMano;
@@ -54,6 +56,9 @@ async function _onAllocBonus(event, target) {
 
 async function _onRollPiloting() {
   const sys = SystemAdapter.current.getShipData(this.actor);
+  if (sys.resources?.pilot?.pilotingMessageId) {
+    return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.AlreadyRolledPiloting"));
+  }
   const crewSize = sys.crewSize ?? 6;
   const is3man = crewSize <= 3;
   // In 3-man mode the Engineer operates helm; larger crews use the Helmsman.
@@ -484,7 +489,7 @@ export function buildHelmContext(sys, opts = {}) {
         const idx  = effective.indexOf("|");
         const spec = effective.slice(idx + 1);
         const key  = effective.slice(0, idx);
-        return `${spec || SystemAdapter.current.getSkillLabel(key)} SL`;
+        return `${spec || SystemAdapter.current.getSkillLabel(key)} ${SystemAdapter.current.allocationUnitLabel}`;
       }
       return game.i18n.localize(is3man ? "SHIPCOMBAT.Helm.EngineeringSL" : "SHIPCOMBAT.Helm.PilotingSL");
     })(),
@@ -497,7 +502,7 @@ export function buildHelmContext(sys, opts = {}) {
         const spec = effective.slice(idx + 1);
         const skillName    = SystemAdapter.current.getSkillLabel(key);
         const skillDisplay = spec ? `${skillName} (${spec})` : skillName;
-        return `Roll ${skillDisplay} to generate Helm SL for Speed, Maneuverability, and Evasion allocation.`;
+        return `Roll ${skillDisplay} to generate Helm ${SystemAdapter.current.allocationUnitLabel} for Speed, Maneuverability, and Evasion allocation.`;
       }
       return game.i18n.localize(is3man ? "SHIPCOMBAT.Helm.EngineeringSLTooltip" : "SHIPCOMBAT.Helm.PilotingSLTooltip");
     })(),

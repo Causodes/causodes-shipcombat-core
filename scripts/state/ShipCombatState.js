@@ -11,7 +11,7 @@
  * the same public API  -  callers still use ShipCombatState.fireWeapon(), etc.
  */
 
-import { MODULE_ID, CORE_MODULE_ID, DEFAULT_COMBAT_STATE, LOCK_DECAY_ROUNDS, buildCaptainDeck } from "../constants.js";
+import { MODULE_ID, CORE_MODULE_ID, DEFAULT_COMBAT_STATE, LOCK_DECAY_ROUNDS, ORDNANCE_4MAN_COSTS, ORDNANCE_MASTER_ACTIONS, buildCaptainDeck } from "../constants.js";
 import { isOrdnance, isTorpedo, isStrikeCraft } from "../actors/ordnance/ordnance-types.js";
 
 // ── Domain imports ──────────────────────────────────────────────────────────
@@ -26,7 +26,9 @@ import { HelmPreview }     from "../canvas/HelmPreview.js";
 import { SystemAdapter }   from "../systems/SystemAdapter.js";
 import { recordPlayerShipInitiative } from "../initiative.js";
 import { POWER_CORE_STATION_ROLES, getPowerCoreCount, getPowerCorePoolRole } from "../roles/crew-operators.js";
+import { prepareCaptainHandForRound } from "../captain/card-instances.js";
 import { getContactDisplayName } from "../targeting/contact-intelligence.js";
+import { isAllocationResource, validateAllocationChange } from "./allocation-guard.js";
 
 export class ShipCombatState {
 
@@ -35,6 +37,9 @@ export class ShipCombatState {
 
   /** Serializes every Power Core count mutation per ship on the GM. */
   static _powerCoreQueues = new Map();
+
+  /** Serializes point-allocation validation and writes per ship on the GM. */
+  static _allocationQueues = new Map();
 
   // ── Ship resolution ───────────────────────────────────────────────────────
 
@@ -148,6 +153,23 @@ export class ShipCombatState {
     } finally {
       if (this._powerCoreQueues.get(shipKey) === transaction) {
         this._powerCoreQueues.delete(shipKey);
+      }
+    }
+  }
+
+  /** Prevent simultaneous allocation changes from validating against the same stale pool. */
+  static async withAllocationTransaction(operation) {
+    if (typeof operation !== "function") throw new TypeError("Allocation transaction requires a function.");
+    const shipKey = this.ship?.uuid ?? this.ship?.id ?? "active-ship";
+    const previous = this._allocationQueues.get(shipKey) ?? Promise.resolve();
+    const transaction = previous.catch(() => {}).then(operation);
+
+    this._allocationQueues.set(shipKey, transaction);
+    try {
+      return await transaction;
+    } finally {
+      if (this._allocationQueues.get(shipKey) === transaction) {
+        this._allocationQueues.delete(shipKey);
       }
     }
   }
@@ -331,7 +353,8 @@ export class ShipCombatState {
       updates[`resources.${roleId}.coreCount`]         = 0;
       updates[`resources.${roleId}.coreActionsPlayed`] = [];
     }
-    updates["resources.captain.mulliganUsed"]         = false;
+    updates["resources.captain.mulligansSpent"]       = 0;
+    updates["resources.captain.allocationLocked"]     = false;
 
     // ── Initiative: carry allocInitiative bonus forward to Foundry combat tracker ──
     const rolledInitiative_ar = data.resources?.captain?.rolledInitiative ?? 0;
@@ -488,17 +511,18 @@ export class ShipCombatState {
       }
     }
 
-    // ── Captain: trim hand to base cap (6) when Inspire bonus expires ──────────
-    const captainHandNow = [...(data.resources?.captain?.hand ?? [])];
-    const BASE_HAND_CAP = 6;
-    const overcapCount  = captainHandNow.length - BASE_HAND_CAP;
-    if (overcapCount > 0) {
-      updates["resources.captain.hand"]        = captainHandNow.slice(0, BASE_HAND_CAP);
-      updates["resources.captain.discardPile"] = [
-        ...(data.resources?.captain?.discardPile ?? []),
-        ...captainHandNow.slice(BASE_HAND_CAP),
-      ];
-    }
+    // ── Captain: next-round Inspire sets the slot count; refill only here ──
+    const nextHandCap = 3 + (data.resources?.captain?.allocInspire ?? 0);
+    const nextCards = prepareCaptainHandForRound({
+      hand: data.resources?.captain?.hand,
+      drawPile: data.resources?.captain?.drawPile,
+      discardPile: data.resources?.captain?.discardPile,
+      nextHandCap,
+    });
+    updates["resources.captain.hand"]           = nextCards.hand;
+    updates["resources.captain.drawPile"]       = nextCards.drawPile;
+    updates["resources.captain.discardPile"]    = nextCards.discardPile;
+    updates["resources.captain.currentHandCap"] = nextHandCap;
 
     // ── Auto-arm torpedo: every 3 rounds, a torpedo is armed for free ──
     const hasTorpConfig = (data.ordnanceActors?.torpedo ?? []).length > 0;
@@ -529,9 +553,9 @@ export class ShipCombatState {
 
     await this.withPowerCoreTransaction(() => this.update(updates));
 
-    if (overcapCount > 0) {
+    if (nextCards.discardedOverflowCount > 0) {
       await ChatMessage.create({
-        content: `<p>${game.i18n.format("SHIPCOMBAT.Captain.InspireDiscard", { count: overcapCount })}</p>`,
+        content: `<p>${game.i18n.format("SHIPCOMBAT.Captain.InspireDiscard", { count: nextCards.discardedOverflowCount })}</p>`,
         speaker: { alias: SystemAdapter.current.getShipData(this.ship)?.roleTitles?.captain || game.i18n.localize("SHIPCOMBAT.Role.Captain") },
         whisper: ChatMessage.getWhisperRecipients("GM"),
       });
@@ -586,19 +610,48 @@ export class ShipCombatState {
     if (roleId === "captain" && key === "rolledInitiative") {
       return recordPlayerShipInitiative({ shipActor: this.ship, rawTotal: value });
     }
-    // When captain's allocResolve changes, sync triageCount by the same delta
-    if (roleId === "captain" && key === "allocResolve") {
-      const data = this.getData();
-      const currentResolve = data.resources?.captain?.allocResolve ?? 0;
-      const currentTriage  = data.resources?.captain?.triageCount  ?? 2;
-      const delta = value - currentResolve;
-      const newTriage = Math.max(0, currentTriage + delta);
-      return this.update({
-        "resources.captain.allocResolve": value,
-        "resources.captain.triageCount":  newTriage,
+    if (isAllocationResource(roleId, key)) {
+      return this.withAllocationTransaction(async () => {
+        const data = this.getData();
+        const validated = validateAllocationChange(data, roleId, key, value);
+        if (!validated) return;
+        return this.update({ [`resources.${roleId}.${key}`]: validated.value });
       });
     }
     return this.update({ [`resources.${roleId}.${key}`]: value });
+  }
+
+  /** Atomically lock Ordnance allocation and commit its manpower/turn costs. */
+  static async commitOrdnanceAction(actionId) {
+    const entry = ORDNANCE_MASTER_ACTIONS[actionId];
+    if (!entry) return null;
+
+    return this.withAllocationTransaction(async () => {
+      const data = this.getData();
+      const ordnance = data.resources?.ordnance ?? {};
+      if (ordnance.actionUsed) return null;
+
+      const override = (data.crewSize ?? 6) <= 4 ? ORDNANCE_4MAN_COSTS[actionId] : null;
+      const baseCrew = override?.crew ?? entry.crew;
+      const baseDuration = override?.duration ?? entry.duration;
+      const crewCost = Math.max(2, baseCrew - Math.max(0, ordnance.allocEfficiency ?? 0));
+      const duration = Math.max(1, baseDuration - Math.max(0, ordnance.allocExpedience ?? 0));
+      const manpower = ordnance.manpower ?? 0;
+      if (manpower < crewCost) return { ok: false, reason: "insufficientCrew", need: crewCost, have: manpower };
+
+      const commitments = [...(ordnance.commitments ?? []), {
+        action: actionId,
+        crewCount: crewCost,
+        turnsRemaining: duration,
+        addedRound: data.round ?? 0,
+      }];
+      await this.update({
+        "resources.ordnance.manpower": manpower - crewCost,
+        "resources.ordnance.actionUsed": true,
+        "resources.ordnance.commitments": commitments,
+      });
+      return { ok: true, crewCost, duration };
+    });
   }
 
   // ── Round management ──────────────────────────────────────────────────────
@@ -1026,7 +1079,9 @@ export class ShipCombatState {
     updates["resources.captain.playedCards"]          = [];
     updates["resources.captain.holdTheLineActive"]    = false;
     updates["resources.captain.hardenedShields"]      = false;
-    updates["resources.captain.mulliganUsed"]         = false;
+    updates["resources.captain.currentHandCap"]       = 3;
+    updates["resources.captain.mulligansSpent"]       = 0;
+    updates["resources.captain.allocationLocked"]     = false;
     updates["resources.captain.coreActionUsed"]           = false;
     updates["resources.captain.selectedCoreAction"]       = null;
     updates["resources.captain.priorityTargetId"]         = null;
@@ -1156,9 +1211,6 @@ export class ShipCombatState {
       });
     }
 
-    // ── Captain: auto-draw up to 3 cards (respecting hand cap of 5) ──────────
-    await this.drawCards({ count: 3 });
-
     // ── NPC per-round resource replenishment (25% of max, rounded down) ────────
     if (canvas?.scene) {
       for (const td of canvas.scene.tokens) {
@@ -1219,6 +1271,9 @@ export class ShipCombatState {
       "resources.captain.hand":                  captainHand,
       "resources.captain.drawPile":              captainDeck,
       "resources.captain.discardPile":           [],
+      "resources.captain.currentHandCap":         3,
+      "resources.captain.mulligansSpent":         0,
+      "resources.captain.allocationLocked":       false,
       "resources.captain.triageCount":           2,
       "resources.captain.triageConditionsUsed":  [],
       "resources.captain.payload":               "",
@@ -1227,6 +1282,9 @@ export class ShipCombatState {
       "resources.captain.rolledInitiative":      0,
       "resources.captain.allocInspire":          0,
       "resources.captain.allocResolve":          0,
+      "resources.captain.allocInitiative":       0,
+      "resources.captain.handCapBonus":          0,
+      "resources.captain.playedCards":           [],
       "resources.captain.priorityTargetId":      null,
     };
     updates["resources.sensors.contacts"] = {};
@@ -1740,7 +1798,9 @@ export class ShipCombatState {
 // This preserves the public API: ShipCombatState.fireWeapon(...) etc.
 
 // Gunner
-ShipCombatState.fireWeapon      = GunnerState.fireWeapon;
+ShipCombatState.fireWeapon      = function (payload) {
+  return this.withAllocationTransaction(() => GunnerState.fireWeapon.call(this, payload));
+};
 ShipCombatState._fireWeaponChat = GunnerState._fireWeaponChat;
 
 // Pilot / Helm
@@ -1750,7 +1810,9 @@ ShipCombatState.pilotOverdrive   = PilotState.pilotOverdrive;
 ShipCombatState.pilotStrafe      = PilotState.pilotStrafe;
 ShipCombatState.pilotFlipAndBurn = PilotState.pilotFlipAndBurn;
 ShipCombatState.pilotRam         = PilotState.pilotRam;
-ShipCombatState.confirmMovement  = PilotState.confirmMovement;
+ShipCombatState.confirmMovement  = function (payload) {
+  return this.withAllocationTransaction(() => PilotState.confirmMovement.call(this, payload));
+};
 ShipCombatState.apToThrust       = PilotState.apToThrust;
 
 // Engineer (power cores, heat/fire, shields, core bank, hull repair)
@@ -1807,6 +1869,8 @@ ShipCombatState.drawCards        = CaptainState.drawCards;
 ShipCombatState.playCard         = CaptainState.playCard;
 ShipCombatState.discardCard      = CaptainState.discardCard;
 ShipCombatState.mulligan         = CaptainState.mulligan;
-ShipCombatState.fullRedraw       = CaptainState.fullRedraw;
 ShipCombatState.captainPayloadActivate = CaptainState.captainPayloadActivate;
 ShipCombatState.captainCoreAction = CaptainState.captainCoreAction;
+ShipCombatState.beginDeadReckoning = CaptainState.beginDeadReckoning;
+ShipCombatState.completeDeadReckoning = CaptainState.completeDeadReckoning;
+ShipCombatState.cancelDeadReckoning = CaptainState.cancelDeadReckoning;

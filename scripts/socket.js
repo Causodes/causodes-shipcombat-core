@@ -24,6 +24,7 @@ export function setupSocket() {
     "upgradeAllLocks",
     "registerSensorContacts",
     "spawnOrdnance",
+    "commitOrdnanceAction",
     "setOrdnanceRtb",
     "setOrdnanceTurnDone",
     "designateHostileTorpedo",
@@ -38,13 +39,12 @@ export function setupSocket() {
     "blastOrdnance",
     "strikeCraftAttack",
     "triageCondition",
-    "drawCards",
     "playCard",
     "discardCard",
     "mulligan",
-    "fullRedraw",
     "captainPayloadActivate",
     "captainCoreAction",
+    "beginDeadReckoning", "completeDeadReckoning", "cancelDeadReckoning",
   ]) {
     _socket.register(action, (payload) => _handleAction(action, payload));
   }
@@ -322,6 +322,9 @@ async function _handleAction(action, payload = {}) {
       await ShipCombatState.spawnOrdnance(payload);
       break;
 
+    case "commitOrdnanceAction":
+      return ShipCombatState.commitOrdnanceAction(payload.actionId);
+
     case "setOrdnanceRtb":
       await ShipCombatState.setOrdnanceRtb(payload.tokenId, payload.rtb);
       break;
@@ -390,10 +393,6 @@ async function _handleAction(action, payload = {}) {
       await ShipCombatState.triageCondition(payload);
       break;
 
-    case "drawCards":
-      await ShipCombatState.drawCards(payload);
-      break;
-
     case "playCard":
       await ShipCombatState.playCard(payload);
       break;
@@ -406,10 +405,6 @@ async function _handleAction(action, payload = {}) {
       await ShipCombatState.mulligan(payload);
       break;
 
-    case "fullRedraw":
-      await ShipCombatState.fullRedraw();
-      break;
-
     case "captainPayloadActivate":
       await ShipCombatState.captainPayloadActivate(payload);
       break;
@@ -417,6 +412,15 @@ async function _handleAction(action, payload = {}) {
     case "captainCoreAction":
       await ShipCombatState.captainCoreAction(payload);
       break;
+
+    case "beginDeadReckoning":
+      return ShipCombatState.beginDeadReckoning();
+
+    case "completeDeadReckoning":
+      return ShipCombatState.completeDeadReckoning(payload);
+
+    case "cancelDeadReckoning":
+      return ShipCombatState.cancelDeadReckoning(payload);
 
     default:
       console.warn(`${MODULE_ID} | Unknown socket action: ${action}`);

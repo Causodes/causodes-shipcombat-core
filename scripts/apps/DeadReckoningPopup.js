@@ -5,15 +5,25 @@
  * cards at once.  The player drags cards to set the draw order; position 1 is
  * drawn next.  On confirm the new pile order is emitted to the GM.
  */
-import { MODULE_ID, CORE_MODULE_ID } from "../constants.js";
+import { CAPTAIN_CARDS, CORE_MODULE_ID } from "../constants.js";
 import { emitToGM }  from "../socket.js";
+
+const CARD_DEFS = Object.fromEntries(CAPTAIN_CARDS.map(card => [card.id, card]));
+const CARD_ICONS = {
+  boost: "fa-solid fa-arrow-up",
+  shipwide: "fa-solid fa-ship",
+  reaction: "fa-solid fa-shield",
+  gambit: "fa-solid fa-chess-knight",
+};
 
 export class DeadReckoningPopup extends foundry.appv1.api.Application {
 
-  constructor({ cards = [], rest = [] } = {}) {
+  constructor({ cards = [], reservationId = null, tailCount = 0 } = {}) {
     super({});
     this._cards = [...cards]; // mutable working copy (top N cards)
-    this._rest  = rest;       // cards below the preview window (unchanged)
+    this._reservationId = reservationId;
+    this._tailCount = tailCount;
+    this._settled = false;
   }
 
   static get defaultOptions() {
@@ -22,9 +32,9 @@ export class DeadReckoningPopup extends foundry.appv1.api.Application {
       classes:   ["shipcombat-dead-reckoning-popup"],
       title:     "Dead Reckoning — Set Draw Order",
       template:  `modules/${CORE_MODULE_ID}/templates/apps/dead-reckoning-popup.hbs`,
-      width:     420,
+      width:     700,
       height:    "auto",
-      resizable: false,
+      resizable: true,
     });
   }
 
@@ -32,12 +42,20 @@ export class DeadReckoningPopup extends foundry.appv1.api.Application {
     const context = await super.getData(options);
     return {
       ...context,
-      cards: this._cards.map((id, i) => ({
-        id,
-        pos:   i + 1,
-        label: game.i18n.localize(`SHIPCOMBAT.Captain.Card.${id}`),
-      })),
-      tailCount: this._rest.length,
+      cards: this._cards.map((card, i) => {
+        const def = CARD_DEFS[card.cardId] ?? { category: "unknown" };
+        return {
+          ...card,
+          id: card.cardId,
+          pos: i + 1,
+          category: def.category,
+          catLabel: game.i18n.localize(`SHIPCOMBAT.Captain.Category.${def.category}`),
+          label: game.i18n.localize(`SHIPCOMBAT.Captain.Card.${card.cardId}`),
+          desc: game.i18n.localize(`SHIPCOMBAT.Captain.Card.Desc.${card.cardId}`),
+          icon: CARD_ICONS[def.category] ?? "fa-solid fa-cards",
+        };
+      }),
+      tailCount: this._tailCount,
     };
   }
 
@@ -47,16 +65,23 @@ export class DeadReckoningPopup extends foundry.appv1.api.Application {
     this._initDragDrop(html);
 
     // Wire confirm/cancel buttons (were static ACTIONS)
-    html.querySelector("[data-action='confirmOrder']")?.addEventListener("click", ev => {
+    html.querySelector("[data-action='confirmOrder']")?.addEventListener("click", async ev => {
       ev.preventDefault();
-      const newOrder = this._getCurrentOrder();
-      const newPile  = [...newOrder, ...this._rest];
-      emitToGM("captainCoreAction", { actionId: "deadReckoning", newPile });
-      this.close();
+      if (this._settled) return;
+      this._settled = true;
+      const orderedInstanceIds = this._getCurrentOrder().map(card => card.instanceId);
+      const result = await emitToGM("completeDeadReckoning", {
+        reservationId: this._reservationId,
+        orderedInstanceIds,
+      });
+      if (!result?.ok) {
+        ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Captain.Core.DRStalePile"));
+      }
+      await this.close();
     });
-    html.querySelector("[data-action='cancelOrder']")?.addEventListener("click", ev => {
+    html.querySelector("[data-action='cancelOrder']")?.addEventListener("click", async ev => {
       ev.preventDefault();
-      this.close();
+      await this.close();
     });
   }
 
@@ -72,7 +97,7 @@ export class DeadReckoningPopup extends foundry.appv1.api.Application {
       card.addEventListener("dragstart", ev => {
         dragSrcEl = card;
         ev.dataTransfer.effectAllowed = "move";
-        ev.dataTransfer.setData("text/plain", card.dataset.cardId);
+        ev.dataTransfer.setData("text/plain", card.dataset.cardInstanceId);
         // Slight delay so the ghost image doesn't include the drag-over highlight
         requestAnimationFrame(() => card.classList.add("shipcombat-dr-dragging"));
       });
@@ -99,7 +124,11 @@ export class DeadReckoningPopup extends foundry.appv1.api.Application {
       card.addEventListener("drop", ev => {
         ev.preventDefault();
         if (!dragSrcEl || dragSrcEl === card) return;
-        list.insertBefore(dragSrcEl, card);
+        const cards = [...list.querySelectorAll(".shipcombat-dr-card")];
+        const sourceIndex = cards.indexOf(dragSrcEl);
+        const targetIndex = cards.indexOf(card);
+        if (sourceIndex < targetIndex) card.after(dragSrcEl);
+        else list.insertBefore(dragSrcEl, card);
         card.classList.remove("shipcombat-dr-drag-over");
         this._syncPositionNumbers();
       });
@@ -118,18 +147,17 @@ export class DeadReckoningPopup extends foundry.appv1.api.Application {
   /** Read current card order from the DOM. */
   _getCurrentOrder() {
     const root = this.element[0] ?? this.element;
-    return [...root.querySelectorAll(".shipcombat-dr-card")].map(el => el.dataset.cardId);
+    const byId = new Map(this._cards.map(card => [card.instanceId, card]));
+    return [...root.querySelectorAll(".shipcombat-dr-card")]
+      .map(el => byId.get(el.dataset.cardInstanceId))
+      .filter(Boolean);
   }
 
-  // Kept as static methods for reference; now wired in activateListeners above.
-  static _onConfirmOrder(event, element) {
-    const newOrder = this._getCurrentOrder();
-    const newPile  = [...newOrder, ...this._rest];
-    emitToGM("captainCoreAction", { actionId: "deadReckoning", newPile });
-    this.close();
-  }
-
-  static _onCancelOrder(event, element) {
-    this.close();
+  async close(options) {
+    if (!this._settled && this._reservationId) {
+      this._settled = true;
+      await emitToGM("cancelDeadReckoning", { reservationId: this._reservationId });
+    }
+    return super.close(options);
   }
 }

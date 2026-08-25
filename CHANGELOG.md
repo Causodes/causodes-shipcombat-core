@@ -1,4 +1,7 @@
-## 2.2.5 (UNRELEASED)
+## 2.3.0 (UNRELEASED)
+- Route every Captain-card surface and pile preview through one system-theme contract so sheets, chat, Emergency Salvage, and Dead Reckoning cannot drift into different card graphics
+- Centralize allocation terminology in the active system adapter, including count-aware singular/plural forms used by localization, templates, BDA badges, and generated UI copy
+- Fix nested role-name localization tokens so companion role overrides resolve cleanly in warnings and Captain-card descriptions
 - Fix Combat Telemetry only upgrading one target by applying all lock upgrades in one atomic GM-side actor update
 - Keep BDA results isolated per attack so overlapping assessments cannot display another shot's hit count or damage
 - Resolve the BDA operator from crew layout, allow the Captain to operate Sensors in 4-person crews, and retain GM launch access
@@ -14,6 +17,15 @@
 - Correct Sensor Radar heading transforms after the ship-forward convention change and rotate the true compass beneath relative/heading-up mode
 - Restyle Marked Target and Battle Clarity as high-opacity translucent pale teal/red indicators outside the shield and bow-indicator radius, with two-line, lock-coloured canvas labels and `Bandit-a: Name` contact formatting
 - Fix NPC ordnance salvo and flight-size fields being locked to 1 by persisting edits to the embedded template and applying the current field value when launching
+- Rework Captain Standing Orders: remove manual draw/full-hand mulligan controls, make Resolve fund per-slot mulligans that lock allocation on first use, and make Inspire set the next round's hand limit above a base of 3
+- Make Captain cards instance-aware so duplicate orders remain independently selectable and reorderable
+- Rework Emergency Salvage to preview full card effects, add the chosen order to hand with a Salvaged tag regardless of hand limit, recycle the remaining discard pile, and return the Salvaged order to the bottom of the draw pile whenever it leaves hand
+- Show full order names, categories, and descriptions while reordering the draw pile with Dead Reckoning
+- Spend Captain's Power Core before revealing the draw-pile preview in Dead Reckoning; cancelling or closing the preview no longer avoids the cost
+- Remove the redundant Active Standing Orders panel from Captain tabs; active stance remains in the top status bar and role-specific order effects remain visible to affected crew
+- Make the Standing Orders next-round counter project the refilled hand, and defer discard recycling until a round begins with an empty draw pile so a partially exhausted pile produces one intentionally short hand
+- Define one universal Captain-card surface contract for sheets, chat, Emergency Salvage, and Dead Reckoning so companion-system themes apply consistently without consumer-specific copies
+- Serialize and validate Captain, Gunner, Pilot, and Ordnance point allocations on the GM, enforcing pool totals, roll prerequisites, and post-action locks across full and reduced crews; apply equivalent guards to NPC helm and gunnery allocation controls
 
 ## 2.2.4
 - Fix NPC ship weapon delete controls doing nothing by registering the shared embedded-item actions on both AppV2 and legacy AppV1 NPC sheets
