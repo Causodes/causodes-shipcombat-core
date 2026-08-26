@@ -639,8 +639,7 @@ export class TargetingPopup extends foundry.applications.api.HandlebarsApplicati
     const ship = this.weapon?.parent;
     const gunnerRes = ship?.system?.resources?.gunner ?? {};
     const fireModeDetails = this._getFireModeDetails(gunnerRes);
-
-    emitToGM("fireWeapon", {
+    const committed = await emitToGM("fireWeapon", {
       actorId:      this.weapon.parent?.id,
       weaponId:     this.weapon.id,
       fireMode:     this.fireMode,
@@ -653,6 +652,7 @@ export class TargetingPopup extends foundry.applications.api.HandlebarsApplicati
       isOvercharged: this.isOvercharged,
       fireCorrection: target.activeCorrection ?? null,
     });
+    if (committed === false) return;
 
     this.close();
   }

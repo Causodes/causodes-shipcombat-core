@@ -126,7 +126,7 @@ export function buildCaptainContext(sys, opts = {}) {
     nextHandCap,
   });
   const mulligansRemaining = Math.max(0, BASE_MULLIGANS_PER_ROUND + (captain.allocResolve ?? 0) - (captain.mulligansSpent ?? 0));
-  const allocationLocked = !!captain.allocationLocked || (captain.playedCards ?? []).length > 0;
+  const allocationLocked = !!captain.allocationLocked;
   const drawPileCards    = _resolvePileCards(captain.drawPile, "draw");
   const discardPileCards = _resolvePileCards(captain.discardPile, "discard");
   const coreActionUsed    = captain.coreActionUsed ?? false;
@@ -305,7 +305,7 @@ async function _onMulligan(event, target) {
   const cardId = card?.dataset?.cardId;
   const cardInstanceId = card?.dataset?.cardInstanceId;
   if (!cardId) return;
-  emitToGM("mulligan", { cardId, cardInstanceId });
+  await emitToGM("mulligan", { cardId, cardInstanceId });
 }
 
 /**

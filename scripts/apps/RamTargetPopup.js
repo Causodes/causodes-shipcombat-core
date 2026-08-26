@@ -16,6 +16,7 @@ import { HelmPreview } from "../canvas/HelmPreview.js";
 import { getHitQuadrant } from "./TargetingPopup.js";
 import { THEME, pixi } from "../theme.js";
 import { getContactDisplayName, isTargetableContactToken } from "../targeting/contact-intelligence.js";
+import { SystemAdapter } from "../systems/SystemAdapter.js";
 
 export class RamTargetPopup extends foundry.applications.api.HandlebarsApplicationMixin(
   foundry.applications.api.ApplicationV2
@@ -347,7 +348,7 @@ export class RamTargetPopup extends foundry.applications.api.HandlebarsApplicati
       if (sheet?._helmState) sheet._helmState.carryPct = 100;
     }
 
-    emitToGM("pilotRam", {
+    const committed = await emitToGM("pilotRam", {
       userId:         game.user.id,
       targetTokenId:  tokenId,
       fuelUsed,
@@ -362,6 +363,7 @@ export class RamTargetPopup extends foundry.applications.api.HandlebarsApplicati
       rammingActorId: this.ship?.id ?? null,
       maxBearingDeg:  this.maxBearingDeg,
     });
+    if (committed === false) return;
 
     this.close();
   }

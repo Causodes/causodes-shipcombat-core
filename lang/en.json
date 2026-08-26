@@ -38,7 +38,11 @@
       "MovementMode": "Movement Mode",
       "MovementModeHint": "Helm movement model. 'Simplified' uses fixed-radius arcs; 'Realistic' uses Newtonian vector physics with persistent momentum.",
       "ContactDesignationHint": "How unidentified contacts are named on the {{SHIPCOMBAT.Term.SensorRadar}}.",
-      "SweepGatedPositionsHint": "Blip positions on the {{SHIPCOMBAT.Term.SensorRadar}} only update when the sweep arm passes over them, like a real phosphor radar. Positions may lag up to one full sweep rotation (~9 seconds)."
+      "SweepGatedPositionsHint": "Blip positions on the {{SHIPCOMBAT.Term.SensorRadar}} only update when the sweep arm passes over them, like a real phosphor radar. Positions may lag up to one full sweep rotation (~9 seconds).",
+      "ResetAllocationWarnings": "Allocation Warnings",
+      "ResetAllocationWarningsButton": "Clear Suppressed Allocation Warnings",
+      "ResetAllocationWarningsHint": "Show all allocation commitment warnings again on this client.",
+      "ResetAllocationWarningsDone": "All allocation commitment warnings have been restored."
     },
     "Dialog": {
       "EndCombat": "End Ship Combat",
@@ -53,7 +57,11 @@
       "OverdriveTitle": "Full Power Burn",
       "OverdriveBody": "Redline the drive chambers to surge the ship well beyond rated speed, adding 100% to the power bar for this helm activation. Consumes one {{SHIPCOMBAT.Term.PowerCore}}. Proceed?",
       "FlipAndBurnBody": "Fire the attitude thrusters to flip the ship 180°, then burn — the ship decelerates along its original trajectory at 50% speed, moving sternward. Consumes one {{SHIPCOMBAT.Term.PowerCore}}. Proceed?",
-      "RamSelectTarget": "Select a target to ram. The ship will arc along the projected course."
+      "RamSelectTarget": "Select a target to ram. The ship will arc along the projected course.",
+      "UnspentAllocationTitle": "Allocation Warning",
+      "UnspentAllocationBody": "You have {count} unspent allocation {unit}. Using <strong>{action}</strong> will lock this allocation for the rest of the round.",
+      "UnrolledAllocationBody": "You have not yet rolled the check that generates allocation {unit}. Using <strong>{action}</strong> will prevent you from rolling and allocating them for the rest of the round.",
+      "UnspentAllocationSuppressTrigger": "Do not warn me again for this trigger."
     },
     "Role": {
       "Captain": "Captain",

@@ -223,7 +223,6 @@ async function _playCard({ cardId, cardInstanceId, sector }) {
     "resources.captain.drawPile":    drawPile,
     "resources.captain.discardPile": discardPile,
     "resources.captain.playedCards": [...(captain.playedCards ?? []), cardId],
-    "resources.captain.allocationLocked": true,
   };
 
   // Apply card effect

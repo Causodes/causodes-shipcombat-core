@@ -12,6 +12,46 @@
   background: rgb(18, 42, 44);
   color: #ddd;
 }
+.shipcombat-allocation-warning {
+  max-width: calc(100vw - 2rem);
+}
+.shipcombat-allocation-warning__body {
+  min-height: 8rem;
+  gap: 1rem;
+  padding: 0.75rem;
+}
+.shipcombat-allocation-warning__body p {
+  margin: 0;
+  line-height: 1.4;
+}
+.shipcombat-allocation-warning__suppress {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  line-height: 1.3;
+}
+.shipcombat-allocation-warning__suppress input {
+  flex: 0 0 auto;
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+}
+.shipcombat-allocation-warning__suppress span {
+  flex: 1;
+}
+.shipcombat-allocation-warning .dialog-buttons,
+.shipcombat-allocation-warning .form-footer {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+.shipcombat-allocation-warning .dialog-buttons button,
+.shipcombat-allocation-warning .form-footer button {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+}
 .shipcombat-tp-wrapper {
   display: flex;
   flex-direction: column;

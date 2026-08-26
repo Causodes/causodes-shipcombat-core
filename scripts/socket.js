@@ -1,7 +1,40 @@
-import { CORE_MODULE_ID, WEAPON_FIRED_HOOK } from "./constants.js";
+import { CORE_MODULE_ID, ORDNANCE_MASTER_ACTIONS, WEAPON_FIRED_HOOK } from "./constants.js";
+import { confirmAllocationCommit } from "./apps/allocation-warning.js";
+import { SystemAdapter } from "./systems/SystemAdapter.js";
 import { ShipCombatState } from "./state/ShipCombatState.js";
 
 let _socket;
+
+function _confirmAllocationAction(action, payload) {
+  const ship = ShipCombatState.ship;
+  if (!ship) return null;
+
+  const policies = {
+    confirmMovement: ["pilot", "pilot.move", "SHIPCOMBAT.Helm.Confirm"],
+    pilotFlipAndBurn: ["pilot", "pilot.flipAndBurn", "SHIPCOMBAT.Action.PilotFlipAndBurn"],
+    pilotRam: ["pilot", "pilot.ram", "SHIPCOMBAT.Helm.Ram"],
+    commitOrdnanceAction: ["ordnance", "ordnance.commit", ORDNANCE_MASTER_ACTIONS[payload.actionId]?.label],
+    mulligan: ["captain", "captain.mulligan", "SHIPCOMBAT.Captain.Mulligan"],
+  };
+
+  let policy = policies[action];
+  if (action === "fireWeapon") {
+    if (payload.actorId && payload.actorId !== ship.id) return null;
+    policy = ["gunner", "gunner.fire", ship.items.get(payload.weaponId)?.name];
+  } else if (action === "pilotRam" && payload.rammingActorId && payload.rammingActorId !== ship.id) {
+    return null;
+  }
+  if (!policy) return null;
+
+  const [roleId, trigger, label] = policy;
+  const actionLabel = label?.startsWith?.("SHIPCOMBAT.") ? game.i18n.localize(label) : label;
+  return confirmAllocationCommit(
+    SystemAdapter.current.getShipData(ship),
+    roleId,
+    trigger,
+    actionLabel ?? action,
+  );
+}
 
 export function setupSocket() {
   _socket = socketlib.registerModule(CORE_MODULE_ID);
@@ -508,6 +541,14 @@ function _handlePlayWeaponAnimation({ weaponCategory, fireMode, firingActorId, t
  * Uses socketlib if available (guaranteed GM execution), otherwise raw socket.
  */
 export function emitToGM(action, payload = {}) {
+  const confirmation = _confirmAllocationAction(action, payload);
+  if (confirmation) {
+    return confirmation.then(proceed => proceed ? _emitToGM(action, payload) : false);
+  }
+  return _emitToGM(action, payload);
+}
+
+function _emitToGM(action, payload) {
   if (game.user.isGM) {
     return _handleAction(action, payload);
   }

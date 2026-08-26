@@ -474,8 +474,7 @@ export class TargetingPopupV1 extends foundry.appv1.api.Application {
     const ship        = this.weapon?.parent;
     const gunnerRes   = ship?.system?.resources?.gunner ?? {};
     const fmd         = this._getFireModeDetails(gunnerRes);
-
-    emitToGM("fireWeapon", {
+    const committed = await emitToGM("fireWeapon", {
       actorId:        this.weapon.parent?.id,
       weaponId:       this.weapon.id,
       fireMode:       this.fireMode,
@@ -488,6 +487,7 @@ export class TargetingPopupV1 extends foundry.appv1.api.Application {
       isOvercharged:  this.isOvercharged,
       fireCorrection: target.activeCorrection ?? null,
     });
+    if (committed === false) return;
 
     this.close();
   }

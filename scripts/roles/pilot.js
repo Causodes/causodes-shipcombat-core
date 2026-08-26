@@ -133,7 +133,7 @@ async function _onConfirmHelm() {
     const newVy = vy + Math.sin(thrustDir) * thrustMag;
     // Keep the highest carryPct across piecemeal commits so turn-end auto-drift is correct.
     const momentumUsedSoFar = sys.resources?.pilot?.momentumUsed ?? 0;
-    emitToGM("confirmMovement", {
+    const committed = await emitToGM("confirmMovement", {
       fuelUsed:     fuelSlider,
       driftUsed:    0,
       speed,
@@ -146,6 +146,7 @@ async function _onConfirmHelm() {
       bearingDelta: Math.abs(bearing),
       momentumUsed: Math.max(momentumUsedSoFar, carryPct),
     });
+    if (committed === false) return;
     // Drift phase complete; reset carryPct so piecemeal commits don't re-apply it.
     this._helmState = {
       ...this._helmState,
@@ -168,8 +169,7 @@ async function _onConfirmHelm() {
   HelmPreview.hide();
 
   const waypoints = HelmPreview.projectWaypoints(token, bearing, thrustPct, speed, driftUnits);
-
-  emitToGM("confirmMovement", {
+  const committed = await emitToGM("confirmMovement", {
     fuelUsed:       fuelSlider,
     driftUsed:      0,
     speed:          speed + driftUnits,
@@ -178,6 +178,7 @@ async function _onConfirmHelm() {
     newRotation:    projected.rotation,
     waypoints,
   });
+  if (committed === false) return;
 
   const round = sys.round ?? 0;
   this._helmState = {
@@ -314,7 +315,7 @@ async function _onPilotFlipAndBurn() {
   const waypoints = HelmPreview.projectFlipAndBurnWaypoints(token, halfSpeedUnits);
   HelmPreview.hide();
 
-  emitToGM("pilotFlipAndBurn", {
+  await emitToGM("pilotFlipAndBurn", {
     userId:         game.user.id,
     halfSpeedUnits,
     newX:           projected.x,

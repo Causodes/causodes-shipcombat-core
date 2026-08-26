@@ -564,7 +564,7 @@ async function _onAllocOrdnanceSL(event, target) {
   const captain = sys.resources?.captain ?? {};
   const ordnance = sys.resources?.ordnance ?? {};
   if (ordnance.actionUsed) return;
-  if ((sys.crewSize ?? 6) <= 5 && (captain.allocationLocked || (captain.playedCards ?? []).length > 0)) return;
+  if ((sys.crewSize ?? 6) <= 5 && captain.allocationLocked) return;
   const stat = target.dataset.stat;
   const delta = Number(target.dataset.delta);
 

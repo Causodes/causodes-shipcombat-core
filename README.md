@@ -73,6 +73,17 @@ Hooks.once("init", () => {
 | `registerPartialOverride(name, path)` | `init` hook | Replace a named Handlebars partial with a companion-supplied template. |
 | `registerPopupOverride(key, PopupClass)` | `init` hook | Replace a core popup class. Keys: `"targeting"`, `"ramTarget"`, `"battleClarity"`, `"strikeCraftAttack"`, `"recoverCraft"`. |
 
+Popup overrides must submit core actions through `emitToGM`. Core automatically
+applies allocation commitment warnings to relevant actions at that boundary, so
+companions must not call the warning dialog directly. Await the result when the
+popup should remain open after cancellation:
+
+```js
+const committed = await emitToGM("fireWeapon", payload);
+if (committed === false) return;
+this.close();
+```
+
 ---
 
 ## The `SystemAdapter` contract
