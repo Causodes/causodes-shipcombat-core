@@ -32,6 +32,7 @@
 - Classify radar contacts by token allegiance (hostile Bandits, neutral Bogeys, named friendlies), exclude the acting ship and its allies from every shared target picker while preserving hostile-NPC targeting, and enforce the same rule in GM-side target-marking handlers
 - Replace the Mark for Crew flag with a crosshair and show Marked/Priority contacts directly on the Sensor Radar; pale-teal intercardinal ticks identify crew marks, Priority doubles the normal ring thickness in pale red, and mirrored name placement keeps the upper label clear
 - Rename Battle Clarity to Priority Target
+- Add Critical Hit effect tooltips on chat cards
 
 ## 2.2.4
 - Fix NPC ship weapon delete controls doing nothing by registering the shared embedded-item actions on both AppV2 and legacy AppV1 NPC sheets

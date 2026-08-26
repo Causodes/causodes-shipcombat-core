@@ -403,6 +403,18 @@
   font-size: 0.78rem;
   color: #ccaaaa;
 }
+.shipcombat-fire-crit-effect {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.3rem;
+  font-size: 0.73rem;
+  line-height: 1.3;
+  color: #c09090;
+}
+.shipcombat-fire-crit-effect i {
+  margin-top: 0.12rem;
+  flex-shrink: 0;
+}
 .shipcombat-fire-crit-note {
   font-size: 0.73rem;
   font-style: italic;

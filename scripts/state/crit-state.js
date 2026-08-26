@@ -142,6 +142,7 @@ export async function rollCrit(targetActor, totalDamage, forceCrit = false, thre
   const tierKey   = `SHIPCOMBAT.Crit.Tier.${finalTier.charAt(0).toUpperCase() + finalTier.slice(1)}`;
   const tierLabel = game.i18n.localize(tierKey);
   const condLabel = game.i18n.localize(condDef?.[finalTier]?.label ?? "");
+  const effect    = game.i18n.localize(`SHIPCOMBAT.Crit.Effect.${locId}.${finalTier}`);
 
   let detail = "";
   if (escalated) {
@@ -156,6 +157,7 @@ export async function rollCrit(targetActor, totalDamage, forceCrit = false, thre
     locLabel,
     tierLabel,
     condLabel,
+    effect,
     finalTier,
     escalated,
     extraHullDmg,
