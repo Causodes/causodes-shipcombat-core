@@ -23,6 +23,8 @@ const _BRITISH_TO_AMERICAN = [
   [/armour/g,          "armor"],
   [/Flavour/g,         "Flavor"],
   [/flavour/g,         "flavor"],
+  [/Defences/g,        "Defenses"],
+  [/defences/g,        "defenses"],
   [/Manoeuvrability/g, "Maneuverability"],
   [/manoeuvrability/g, "maneuverability"],
   [/Manoeuvring/g,     "Maneuvering"],

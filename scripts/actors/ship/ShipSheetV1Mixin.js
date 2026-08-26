@@ -29,6 +29,7 @@ import { SENSORS_ACTIONS }  from "../../roles/sensors.js";
 import { GUNNER_ACTIONS }   from "../../roles/gunner.js";
 import { ORDNANCE_ACTIONS } from "../../roles/ordnance.js";
 import { userOperatesStation } from "../../roles/crew-operators.js";
+import { openManualOverride } from "../../apps/ManualOverride.js";
 
 // ── Mixin ─────────────────────────────────────────────────────────────────
 
@@ -67,6 +68,7 @@ export const ShipSheetV1Mixin = (BaseClass) => {
         removeOrdnanceActor: ShipSheetV1Base._onRemoveOrdnanceActor,
         clearOrdnanceSlot:   ShipSheetV1Base._onClearOrdnanceSlot,
         addToInventory:      ShipSheetV1Base._onAddToInventory,
+        openManualOverride:  ShipSheetV1Base._onOpenManualOverride,
         unassignWeapon:      ShipSheetV1Base._onUnassignWeapon,
         unassignEquipment:   ShipSheetV1Base._onUnassignEquipment,
       },
@@ -163,6 +165,10 @@ export const ShipSheetV1Mixin = (BaseClass) => {
         name: game.i18n.localize("SHIPCOMBAT.Component.New"),
         system: { slot: "weapon", equipped: false },
       }]);
+    }
+
+    static _onOpenManualOverride() {
+      return openManualOverride(this.actor);
     }
 
     static async _onUnassignWeapon(event, target) {

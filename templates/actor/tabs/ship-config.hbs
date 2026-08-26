@@ -213,5 +213,19 @@
         </div>
     </div>
 
+    {{#if isGM}}
+    <div class="shipcombat-danger-zone">
+        <div class="shipcombat-danger-zone__heading">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <span>{{localize "SHIPCOMBAT.Override.DangerZone"}}</span>
+        </div>
+        <p>{{localize "SHIPCOMBAT.Override.DangerZoneHint"}}</p>
+        <button type="button" class="shipcombat-danger-zone__button" data-action="openManualOverride">
+            <i class="fa-solid fa-screwdriver-wrench"></i>
+            <span>{{localize "SHIPCOMBAT.Override.Open"}}</span>
+        </button>
+    </div>
+    {{/if}}
+
 
 </section>

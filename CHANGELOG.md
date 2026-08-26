@@ -36,6 +36,7 @@
 - Clean up allocation locks; locking actions are now more sensible than before
 - Harden various emit to GM transport contracts
 - Add confirmation dialogue on allocation locking actions
+- Add GM Manual Override to player ship stats to the bottom of the Configuration tab
 
 ## 2.2.4
 - Fix NPC ship weapon delete controls doing nothing by registering the shared embedded-item actions on both AppV2 and legacy AppV1 NPC sheets

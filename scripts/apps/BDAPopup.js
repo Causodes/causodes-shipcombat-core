@@ -192,7 +192,8 @@ export class BDAPopup extends foundry.appv1.api.Application {
     }));
     return {
       ...context,
-      resultSL:   this.sl,
+      resultLabel: SystemAdapter.current.formatAllocationUnit(this.sl, { capitalize: true }),
+      resultValue: this.sl,
       retainDesc: _lockRetainDesc(this.sl, this.originalLockTier),
       corrections,
     };

@@ -254,6 +254,41 @@ input[data-slot-count]:focus {
   margin: 0.1rem 0;
 }
 
+/* ── Configuration danger zone ─────────────────────────────────────────── */
+.shipcombat-danger-zone {
+  margin-top: 1.25rem;
+  padding: 0.85rem;
+  border: 1px solid rgba(190, 55, 45, 0.75);
+  border-radius: 4px;
+  background: rgba(120, 20, 15, 0.08);
+}
+.shipcombat-danger-zone__heading {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: #b83228;
+  font-size: 1rem;
+  font-weight: 700;
+}
+.shipcombat-danger-zone p {
+  margin: 0.5rem 0 0.75rem;
+  line-height: 1.35;
+}
+.shipcombat-danger-zone__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  width: auto;
+  min-width: 13rem;
+  border-color: #b83228;
+  color: #b83228;
+}
+.shipcombat-danger-zone__button:hover {
+  border-color: #d84b3f;
+  color: #d84b3f;
+}
+
 /* ── Ordnance launch-side toggle pills ───────────────────────────────────── */
 .shipcombat-launch-sides {
   display: flex;

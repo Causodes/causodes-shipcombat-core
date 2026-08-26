@@ -1,0 +1,148 @@
+<form class="shipcombat-override-form" autocomplete="off">
+  <div class="shipcombat-override-notice">
+    <i class="fa-solid fa-triangle-exclamation"></i>
+    <div>
+      <strong>{{actorName}}</strong>
+      <p>{{localize "SHIPCOMBAT.Override.Warning"}}</p>
+    </div>
+  </div>
+
+  <div class="shipcombat-override-body">
+    <fieldset>
+      <legend>{{localize "SHIPCOMBAT.Override.Vitals"}}</legend>
+      <div class="shipcombat-override-grid">
+        {{#each vitals}}
+        <label>
+          <span>{{label}}</span>
+          <input type="number" name="field.{{path}}" value="{{value}}" min="0" step="1">
+        </label>
+        {{/each}}
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>{{localize "SHIPCOMBAT.Override.Conditions"}}</legend>
+      <div class="shipcombat-override-grid">
+        {{#each conditions}}
+        <label>
+          <span>{{label}}</span>
+          <select name="condition.{{key}}">
+            {{#each options}}<option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}
+          </select>
+        </label>
+        {{/each}}
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>{{localize "SHIPCOMBAT.Override.CoreState"}}</legend>
+      <div class="shipcombat-override-core-state">
+        {{#each coreState}}
+        <label class="shipcombat-override-core-row">
+          <span>{{label}}</span>
+          <input type="number" name="core.{{roleId}}" value="{{value}}" min="0" step="1">
+        </label>
+        {{/each}}
+        <div class="shipcombat-override-engineer-action">
+          <span>{{localize "SHIPCOMBAT.Override.EngineerActionState"}}</span>
+          <div class="shipcombat-override-radio-group">
+            {{#each engineerActions}}
+            <label>
+              <input type="radio" name="engineerAction" value="{{value}}" {{#if selected}}checked{{/if}}>
+              <span>{{label}}</span>
+            </label>
+            {{/each}}
+          </div>
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>{{localize "SHIPCOMBAT.Override.SensorLocks"}}</legend>
+      {{#if contacts.length}}
+      <div class="shipcombat-override-locks">
+        {{#each contacts}}
+        <label>
+          <span>{{name}}{{#if missing}} <em>{{localize "SHIPCOMBAT.Override.MissingToken"}}</em>{{/if}}</span>
+          <select name="lock.{{tokenId}}">
+            <option value="0" {{#if (shipcombatEq tier 0)}}selected{{/if}}>{{localize "SHIPCOMBAT.Override.NoLock"}}</option>
+            <option value="1" {{#if (shipcombatEq tier 1)}}selected{{/if}}>1</option>
+            <option value="2" {{#if (shipcombatEq tier 2)}}selected{{/if}}>2</option>
+            <option value="3" {{#if (shipcombatEq tier 3)}}selected{{/if}}>3</option>
+            <option value="4" {{#if (shipcombatEq tier 4)}}selected{{/if}}>4</option>
+          </select>
+        </label>
+        {{/each}}
+      </div>
+      {{else}}
+      <p class="shipcombat-override-empty">{{localize "SHIPCOMBAT.Override.NoContacts"}}</p>
+      {{/if}}
+    </fieldset>
+
+    <fieldset>
+      <legend>{{localize "SHIPCOMBAT.Override.Resources"}}</legend>
+      <div class="shipcombat-override-role-resources">
+        {{#each resourceGroups}}
+        <section class="shipcombat-override-role-resource" data-role-id="{{roleId}}">
+          <h3>{{label}}</h3>
+          <div class="shipcombat-override-resource-list">
+            {{#if (shipcombatEq roleId "engineer")}}
+            {{#each @root.shipFields}}
+            <label>
+              <span><strong>{{label}}</strong></span>
+              {{#if isBoolean}}
+              <input type="checkbox" name="field.{{path}}" {{#if value}}checked{{/if}}>
+              {{else}}
+              <input type="number" name="field.{{path}}" value="{{value}}" step="1">
+              {{/if}}
+            </label>
+            {{/each}}
+            {{/if}}
+            {{#each selects}}
+            <label>
+              <span><strong>{{label}}</strong></span>
+              <select name="field.{{path}}">
+                {{#each options}}<option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}
+              </select>
+            </label>
+            {{/each}}
+            {{#each fields}}
+            <label>
+              <span><strong>{{label}}</strong></span>
+              {{#if isBoolean}}
+              <input type="checkbox" name="field.{{path}}" {{#if value}}checked{{/if}}>
+              {{else}}
+              <input type="number" name="field.{{path}}" value="{{value}}" step="1">
+              {{/if}}
+            </label>
+            {{/each}}
+            {{#if (shipcombatEq roleId "gunner")}}
+            {{#if @root.weapons.length}}
+            <div class="shipcombat-override-weapons">
+              <h4>{{localize "SHIPCOMBAT.Override.FiredWeapons"}}</h4>
+              {{#each @root.weapons}}
+              <label class="shipcombat-override-weapon-row">
+                <span>
+                  {{#if img}}<img src="{{img}}" alt="">{{/if}}
+                  <strong>{{name}}</strong>
+                </span>
+                <input type="checkbox" name="weaponFired.{{id}}" {{#if fired}}checked{{/if}}>
+              </label>
+              {{/each}}
+            </div>
+            {{/if}}
+            {{/if}}
+          </div>
+        </section>
+        {{/each}}
+      </div>
+    </fieldset>
+  </div>
+
+  <footer class="shipcombat-override-footer">
+    <button type="submit" class="shipcombat-override-apply">
+      <i class="fa-solid fa-check"></i>
+      <span>{{localize "SHIPCOMBAT.Override.ReviewApply"}}</span>
+    </button>
+  </footer>
+</form>

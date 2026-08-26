@@ -30,6 +30,7 @@ import { SHIP_PARTS, SHIP_TABS } from "./parts.js";
 import { ShipController } from "./ShipController.js";
 import { normalizeStrikeCraftTemplateHull } from "../ordnance/ordnance-helpers.js";
 import { userOperatesStation } from "../../roles/crew-operators.js";
+import { openManualOverride } from "../../apps/ManualOverride.js";
 export { getEffectiveSkillSpec } from "./ShipController.js";
 
 const GUNNER_TABS = new Set(["gunner", "gunner4man", "gunner5man"]);
@@ -67,6 +68,7 @@ export const ShipSheetV2Mixin = (BaseClass) => {
         removeOrdnanceActor: ShipSheetBase._onRemoveOrdnanceActor,
         clearOrdnanceSlot:   ShipSheetBase._onClearOrdnanceSlot,
         addToInventory:      ShipSheetBase._onAddToInventory,
+        openManualOverride:  ShipSheetBase._onOpenManualOverride,
         unassignWeapon:      ShipSheetBase._onUnassignWeapon,
         unassignEquipment:   ShipSheetBase._onUnassignEquipment,
       },
@@ -191,6 +193,10 @@ export const ShipSheetV2Mixin = (BaseClass) => {
         name: game.i18n.localize("SHIPCOMBAT.Component.New"),
         system: { slot: "weapon", equipped: false },
       }]);
+    }
+
+    static _onOpenManualOverride() {
+      return openManualOverride(this.actor);
     }
 
     static async _onUnassignWeapon(event, target) {

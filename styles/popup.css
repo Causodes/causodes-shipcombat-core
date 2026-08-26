@@ -7,6 +7,253 @@
 /* Targeting Popup, Strike-Craft/Recover/Priority-Target popup variants      */
 /* ══════════════════════════════════════════════════════════════════════════ */
 
+/* ── Manual Override ───────────────────────────────────────────────────── */
+.shipcombat-targeting-popup.shipcombat-manual-override {
+  max-width: none;
+  max-height: none;
+}
+.shipcombat-manual-override .window-content {
+  padding: 0;
+}
+.shipcombat-manual-override-review .window-content {
+  padding: 0.8rem;
+}
+.shipcombat-manual-override-review .dialog-buttons,
+.shipcombat-manual-override-review .form-footer {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+.shipcombat-manual-override-review .dialog-buttons button,
+.shipcombat-manual-override-review .form-footer button {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+}
+.shipcombat-override-review-content > p {
+  margin: 0 0 0.75rem;
+}
+.shipcombat-override-review-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-height: min(28rem, 60vh);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.shipcombat-override-review-list li {
+  display: grid;
+  grid-template-columns: minmax(8rem, 1.25fr) minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid rgba(127, 127, 127, 0.25);
+}
+.shipcombat-override-review-list span {
+  overflow-wrap: anywhere;
+}
+.shipcombat-override-review-list i {
+  opacity: 0.7;
+}
+.shipcombat-override-form {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.shipcombat-override-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgba(190, 55, 45, 0.65);
+  background: rgba(120, 20, 15, 0.1);
+}
+.shipcombat-override-notice > i {
+  margin-top: 0.15rem;
+  color: #d84b3f;
+}
+.shipcombat-override-notice p {
+  margin: 0.2rem 0 0;
+}
+.shipcombat-override-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.8rem;
+}
+.shipcombat-override-body fieldset {
+  margin: 0 0 0.8rem;
+  padding: 0.65rem;
+  border: 1px solid rgba(127, 127, 127, 0.45);
+}
+.shipcombat-override-body legend {
+  padding: 0 0.35rem;
+  font-weight: 700;
+}
+.shipcombat-override-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem 0.75rem;
+}
+.shipcombat-override-grid label,
+.shipcombat-override-locks label,
+.shipcombat-override-resource-list label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+}
+.shipcombat-override-grid input,
+.shipcombat-override-grid select,
+.shipcombat-override-locks select,
+.shipcombat-override-resource-list input {
+  flex: 0 0 8rem;
+  min-width: 0;
+}
+.shipcombat-override-core-state {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem 0.75rem;
+}
+.shipcombat-override-core-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+}
+.shipcombat-override-core-row input {
+  flex: 0 0 5rem;
+  min-width: 0;
+}
+.shipcombat-override-engineer-action {
+  grid-column: 1 / -1;
+}
+.shipcombat-override-engineer-action > span {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-weight: 700;
+}
+.shipcombat-override-radio-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+}
+.shipcombat-override-radio-group label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.shipcombat-override-radio-group input {
+  flex: 0 0 auto;
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+}
+.shipcombat-override-resource-list input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 1rem;
+  height: 1rem;
+  margin: 0 0 0 auto;
+}
+.shipcombat-override-locks,
+.shipcombat-override-resource-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.shipcombat-override-locks em {
+  opacity: 0.65;
+  font-size: 0.8rem;
+}
+.shipcombat-override-resource-list label {
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid rgba(127, 127, 127, 0.2);
+}
+.shipcombat-override-resource-list > label {
+  min-height: 2.25rem;
+  box-sizing: border-box;
+}
+.shipcombat-override-role-resources {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.75rem;
+}
+.shipcombat-override-role-resource {
+  min-width: 0;
+  padding: 0.55rem;
+  border: 1px solid rgba(127, 127, 127, 0.3);
+}
+.shipcombat-override-role-resource h3 {
+  margin: 0 0 0.55rem;
+  font-size: 0.9rem;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+.shipcombat-override-resource-list select {
+  flex: 0 0 9rem;
+  min-width: 0;
+}
+.shipcombat-override-resource-list label > span {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.shipcombat-override-weapons {
+  margin-top: 0.25rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid rgba(127, 127, 127, 0.3);
+}
+.shipcombat-override-weapons h4 {
+  margin: 0 0 0.45rem;
+  font-size: inherit;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+.shipcombat-override-resource-list .shipcombat-override-weapon-row > span {
+  display: inline-flex;
+  flex: 1 1 auto;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.4rem;
+  text-align: left;
+}
+.shipcombat-override-weapon-row img {
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 0;
+  object-fit: cover;
+}
+.shipcombat-override-empty {
+  margin: 0;
+  opacity: 0.7;
+}
+.shipcombat-override-footer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.6rem;
+  padding: 0.7rem 0.8rem;
+  border-top: 1px solid rgba(127, 127, 127, 0.4);
+}
+.shipcombat-override-footer button {
+  min-width: 0;
+  margin: 0;
+}
+.shipcombat-override-apply {
+  border-color: #b83228;
+  color: #b83228;
+}
+@media (max-width: 560px) {
+  .shipcombat-override-grid,
+  .shipcombat-override-core-state,
+  .shipcombat-override-role-resources { grid-template-columns: 1fr; }
+}
+
 /* ── Targeting Popup ───────────────────────────────────────────────────── */
 .shipcombat-targeting-popup {
   background: rgb(18, 42, 44);

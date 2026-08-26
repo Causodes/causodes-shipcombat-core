@@ -151,6 +151,7 @@ export const STATIC_TEMPLATE_PATHS = Object.freeze([
   `modules/${CORE_MODULE_ID}/templates/apps/bda-popup.hbs`,
   `modules/${CORE_MODULE_ID}/templates/apps/strike-craft-attack-popup.hbs`,
   `modules/${CORE_MODULE_ID}/templates/apps/recover-craft-popup.hbs`,
+  `modules/${CORE_MODULE_ID}/templates/apps/manual-override.hbs`,
   // Chat templates
   `modules/${CORE_MODULE_ID}/templates/chat/bda-pending.hbs`,
   `modules/${CORE_MODULE_ID}/templates/chat/strike-craft-result.hbs`,
