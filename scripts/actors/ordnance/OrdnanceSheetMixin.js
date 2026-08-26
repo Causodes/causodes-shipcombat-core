@@ -218,6 +218,7 @@ async function _onOrdDetonate() {
     else if (deg >= -135 && deg < -45) hitQuadrant = "port";
     else                               hitQuadrant = "stern";
     emitToGM("torpedoDamage", {
+      torpedoActorId: this.actor.id,
       targetActorId: t.document.actorId,
       torName: this.actor.name,
       torImg:  this.actor.img,

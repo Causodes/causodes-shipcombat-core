@@ -186,10 +186,16 @@
   color: #00ff88;
   border-color: #00ff88;
 }
-.shipcombat-bearing-toggle-btn.active {
+.shipcombat-bearing-toggle-btn:focus {
+  background: none;
+  box-shadow: none;
+  outline: none;
+}
+.shipcombat-bearing-toggle-btn:focus-visible {
   color: #00ff88;
   border-color: #00ff88;
-  background: rgba(0, 255, 136, 0.1);
+  outline: 1px solid rgba(0, 255, 136, 0.65);
+  outline-offset: 1px;
 }
 
 /* Pop-out button  -  forced square */
@@ -696,4 +702,3 @@
   margin: 0.2rem 0;
   align-self: stretch;
 }
-

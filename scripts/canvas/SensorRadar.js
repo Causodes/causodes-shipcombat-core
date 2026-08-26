@@ -15,7 +15,7 @@ import { MODULE_ID, CORE_MODULE_ID, LOCK_DECAY_ROUNDS, hullDisplay } from "../co
 import { ShipCombatState } from "../state/ShipCombatState.js";
 import { emitToGM } from "../socket.js";
 import { refreshTokenVisibility } from "./TokenVisibility.js";
-import { getContactDisplayName } from "../targeting/contact-intelligence.js";
+import { getContactDisplayName, getEffectiveTokenDisposition, isFriendlyContactToken } from "../targeting/contact-intelligence.js";
 import { SENSORS_ACTIONS } from "../roles/sensors.js";
 import { isOrdnance as _isOrdnanceActor, ordnanceSubtype as _ordnanceSubtype, actorTypeIsOrdnance, actorTypeIsTorpedo, actorTypeIsStrikeCraft } from "../actors/ordnance/ordnance-types.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
@@ -54,6 +54,8 @@ let _pal = {
   trailStop2:     "rgba(0, 255, 136, 0.08)",
   trailStop3:     "rgba(0, 255, 136, 0.18)",
   outerRim:       "rgba(0, 255, 136, 0.35)",
+  markedTarget:   "#a7f3e6",
+  battleClarity:  "#ff8fa3",
 };
 const SWEEP_SPEED     = 0.7;   // radians per second (~9 s per full rotation)
 const EDGE_PAD        = 0.15;
@@ -259,7 +261,13 @@ function _paint(el, sheet) {
 
   const shipData = SystemAdapter.current.getShipData(ship) ?? {};
   const locks = shipData.resources?.sensors?.locks ?? [];
-  const sortedContactIds = candidates.map(candidate => candidate.id).filter(Boolean).sort();
+  const recommendedTargetId = shipData.resources?.sensors?.recommendedTargetId ?? null;
+  const priorityTargetId = shipData.resources?.captain?.priorityTargetId ?? null;
+  const sortedContactIds = candidates
+    .filter(candidate => !isFriendlyContactToken(candidate))
+    .map(candidate => candidate.id)
+    .filter(Boolean)
+    .sort();
 
   const rawBlips = [];
   for (const c of candidates) {
@@ -278,7 +286,8 @@ function _paint(el, sheet) {
     const actorType = c.document.actor?.type ?? "";
     const isOrdnance = _isOrdnanceActor(c.document.actor);
     const parentTokenId = SystemAdapter.current.getShipData(c.document.actor)?.parentShipTokenId ?? "";
-    const friendly = isOrdnance && ownTokenIds.has(parentTokenId);
+    const friendly = isFriendlyContactToken(c) || (isOrdnance && ownTokenIds.has(parentTokenId));
+    const disposition = getEffectiveTokenDisposition(c);
 
     // Effective lock tier (explicit + auto-lock within guaranteed range)
     // Friendly ordnance is always fully identified (tier 4)
@@ -299,6 +308,7 @@ function _paint(el, sheet) {
         currentTier: lockTier,
         realName: c.document.name ?? "?",
         fallbackOrdinal: sortedContactIds.indexOf(tokenId) + 1,
+        disposition,
       }),
       distSq,
       absAngle:   angle,
@@ -308,6 +318,8 @@ function _paint(el, sheet) {
       actorSubtype: _ordnanceSubtype(c.document.actor),
       decayRounds: friendly ? 0 : (locks.find(l => l.targetTokenId === tokenId)?.decayRounds ?? 0),
       selected:   c.id === _selectedTokenId,
+      recommended: !friendly && recommendedTargetId === tokenId,
+      priority:    !friendly && priorityTargetId === tokenId,
       // Target heading: relative for REL radar, absolute for TRUE radar.
       // Both stored so the rendering code can pick the right one.
       targetHeadingRel: tokenHeadingOnRadar(c.document.rotation, heading, false),
@@ -376,7 +388,10 @@ function _paint(el, sheet) {
         d.realName            = b.realName;
         d.actorType           = b.actorType;
         d.actorSubtype        = b.actorSubtype;
+        d.friendly            = b.friendly;
         d.selected            = (b.tokenId === _selectedTokenId);
+        d.recommended         = b.recommended;
+        d.priority            = b.priority;
         d.decayRounds         = b.decayRounds;
         d.targetHeadingRel    = b.targetHeadingRel;
         d.targetHeadingAbs    = b.targetHeadingAbs;
@@ -622,7 +637,8 @@ function _paint(el, sheet) {
     }
     ctx.shadowBlur = 0;
 
-    // Lock tier ring (concentric indicator)
+    // Lock tier ring (concentric indicator). Priority Target strengthens this
+    // same circle instead of adding a second radar shape around the contact.
     if (b.lockTier > 0) {
       // Tier 1 (Active Ping): filled halo  -  translucent red ring fill + stroke
       if (b.lockTier === 1) {
@@ -633,21 +649,26 @@ function _paint(el, sheet) {
         ctx.arc(bx, by, rad,              0, Math.PI * 2, true);  // inner CCW  -  creates donut
         ctx.fill();
       }
-      ctx.strokeStyle = tierCol;
-      ctx.lineWidth   = 1;
-      ctx.globalAlpha = 0.45;
+      ctx.strokeStyle = b.priority ? _pal.battleClarity : tierCol;
+      ctx.lineWidth   = b.priority ? 2 : 1;
+      ctx.globalAlpha = b.priority ? 0.9 : 0.45;
       ctx.beginPath();
       ctx.arc(bx, by, BLIP_RADIUS + 5, 0, Math.PI * 2);
       ctx.stroke();
     }
     ctx.globalAlpha = 1;
 
+    _drawTargetDesignation(ctx, bx, by, b.recommended, b.priority);
+
     // Name label (contact designation or real name per tier)
+    ctx.save();
     ctx.fillStyle = col;
     ctx.font      = `${isSelected ? "bold " : ""}10px monospace`;
     ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
     const label   = b.name.length > 14 ? b.name.slice(0, 13) + "\u2026" : b.name;
-    ctx.fillText(label, bx, by - BLIP_RADIUS - 4);
+    ctx.fillText(label, bx, by - BLIP_RADIUS - 8);
+    ctx.restore();
 
     // Effect badges (utility/core effects only)
     const blipEffects = effects.filter(e => e.targetTokenId === b.tokenId);
@@ -831,6 +852,43 @@ function _paint(el, sheet) {
   refreshTokenVisibility();
 }
 
+function _drawTargetDesignation(ctx, cx, cy, recommended, priority) {
+  if (!recommended && !priority) return;
+  ctx.save();
+  ctx.shadowBlur = 0;
+  ctx.lineWidth = 2;
+
+  if (recommended) {
+    const inner = BLIP_RADIUS + 7;
+    const outer = inner + 5;
+    const innerCoord = inner / Math.SQRT2;
+    const outerCoord = outer / Math.SQRT2;
+    ctx.strokeStyle = _pal.markedTarget;
+    ctx.globalAlpha = 0.95;
+    ctx.beginPath();
+    for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+      ctx.moveTo(cx + sx * innerCoord, cy + sy * innerCoord);
+      ctx.lineTo(cx + sx * outerCoord, cy + sy * outerCoord);
+    }
+    ctx.stroke();
+  }
+
+  ctx.font = "bold 8px monospace";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  let labelY = cy + BLIP_RADIUS + 8;
+  if (recommended) {
+    ctx.fillStyle = _pal.markedTarget;
+    ctx.fillText("MARKED", cx, labelY);
+    labelY += 9;
+  }
+  if (priority) {
+    ctx.fillStyle = _pal.battleClarity;
+    ctx.fillText("PRIORITY", cx, labelY);
+  }
+  ctx.restore();
+}
+
 // ── Arrow blip (directional heading indicator) ────────────────────────────
 
 /** Draw a small triangular "arrow" blip pointing in the target's heading direction. */
@@ -941,7 +999,7 @@ function _drawEffectBadges(ctx, cx, cy, effects) {
 let _popupEl = null;
 let _outsideHandler = null;
 
-function _showPopup(blip, canvasEl) {
+function _showPopup(blip, canvasEl, preservedView = null) {
   _dismissPopup();
 
   const wrap = canvasEl.parentElement;
@@ -952,24 +1010,12 @@ function _showPopup(blip, canvasEl) {
 
   const popup = document.createElement("div");
   popup.className = "shipcombat-radar-popup";
-
-  // Position: favour the side of the radar with more room
-  const side = canvasEl.width;
-  const popupW = 220;
-  let left = Math.max(8, Math.min(blip.canvasX - popupW / 2, side - popupW - 8));
-  const above = blip.canvasY > side * 0.55;
-
-  popup.style.left   = `${left}px`;
-  popup.style.width  = `${popupW}px`;
-  if (above) {
-    popup.style.bottom = `${side - blip.canvasY + 16}px`;
-  } else {
-    popup.style.top = `${blip.canvasY + 16}px`;
-  }
-
   popup.innerHTML = _buildPopupHTML(blip, ctx, blipEffects);
   wrap.style.position = "relative";
   wrap.appendChild(popup);
+  _positionPopupWithinRadar(popup, wrap, canvasEl, blip);
+  if (preservedView) _restorePopupView(popup, wrap, preservedView);
+  _wirePopupDrag(popup, wrap);
   _popupEl = popup;
 
   // Wire close button
@@ -993,13 +1039,27 @@ function _showPopup(blip, canvasEl) {
       const actionName = btn.dataset.action;
       const handler = SENSORS_ACTIONS[actionName];
       if (handler) {
+        const preservedView = {
+          left: popup.offsetLeft,
+          top: popup.offsetTop,
+          scrollTop: popup.scrollTop,
+        };
+        const fromPopOut = canvasEl.hasAttribute("data-sensor-radar-popout");
         handler.call(sheet, ev, btn);
         // Refresh the popup after a short delay to reflect new state
         setTimeout(() => {
           if (_selectedTokenId) {
             const selBlip = _blips.find(b => b.tokenId === _selectedTokenId);
             if (selBlip) {
-              _showPopup(selBlip, canvasEl);
+              const sheetRoot = _activeSheet?.element?.querySelector
+                ? _activeSheet.element
+                : _activeSheet?.element?.[0];
+              const liveCanvas = fromPopOut
+                ? _popOutCanvas
+                : sheetRoot?.querySelector?.("canvas[data-sensor-radar]");
+              if (liveCanvas?.isConnected) {
+                _showPopup(selBlip, liveCanvas, preservedView);
+              }
             }
           }
         }, 300);
@@ -1079,6 +1139,96 @@ function _showPopup(blip, canvasEl) {
       _targetScanRange = armDrawer.open ? tgtScanR : 0;
     });
   }
+}
+
+/** Position a contact popup in CSS pixels and keep its full frame inside the radar. */
+function _positionPopupWithinRadar(popup, wrap, canvasEl, blip) {
+  const pad = 8;
+  const gap = 16;
+  const wrapW = wrap.clientWidth;
+  const wrapH = wrap.clientHeight;
+  const popupW = Math.max(1, Math.min(220, wrapW - pad * 2));
+  const scaleX = canvasEl.width > 0 ? canvasEl.clientWidth / canvasEl.width : 1;
+  const scaleY = canvasEl.height > 0 ? canvasEl.clientHeight / canvasEl.height : 1;
+  const anchorX = canvasEl.offsetLeft + blip.canvasX * scaleX;
+  const anchorY = canvasEl.offsetTop + blip.canvasY * scaleY;
+  const aboveRoom = Math.max(1, anchorY - gap - pad);
+  const belowRoom = Math.max(1, wrapH - pad - anchorY - gap);
+  const placeAbove = aboveRoom > belowRoom;
+  const sideRoom = placeAbove ? aboveRoom : belowRoom;
+  const maxH = Math.max(1, Math.min(wrapH * 0.55, sideRoom));
+
+  popup.style.width = `${popupW}px`;
+  popup.style.maxHeight = `${maxH}px`;
+  popup.style.visibility = "hidden";
+
+  const popupH = Math.min(popup.offsetHeight, maxH);
+  const maxLeft = Math.max(pad, wrapW - popupW - pad);
+  const left = Math.max(pad, Math.min(anchorX - popupW / 2, maxLeft));
+  const top = placeAbove
+    ? Math.max(pad, anchorY - gap - popupH)
+    : Math.min(anchorY + gap, Math.max(pad, wrapH - popupH - pad));
+
+  popup.style.left = `${left}px`;
+  popup.style.top = `${top}px`;
+  popup.style.visibility = "visible";
+}
+
+/** Restore a dragged/scrolled popup after an action rebuilds its contents. */
+function _restorePopupView(popup, wrap, preservedView) {
+  const pad = 8;
+  popup.style.maxHeight = `${Math.max(1, wrap.clientHeight * 0.55)}px`;
+  const maxLeft = Math.max(0, wrap.clientWidth - popup.offsetWidth);
+  const maxTop = Math.max(0, wrap.clientHeight - popup.offsetHeight);
+  const savedLeft = Number(preservedView.left);
+  const savedTop = Number(preservedView.top);
+  const left = Math.max(0, Math.min(Number.isFinite(savedLeft) ? savedLeft : pad, maxLeft));
+  const top = Math.max(0, Math.min(Number.isFinite(savedTop) ? savedTop : pad, maxTop));
+  popup.style.left = `${left}px`;
+  popup.style.top = `${top}px`;
+  popup.style.maxHeight = `${Math.max(1, Math.min(
+    wrap.clientHeight * 0.55,
+    wrap.clientHeight - top - pad,
+  ))}px`;
+  popup.scrollTop = Math.max(0, Number(preservedView.scrollTop) || 0);
+}
+
+/** Allow the popup header to reposition the popup without leaving the radar. */
+function _wirePopupDrag(popup, wrap) {
+  const handle = popup.querySelector(".shipcombat-rpop-header");
+  if (!handle) return;
+
+  let dragOffsetX = 0;
+  let dragOffsetY = 0;
+
+  handle.addEventListener("pointerdown", event => {
+    if (event.button !== 0 || event.target.closest("button")) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const popupRect = popup.getBoundingClientRect();
+    dragOffsetX = event.clientX - popupRect.left;
+    dragOffsetY = event.clientY - popupRect.top;
+    handle.setPointerCapture(event.pointerId);
+    popup.classList.add("is-dragging");
+  });
+
+  handle.addEventListener("pointermove", event => {
+    if (!handle.hasPointerCapture(event.pointerId)) return;
+    const wrapRect = wrap.getBoundingClientRect();
+    const maxLeft = Math.max(0, wrap.clientWidth - popup.offsetWidth);
+    const maxTop = Math.max(0, wrap.clientHeight - popup.offsetHeight);
+    const left = Math.max(0, Math.min(event.clientX - wrapRect.left - dragOffsetX, maxLeft));
+    const top = Math.max(0, Math.min(event.clientY - wrapRect.top - dragOffsetY, maxTop));
+    popup.style.left = `${left}px`;
+    popup.style.top = `${top}px`;
+  });
+
+  const finishDrag = event => {
+    if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId);
+    popup.classList.remove("is-dragging");
+  };
+  handle.addEventListener("pointerup", finishDrag);
+  handle.addEventListener("pointercancel", finishDrag);
 }
 
 function _buildPopupHTML(blip, ctx, blipEffects) {
@@ -1205,19 +1355,12 @@ function _buildPopupHTML(blip, ctx, blipEffects) {
 
   // ── Shared crew targeting ──────────────────────────────────────
   const recommended = ctx.recommendedTargetId === blip.tokenId;
-  const priority = ctx.priorityTargetId === blip.tokenId;
-  if (!blip.friendly && (tier >= 1 || recommended || (ctx.isGM && priority))) {
+  if (!blip.friendly && (tier >= 1 || recommended)) {
     h += `<div class="shipcombat-rpop-divider"></div>`;
     if (tier >= 1 || recommended) {
       h += `<button class="shipcombat-rpop-btn shipcombat-rpop-btn--recommend${recommended ? " is-active" : ""}" `;
       h += `data-action="recommendTarget" data-target-token-id="${blip.tokenId}" data-radar-action>`;
-      h += `<i class="fa-solid fa-flag"></i> ${recommended ? loc("SHIPCOMBAT.Sensors.ClearRecommendation") : loc("SHIPCOMBAT.Sensors.RecommendTarget")}</button>`;
-    }
-    if (ctx.isGM && (tier >= 1 || priority)) {
-      h += `<button class="shipcombat-rpop-btn shipcombat-rpop-btn--debug${priority ? " is-active" : ""}" `;
-      h += `data-action="debugBattleClarity" data-target-token-id="${blip.tokenId}" data-radar-action `;
-      h += `title="GM debug control; does not consume a Power Core">`;
-      h += `<i class="fa-solid fa-bug"></i> ${priority ? loc("SHIPCOMBAT.Sensors.ClearDebugBattleClarity") : loc("SHIPCOMBAT.Sensors.DebugBattleClarity")}</button>`;
+      h += `<i class="fa-solid fa-crosshairs"></i> ${recommended ? loc("SHIPCOMBAT.Sensors.ClearRecommendation") : loc("SHIPCOMBAT.Sensors.RecommendTarget")}</button>`;
     }
   }
 
@@ -1933,17 +2076,13 @@ class SensorPopOut extends Application {
 
     // Bearing toggle label
     const bearingLabel = html.find(".shipcombat-popout-bearing-label")[0];
-    const bearingBtn   = html.find(".shipcombat-popout-bearing-btn")[0];
     if (bearingLabel) bearingLabel.textContent = _trueBearing ? "TRUE" : "REL";
-    if (bearingBtn && _trueBearing) bearingBtn.classList.add("active");
 
     // Bearing toggle action
     html.find("[data-popout-action='toggleBearing']").on("click", () => {
       SensorRadar.toggleBearing();
       const lbl = html.find(".shipcombat-popout-bearing-label")[0];
-      const btn = html.find(".shipcombat-popout-bearing-btn")[0];
       if (lbl) lbl.textContent = _trueBearing ? "TRUE" : "REL";
-      if (btn) btn.classList.toggle("active", _trueBearing);
       // Also sync the main sheet's bearing button if open
       if (_activeSheet?.element) {
         _activeSheet.render();

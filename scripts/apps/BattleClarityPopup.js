@@ -1,5 +1,5 @@
 /**
- * BattleClarityPopup  -  Battle Clarity core action target picker.
+ * BattleClarityPopup  -  Priority Target core action target picker.
  *
  * Lists all visible enemy/neutral tokens.  Only ships with Lock 1+ can be
  * designated; Lock 0 targets are shown but greyed out.
@@ -7,7 +7,8 @@
 import { MODULE_ID, CORE_MODULE_ID } from "../constants.js";
 import { emitToGM }  from "../socket.js";
 import { ShipCombatState } from "../state/ShipCombatState.js";
-import { getContactDisplayName } from "../targeting/contact-intelligence.js";
+import { SystemAdapter } from "../systems/SystemAdapter.js";
+import { getContactDisplayName, isTargetableContactToken } from "../targeting/contact-intelligence.js";
 
 // Lock tier palette (matches SensorRadar TIER_COLOUR)
 const TIER_COLOUR = {
@@ -59,12 +60,9 @@ export class BattleClarityPopup extends foundry.applications.api.HandlebarsAppli
     const data  = ShipCombatState.getData();
 
     // Gather enemy / neutral tokens visible on the scene
-    const candidates = canvas.tokens?.placeables?.filter(t => {
-      if (!t.actor || !t.visible) return false;
-      const disp = t.document.disposition;
-      return disp === CONST.TOKEN_DISPOSITIONS.HOSTILE
-          || disp === CONST.TOKEN_DISPOSITIONS.NEUTRAL;
-    }) ?? [];
+    const candidates = canvas.tokens?.placeables?.filter(
+      token => isTargetableContactToken(token, ShipCombatState.ship),
+    ) ?? [];
 
     const sortedContactIds = candidates.map(target => target.id).filter(Boolean).sort();
     const recommendedTargetId = data.resources?.sensors?.recommendedTargetId ?? null;
@@ -93,6 +91,7 @@ export class BattleClarityPopup extends foundry.applications.api.HandlebarsAppli
       ...context,
       targets,
       noTargets: targets.length === 0,
+      markerPalette: SystemAdapter.current.targetMarkerPalette(),
     };
   }
 

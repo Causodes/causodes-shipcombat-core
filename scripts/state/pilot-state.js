@@ -9,6 +9,7 @@ import { MODULE_ID } from "../constants.js";
 import { getHitQuadrant } from "../apps/TargetingPopup.js";
 import { rollCrit } from "./crit-state.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
+import { getStanceMovementModifiers, hasDevastationProtocol } from "../stances.js";
 
 /**
  * Consume the pilot's assigned Power Core and record the overcharge action played.
@@ -161,8 +162,9 @@ export async function apToThrust(userId) {
  */
 export async function confirmMovement({ fuelUsed, driftUsed = 0, speed, newX, newY, newRotation, gridSquaresMoved, waypoints, velocityX, velocityY, bearingDelta, momentumUsed }) {
   const data = this.getData();
+  const stanceSpeed = getStanceMovementModifiers(data).speed;
   const effectiveSpeed = speed
-    ?? (SystemAdapter.current.getShipData(this.ship)?.movement?.speed ?? 6) + (data.resources?.pilot?.allocSpeed ?? 0);
+    ?? (SystemAdapter.current.getShipData(this.ship)?.movement?.speed ?? 6) + (data.resources?.pilot?.allocSpeed ?? 0) + stanceSpeed;
   const existingDrift  = data.resources?.pilot?.driftBurned ?? 0;
   const newDriftBurned = existingDrift + driftUsed;
   // prevTurnMove is NOT updated here — it is computed and set by resetHelmState at the
@@ -347,8 +349,9 @@ export async function pilotRam(
   });
 
   // ── 11. Crit rolls for both ships ─────────────────────────────────────────
-  if (damageToRammed  > 0) await rollCrit.call(this, rammedActor,   damageToRammed,  false, 0);
-  if (damageToRamming > 0) await rollCrit.call(this, rammingActor,  damageToRamming, false, 0);
+  const isDevastation = hasDevastationProtocol(rammingSys, rammedSys);
+  if (damageToRammed  > 0) await rollCrit.call(this, rammedActor,   damageToRammed,  isDevastation, 0);
+  if (damageToRamming > 0) await rollCrit.call(this, rammingActor,  damageToRamming, isDevastation, 0);
 
   // ── 12. Displace rammed ship + velocity transfer ──────────────────────────
   const isRealistic = game.settings.get(MODULE_ID, "movementMode") === "realistic";
@@ -391,10 +394,12 @@ export async function pilotRam(
     rammingToken = rammingActor?.getActiveTokens?.()?.[0];
     if (rammingToken && canvas?.ready) {
       const h0deg      = rammingToken.document.rotation ?? 0;
-      const mano       = rammingActor.system?.movement?.maneuverability ?? 2;
-      const allocMano  = rammingActor.system?.resources?.pilot?.allocMano ?? 0;
+      const rammingData = SystemAdapter.current.getShipData(rammingActor) ?? {};
+      const mano       = rammingData.movement?.maneuverability ?? 2;
+      const allocMano  = rammingData.resources?.pilot?.allocMano ?? 0;
+      const stanceMano = getStanceMovementModifiers(rammingData).maneuverability;
       // Cap at 20° – a meaningful orientation nudge toward orthogonal, not a full re-aim
-      const maxBearing = Math.min(20, Math.max(0, mano + allocMano) * 15);
+      const maxBearing = Math.min(20, Math.max(0, mano + allocMano + stanceMano) * 15);
       const { HelmPreview } = await import("../canvas/HelmPreview.js").catch(() => ({ HelmPreview: null }));
       let newRot;
       if (HelmPreview) {

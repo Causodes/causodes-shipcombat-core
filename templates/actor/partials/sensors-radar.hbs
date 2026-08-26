@@ -11,7 +11,7 @@
     <div class="list-content">
         {{#unless sensorsCtx.sensorBlind}}
         <div class="shipcombat-radar-toolbar">
-            <button type="button" class="shipcombat-bearing-toggle-btn {{#if sensorsCtx.isTrueBearing}}active{{/if}}" data-action="toggleBearing"
+            <button type="button" class="shipcombat-bearing-toggle-btn" data-action="toggleBearing"
                     data-tooltip="{{localize 'SHIPCOMBAT.Sensors.BearingToggle'}}">
                 <i class="fa-solid fa-compass-drafting"></i>
                 {{#if sensorsCtx.isTrueBearing}}TRUE{{else}}REL{{/if}}

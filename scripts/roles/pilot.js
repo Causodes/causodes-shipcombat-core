@@ -14,6 +14,7 @@ import { ShipCombatState } from "../state/ShipCombatState.js";
 import { MODULE_ID } from "../constants.js";
 import { getEffectiveSkillSpec } from "../actors/ship/ShipSheetMixin.js";
 import { getPowerCoreCount, resolveStationOperatorActor } from "./crew-operators.js";
+import { getStanceMovementModifiers } from "../stances.js";
 
 // ── Action handlers (static, `this` = sheet instance) ──────────────────────
 
@@ -97,7 +98,8 @@ async function _onConfirmHelm() {
   }
 
   const sys        = SystemAdapter.current.getShipData(this.actor);
-  const speed      = (sys.movement?.speed ?? 6) + (sys.resources?.pilot?.allocSpeed ?? 0);
+  const stanceMods = getStanceMovementModifiers(sys);
+  const speed      = (sys.movement?.speed ?? 6) + (sys.resources?.pilot?.allocSpeed ?? 0) + stanceMods.speed;
   const fuelBurned = sys.resources?.pilot?.fuelBurned ?? 0;
   const fuelSlider = this._helmState?.fuelSlider ?? fuelBurned;
   const bearing    = this._helmState?.bearing ?? 0;
@@ -302,7 +304,8 @@ async function _onPilotFlipAndBurn() {
 
   const baseSpeed      = sys.movement?.speed ?? 6;
   const allocSpeed     = sys.resources?.pilot?.allocSpeed ?? 0;
-  const effSpeed       = Math.max(0, baseSpeed + allocSpeed);
+  const stanceMods     = getStanceMovementModifiers(sys);
+  const effSpeed       = Math.max(0, baseSpeed + allocSpeed + stanceMods.speed);
   const halfSpeedUnits = Math.max(1, Math.round(effSpeed * 0.5));
 
   const projected = HelmPreview.projectFlipAndBurn(token, halfSpeedUnits);
@@ -340,15 +343,16 @@ async function _onPilotRam() {
 
   const baseSpeed      = sys.movement?.speed ?? 6;
   const allocSpeed     = sys.resources?.pilot?.allocSpeed ?? 0;
+  const stanceMods     = getStanceMovementModifiers(sys);
   const overdrive      = sys.resources?.pilot?.overdrive ?? false;
   const apThrustBonus  = sys.resources?.pilot?.apThrustBonus ?? 0;
-  const effSpeed       = Math.max(0, baseSpeed + allocSpeed);
+  const effSpeed       = Math.max(0, baseSpeed + allocSpeed + stanceMods.speed);
   const powerMax       = (overdrive ? 200 : 100) + apThrustBonus;
   const powerRemaining = Math.max(0, powerMax - fuelBurned);
 
   const baseMano       = sys.movement?.maneuverability ?? 2;
   const allocMano      = sys.resources?.pilot?.allocMano ?? 0;
-  const effMano        = Math.max(0, baseMano + allocMano);
+  const effMano        = Math.max(0, baseMano + allocMano + stanceMods.maneuverability);
   const bearingUsed    = sys.resources?.pilot?.bearingUsed ?? 0;
   const maxBearingDeg  = Math.max(0, effMano * 15 - bearingUsed);
 
@@ -426,9 +430,9 @@ export function buildHelmContext(sys, opts = {}) {
   const manPenalty    = manTier    === "high" ? 4 : manTier    === "medium" ? 2 : manTier    === "low" ? 1 : 0;
 
   // ── Captain stance modifiers ───────────────────────────────────────────────────
-  const stance       = sys.resources?.captain?.stance ?? "none";
-  const stanceSpeedMod = stance === "aggressive" ? -1 : stance === "defensive" ? 1 : 0;
-  const stanceManoMod  = stance === "aggressive" ? -1 : stance === "defensive" ? 1 : 0;
+  const stanceMods     = getStanceMovementModifiers(sys);
+  const stanceSpeedMod = stanceMods.speed;
+  const stanceManoMod  = stanceMods.maneuverability;
 
   const effSpeed   = Math.max(0, baseSpeed + allocSpeed + speedPayloadBonus + stanceSpeedMod - enginePenalty);
   const effMano    = Math.max(0, effectiveBaseMano + allocMano + manoPayloadBonus + stanceManoMod - manPenalty);
@@ -660,7 +664,8 @@ export function helmOnRender(sheet) {
   // Realistic-mode bearing budget values
   const baseManoHOR   = sys.movement?.maneuverability ?? 2;
   const allocManoHOR  = sys.resources?.pilot?.allocMano ?? 0;
-  const effManoHOR    = Math.max(0, baseManoHOR + allocManoHOR);
+  const stanceManoHOR = getStanceMovementModifiers(sys).maneuverability;
+  const effManoHOR    = Math.max(0, baseManoHOR + allocManoHOR + stanceManoHOR);
   const bearingMax    = effManoHOR * 15;
   const bearingUsed   = sys.resources?.pilot?.bearingUsed  ?? 0;
   const momentumUsed  = sys.resources?.pilot?.momentumUsed ?? 0;
@@ -866,7 +871,8 @@ export function helmOnRender(sheet) {
   if (flipBurnPanel && token && canvas?.ready) {
     const baseSpdFB  = sys.movement?.speed ?? 6;
     const allocSpdFB = sys.resources?.pilot?.allocSpeed ?? 0;
-    const effSpdFB   = Math.max(0, baseSpdFB + allocSpdFB);
+    const stanceSpdFB = getStanceMovementModifiers(sys).speed;
+    const effSpdFB   = Math.max(0, baseSpdFB + allocSpdFB + stanceSpdFB);
     const halfDist   = Math.max(1, Math.round(effSpdFB * 0.5));
 
     // Inject the striped overlay zone into the power bar (once per render)
@@ -927,7 +933,8 @@ export function helmUpdatePreview(sheet) {
   if (!token || !canvas?.ready) return;
 
   const sys          = SystemAdapter.current.getShipData(sheet.actor);
-  const speed        = (sys.movement?.speed ?? 6) + (sys.resources?.pilot?.allocSpeed ?? 0);
+  const stanceSpeed  = getStanceMovementModifiers(sys).speed;
+  const speed        = (sys.movement?.speed ?? 6) + (sys.resources?.pilot?.allocSpeed ?? 0) + stanceSpeed;
   const prevTurnMove = sys.resources?.pilot?.prevTurnMove ?? 0;
   const minMove      = Math.ceil(prevTurnMove / 2);
   const fuelBurned   = sys.resources?.pilot?.fuelBurned ?? 0;

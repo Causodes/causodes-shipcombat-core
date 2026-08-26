@@ -16,7 +16,7 @@ import { getHitQuadrant }
   from "./TargetingPopup.js";
 import { HelmPreview }
   from "../canvas/HelmPreview.js";
-import { getContactDisplayName }
+import { getContactDisplayName, isTargetableContactToken }
   from "../targeting/contact-intelligence.js";
 
 // ── RamTargetPopupV1 ─────────────────────────────────────────────────────────
@@ -87,12 +87,11 @@ export class RamTargetPopupV1 extends foundry.appv1.api.Application {
 
     const shipBasis = this.shipBasis ?? HelmPreview._tokenBasis(token);
 
-    // Exclude only the ramming ship's specific token (by token ID), not all
-    // tokens sharing the same actor — this correctly handles test scenarios
-    // where the player ship and NPC share the same actor prototype.
-    const candidates = canvas.tokens.placeables.filter(t =>
-      t.id !== token.id &&
-      t.visible,
+    // Gather opposing and neutral contacts only. The shared rule excludes the
+    // acting ship, same-actor token copies, allied ships, and allied ordnance.
+    const candidates = canvas.tokens.placeables.filter(target =>
+      target.id !== token.id &&
+      isTargetableContactToken(target, this.ship),
     );
 
     const RAM_COEFF        = 2;

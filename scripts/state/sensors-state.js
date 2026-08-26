@@ -7,7 +7,11 @@
 
 import { MODULE_ID, CORE_MODULE_ID, LOCK_DECAY_ROUNDS } from "../constants.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
-import { ensureContactRecord, getContactDisplayName } from "../targeting/contact-intelligence.js";
+import {
+  ensureContactRecord,
+  getContactDisplayName,
+  isTargetableContactToken,
+} from "../targeting/contact-intelligence.js";
 
 function _targetName(targetTokenId) {
   return canvas?.tokens?.get(targetTokenId)?.document?.name ?? null;
@@ -216,6 +220,9 @@ export async function setRecommendedTarget({ targetTokenId } = {}) {
     return this.update({ "resources.sensors.recommendedTargetId": null });
   }
 
+  const target = canvas?.tokens?.get(targetTokenId);
+  if (!isTargetableContactToken(target, this.ship)) return false;
+
   const tier = this.getEffectiveLockTier(
     targetTokenId,
     _distanceSquaresToTarget(targetTokenId, this.ship),
@@ -224,25 +231,6 @@ export async function setRecommendedTarget({ targetTokenId } = {}) {
 
   return this.update({
     "resources.sensors.recommendedTargetId": targetTokenId,
-    ..._contactUpdates(data, [{ targetTokenId, tier }]),
-  });
-}
-
-/** GM-only debug toggle that bypasses Captain core consumption. */
-export async function setDebugBattleClarityTarget({ targetTokenId } = {}) {
-  if (!game.user.isGM) return false;
-  const data = this.getData();
-  const current = data.resources?.captain?.priorityTargetId ?? null;
-  if (!targetTokenId || current === targetTokenId) {
-    return this.update({ "resources.captain.priorityTargetId": null });
-  }
-  if (!canvas?.tokens?.get(targetTokenId)) return false;
-  const tier = Math.max(1, this.getEffectiveLockTier(
-    targetTokenId,
-    _distanceSquaresToTarget(targetTokenId, this.ship),
-  ));
-  return this.update({
-    "resources.captain.priorityTargetId": targetTokenId,
     ..._contactUpdates(data, [{ targetTokenId, tier }]),
   });
 }

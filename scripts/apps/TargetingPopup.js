@@ -12,7 +12,8 @@ import { ShipCombatState } from "../state/ShipCombatState.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
 import { THEME, pixi } from "../theme.js";
 import { isOrdnance as _isOrdActorType } from "../actors/ordnance/ordnance-types.js";
-import { getContactDisplayName } from "../targeting/contact-intelligence.js";
+import { getContactDisplayName, isTargetableContactToken } from "../targeting/contact-intelligence.js";
+import { getAttackStanceModifier } from "../stances.js";
 
 // ── Geometry helpers ────────────────────────────────────────────────────────
 
@@ -159,7 +160,8 @@ export class TargetingPopup extends foundry.applications.api.HandlebarsApplicati
     const ship = this.weapon?.parent;
     if (!ship || !this.weapon) return { ...context, targets: [], weapon: null };
 
-    const sys     = ship.system;
+    const adapter = SystemAdapter.current;
+    const sys     = adapter.getShipData(ship) ?? {};
     const gunnerRes = sys.resources?.gunner ?? {};
     const tokens  = ship.getActiveTokens?.() ?? [];
     if (!tokens.length) return { ...context, targets: [], weapon: null };
@@ -193,11 +195,8 @@ export class TargetingPopup extends foundry.applications.api.HandlebarsApplicati
     const fireModeDetails = this._getFireModeDetails(gunnerRes);
 
     // Captain stance hit modifier (same for all targets in this popup)
-    const adapter         = SystemAdapter.current;
     const step            = adapter.getModifierStepSize();
-    const hbs             = adapter.getHitBonusStep();  // fixed hit-bonus step (lock, ranging, BDA, battle clarity)
-    const captainStance   = sys.resources?.captain?.stance ?? "none";
-    const stanceHitMod    = captainStance === "aggressive" ? step : captainStance === "defensive" ? -step : 0;
+    const hbs             = adapter.getHitBonusStep();  // fixed hit-bonus step (lock, ranging, BDA, Priority Target)
 
     // Hostile sensor effects on the FIRING ship (registered by an enemy Sensors
     // Officer): Disruption penalises all rolls by the disruptor's sensor hit
@@ -209,8 +208,7 @@ export class TargetingPopup extends foundry.applications.api.HandlebarsApplicati
     // Find valid target tokens: exclude own ship and own torpedoes / strike craft
     const shipTokenId = token.id;
     const candidates = canvas.tokens.placeables.filter(t => {
-      if (!t.visible) return false;
-      if (t.document.actor?.id === ship.id) return false;
+      if (!isTargetableContactToken(t, ship)) return false;
       // Exclude own ordnance that was launched by this ship
       if (_isOrdActorType(t.document.actor) && t.document.actor.system?.parentShipTokenId === shipTokenId) return false;
       return true;
@@ -257,7 +255,8 @@ export class TargetingPopup extends foundry.applications.api.HandlebarsApplicati
       const finalZoneMod = (zone.zone === 3 && lockTier >= 4) ? 0 : zone.modifier;
 
       // Get target system data (must be before any reference to targetSys)
-      const targetSys = candidate.document.actor?.system ?? {};
+      const targetSys = adapter.getShipData(candidate.document.actor) ?? {};
+      const stanceHitMod = getAttackStanceModifier(sys, targetSys, step);
 
       // Total accuracy = sensor rating + zone mod + fire mode mod + lock bonus + SL allocation + weapon hit rating + stance
       const allocAccuracy = sys.resources?.gunner?.allocAccuracy ?? 0;
@@ -273,7 +272,7 @@ export class TargetingPopup extends foundry.applications.api.HandlebarsApplicati
       const rangingFireBonus      = (correctionMatches && fcRaw.type === "rangingFireBonus") ? hbs : 0;
       const activeCorrection      = correctionMatches ? fcRaw : null;
 
-      // Battle Clarity: captain core action grants a fixed hit bonus + 2 shield pierce on the nominated target
+      // Priority Target: captain core action grants a fixed hit bonus + 2 shield pierce on the nominated target
       const priorityTargetId     = sys.resources?.captain?.priorityTargetId ?? null;
       const battleClarityBonus   = (priorityTargetId && priorityTargetId === candidate.id) ? hbs : 0;
       const battleClarityPierce  = (priorityTargetId && priorityTargetId === candidate.id) ? 2 : 0;
@@ -308,7 +307,7 @@ export class TargetingPopup extends foundry.applications.api.HandlebarsApplicati
       if (weaponHitMod !== 0) breakdownParts.push(`Weapon Rating: ${adapter.formatModifier(weaponHitMod)}`);
       if (adjustBearingBonus !== 0) breakdownParts.push(`Adj. Bearing: ${adapter.formatModifier(adjustBearingBonus)}`);
       if (rangingFireBonus !== 0) breakdownParts.push(`Ranging Fire: ${adapter.formatModifier(rangingFireBonus)}`);
-      if (battleClarityBonus !== 0) breakdownParts.push(`Battle Clarity: ${adapter.formatModifier(battleClarityBonus)}`);
+      if (battleClarityBonus !== 0) breakdownParts.push(`Priority Target: ${adapter.formatModifier(battleClarityBonus)}`);
       if (captainHitBonus !== 0) breakdownParts.push(`Insp. Targeting: ${adapter.formatModifier(captainHitBonus)}`);
       if (evasionPenalty  !== 0) breakdownParts.push(`Target Evasion: ${adapter.formatModifier(evasionPenalty)}`);
       if (disruptionPenalty !== 0) breakdownParts.push(`Sensor Disruption: ${adapter.formatModifier(disruptionPenalty)}`);
@@ -401,6 +400,7 @@ export class TargetingPopup extends foundry.applications.api.HandlebarsApplicati
       hasOvercharge: !!(this.weapon?.system?.traits?.overcharge) && this.weaponType === "heat",
       isOvercharged: this.isOvercharged,
       overchargedTraits: this._buildOverchargedTraits(),
+      markerPalette: adapter.targetMarkerPalette(),
     };
   }
 

@@ -4,7 +4,7 @@
 /* ══════════════════════════════════════════════════════════════════════════ */
 
 /* ══════════════════════════════════════════════════════════════════════════ */
-/* Targeting Popup, Strike-Craft/Recover/Battle-Clarity popup variants       */
+/* Targeting Popup, Strike-Craft/Recover/Priority-Target popup variants      */
 /* ══════════════════════════════════════════════════════════════════════════ */
 
 /* ── Targeting Popup ───────────────────────────────────────────────────── */
@@ -226,7 +226,7 @@
   padding: 0.25rem 0;
 }
 
-/* ── Battle Clarity popup: lock badge + disabled fire button ──────────── */
+/* ── Priority Target popup: lock badge + disabled fire button ─────────── */
 
 .shipcombat-tp-lock-badge {
   font-size: 0.65rem;
@@ -336,6 +336,7 @@
 /* ── Radar action popup ────────────────────────────────────────────────── */
 .shipcombat-radar-popup {
   position: absolute;
+  box-sizing: border-box;
   z-index: 100;
   background: rgba(10, 16, 22, 0.95);
   border: 1px solid rgba(0, 255, 136, 0.3);
@@ -346,19 +347,43 @@
   display: flex;
   flex-direction: column;
   gap: 3px;
-  max-height: 55%;
+  max-height: calc(100% - 16px);
   overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 255, 136, 0.4) rgba(0, 0, 0, 0.25);
 }
 
+.shipcombat-radar-popup::-webkit-scrollbar { width: 8px; }
+.shipcombat-radar-popup::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.25); }
+.shipcombat-radar-popup::-webkit-scrollbar-thumb {
+  background: rgba(0, 255, 136, 0.4);
+  border-radius: 4px;
+}
+
+.shipcombat-radar-popup > * { flex-shrink: 0; }
+
 .shipcombat-rpop-header {
+  position: sticky;
+  top: -6px;
+  z-index: 2;
   display: flex;
   align-items: center;
   gap: 6px;
-  padding-bottom: 4px;
+  margin: -6px -6px 0;
+  padding: 6px 6px 4px;
   border-bottom: 1px solid rgba(0, 255, 136, 0.12);
+  border-radius: 5px 5px 0 0;
   min-height: 22px;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  background: #0a1016;
 }
+
+.shipcombat-radar-popup.is-dragging .shipcombat-rpop-header { cursor: grabbing; }
 
 .shipcombat-rpop-name {
   color: #ffcc00;
@@ -465,15 +490,6 @@
   background: rgba(167,243,230,0.16);
   border-color: #a7f3e6;
 }
-.shipcombat-rpop-btn--debug {
-  border-color: rgba(255,143,163,0.35);
-  color: #ffb4c1;
-}
-.shipcombat-rpop-btn--debug.is-active {
-  background: rgba(255,143,163,0.16);
-  border-color: #ff8fa3;
-}
-
 .shipcombat-rpop-btn i {
   flex-shrink: 0;
   width: 12px;

@@ -1,7 +1,7 @@
 import { ShipCombatState } from "../state/ShipCombatState.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
 import { THEME, pixi } from "../theme.js";
-import { getContactDisplayName } from "../targeting/contact-intelligence.js";
+import { getContactDisplayName, isTargetableContactToken } from "../targeting/contact-intelligence.js";
 
 const LOCK_TIER_COLOUR = Object.freeze({
   0: 0x666666,
@@ -45,7 +45,7 @@ function _canSeeCrewTargeting(ship) {
   return !!ship?.testUserPermission?.(game.user, "OBSERVER");
 }
 
-/** Crew-only canvas markers for Sensors recommendations and Battle Clarity. */
+/** Crew-only canvas markers for Sensors recommendations and Priority Target. */
 export class TargetDesignationOverlay {
   static _overlays = new Map();
 
@@ -69,7 +69,7 @@ export class TargetDesignationOverlay {
     for (const tokenId of activeIds) {
       const token = canvas.tokens.get(tokenId);
       // Never let a crew marker reveal a token hidden by current lock quality.
-      if (!token || token.visible === false) {
+      if (!isTargetableContactToken(token, ship)) {
         this._destroyToken(tokenId);
         continue;
       }
@@ -204,7 +204,7 @@ export class TargetDesignationOverlay {
     entry.separatorText.text = recommended && priority ? " | " : "";
     entry.separatorText.style.fill = lockColour;
     entry.separatorText.visible = recommended && priority;
-    entry.clarityText.text = priority ? "BATTLE CLARITY" : "";
+    entry.clarityText.text = priority ? "PRIORITY TARGET" : "";
     entry.clarityText.style.fill = pixi(THEME.overlay.battleClarity);
     entry.clarityText.visible = priority;
     entry.nameText.text = label;

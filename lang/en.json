@@ -368,10 +368,8 @@
       "RadarClickToSelect": "Click a blip to select a target",
       "RecommendTarget": "Mark for Crew",
       "ClearRecommendation": "Clear Crew Mark",
-"RecommendationLabel": "Marked Target",
-      "BattleClarityLabel": "Battle Clarity",
-      "DebugBattleClarity": "Debug: Mark Battle Clarity",
-      "ClearDebugBattleClarity": "Clear Debug Battle Clarity",
+      "RecommendationLabel": "Marked Target",
+      "BattleClarityLabel": "Priority Target",
       "LockTier": "Lock Tier",
       "DecayRounds": "Decays in {rounds} round(s).",
       "GunnerConsumesLock": "{{SHIPCOMBAT.Role.Gunner}} attacks consume lock to Tier 0.",
@@ -1059,7 +1057,7 @@
         "NoCoreAssigned": "No core assigned",
         "AlreadyUsed": "You have already used your command power this engagement.",
         "BCNoTargets": "No visible enemy tokens on the canvas.",
-        "BCTitle": "Battle Clarity  -  Designate Target",
+        "BCTitle": "Priority Target  -  Designate Target",
         "BCPrompt": "Choose an enemy to designate as the priority target. All weapons fired at this target gain {{SHIPCOMBAT.ModifierCopy.HitBonus}} accuracy, 2 armour penetration, and 2 shield burn this round.",
         "BCDesignate": "Designate this target",
         "BCNeedLock": "Requires Lock 1 or higher to designate.",
@@ -1085,7 +1083,7 @@
           "desc": "Discard your entire hand. Step every Medium and High condition down one tier (Low conditions are unaffected)."
         },
         "BattleClarity": {
-          "label": "Battle Clarity",
+          "label": "Priority Target",
           "desc": "Nominate one enemy token. All weapons striking that target gain {{SHIPCOMBAT.ModifierCopy.HitBonus}} accuracy and pierce 2 shields this round."
         },
         "EmergencySalvage": {

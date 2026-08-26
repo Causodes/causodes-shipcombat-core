@@ -72,8 +72,8 @@
             <img src="{{this.img}}" class="shipcombat-tp-target-icon{{#if this.isL1}} shipcombat-tp-target-icon--l1{{/if}}">
             <div class="shipcombat-tp-target-info">
                 <span class="shipcombat-tp-target-name">{{this.name}}</span>
-                {{#if this.isRecommended}}<span class="shipcombat-tp-target-marker shipcombat-tp-target-marker--recommended"><i class="fa-solid fa-flag"></i> {{localize "SHIPCOMBAT.Sensors.RecommendationLabel"}}</span>{{/if}}
-                {{#if this.isPriority}}<span class="shipcombat-tp-target-marker shipcombat-tp-target-marker--priority"><i class="fa-solid fa-crosshairs"></i> {{localize "SHIPCOMBAT.Sensors.BattleClarityLabel"}}</span>{{/if}}
+                {{#if this.isRecommended}}<span class="shipcombat-tp-target-marker shipcombat-tp-target-marker--recommended" style="color:{{../markerPalette.recommended}}"><i class="fa-solid fa-crosshairs"></i> {{localize "SHIPCOMBAT.Sensors.RecommendationLabel"}}</span>{{/if}}
+                {{#if this.isPriority}}<span class="shipcombat-tp-target-marker shipcombat-tp-target-marker--priority" style="color:{{../markerPalette.priority}}"><i class="fa-solid fa-crosshairs"></i> {{localize "SHIPCOMBAT.Sensors.BattleClarityLabel"}}</span>{{/if}}
                 {{#if this.isL1}}
                 <div class="shipcombat-tp-l1-meta">
                     {{#if this.classification}}<span class="shipcombat-tp-l1-class"><i class="fa-solid fa-ship"></i> {{this.classification}}</span>{{/if}}

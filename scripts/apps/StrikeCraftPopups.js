@@ -16,11 +16,12 @@
 import { MODULE_ID, CORE_MODULE_ID } from "../constants.js";
 import { emitToGM } from "../socket.js";
 import { ShipCombatState } from "../state/ShipCombatState.js";
-import { getContactDisplayName } from "../targeting/contact-intelligence.js";
+import { getContactDisplayName, isTargetableContactToken } from "../targeting/contact-intelligence.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
 import { THEME, pixi } from "../theme.js";
 import { classifyZone, getHitQuadrant } from "./TargetingPopup.js";
 import { isOrdnance } from "../actors/ordnance/ordnance-types.js";
+import { getAttackStanceModifier } from "../stances.js";
 
 // ── Shared arrow helper ──
 
@@ -132,6 +133,10 @@ export class StrikeCraftAttackPopup extends foundry.applications.api.HandlebarsA
     }
 
     const parentShipTokenId = sys.parentShipTokenId ?? null;
+    const parentShipData = SystemAdapter.current.getShipData(
+      canvas.tokens.get(parentShipTokenId)?.document?.actor,
+    ) ?? {};
+    const parentShipActor = canvas.tokens.get(parentShipTokenId)?.document?.actor ?? null;
 
     const candidates = canvas.tokens.placeables.filter(t => {
       if (!shipTypes.includes(t.document.actor?.type) && !(isFighter && isOrdnance(t.document.actor))) return false;
@@ -142,7 +147,7 @@ export class StrikeCraftAttackPopup extends foundry.applications.api.HandlebarsA
       // Exclude sibling ordnance (same parent ship)
       const tParent = t.document.actor?.system?.parentShipTokenId;
       if (tParent && tParent === parentShipTokenId) return false;
-      return true;
+      return isTargetableContactToken(t, parentShipActor);
     });
 
     const targets = [];
@@ -178,7 +183,9 @@ export class StrikeCraftAttackPopup extends foundry.applications.api.HandlebarsA
       const adapter      = SystemAdapter.current;
       const lockBonus    = lockTier >= 4 ? adapter.getHitBonusStep() : 0;
       const finalZoneMod = (zone.zone === 3 && lockTier >= 4) ? 0 : zone.modifier;
-      let totalAccuracy  = sensor.rating + finalZoneMod + lockBonus;
+      const targetData   = adapter.getShipData(candidate.document.actor) ?? {};
+      const stanceHitMod = getAttackStanceModifier(parentShipData, targetData, adapter.getModifierStepSize());
+      let totalAccuracy  = sensor.rating + finalZoneMod + lockBonus + stanceHitMod;
 
       // Zone 1 (close scan): system-specific bonus
       let zone1Bonus = 0;
@@ -197,6 +204,7 @@ export class StrikeCraftAttackPopup extends foundry.applications.api.HandlebarsA
       const breakdown = [`Base: ${adapter.formatTargetNumber(sensor.rating)}`];
       if (finalZoneMod !== 0) breakdown.push(`Distance: ${adapter.formatModifier(finalZoneMod)}`);
       if (lockBonus    !== 0) breakdown.push(`Lock Tier: ${adapter.formatModifier(lockBonus)}`);
+      if (stanceHitMod !== 0) breakdown.push(`Stance: ${adapter.formatModifier(stanceHitMod)}`);
       if (zone1Bonus   !== 0) breakdown.push(`Close Scan: ${adapter.formatModifier(zone1Bonus)}`);
       const accuracyTooltip = breakdown.join("\n");
       const targetAC = adapter.getTargetAC(candidate.document.actor);

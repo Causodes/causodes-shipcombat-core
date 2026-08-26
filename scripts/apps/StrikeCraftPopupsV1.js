@@ -11,7 +11,7 @@ import { emitToGM }
   from "../socket.js";
 import { ShipCombatState }
   from "../state/ShipCombatState.js";
-import { getContactDisplayName }
+import { getContactDisplayName, isTargetableContactToken }
   from "../targeting/contact-intelligence.js";
 import { SystemAdapter }
   from "../systems/SystemAdapter.js";
@@ -23,6 +23,8 @@ import { classifyZone, getHitQuadrant }
   from "./TargetingPopup.js";
 import { _drawArrow, _makeArrowContainer, _destroyContainer }
   from "./StrikeCraftPopups.js";
+import { getAttackStanceModifier }
+  from "../stances.js";
 
 // ── StrikeCraftAttackPopupV1 ─────────────────────────────────────────────────
 
@@ -85,6 +87,10 @@ export class StrikeCraftAttackPopupV1 extends foundry.appv1.api.Application {
     }
 
     const parentShipTokenId = sys.parentShipTokenId ?? null;
+    const parentShipData = SystemAdapter.current.getShipData(
+      canvas.tokens.get(parentShipTokenId)?.document?.actor,
+    ) ?? {};
+    const parentShipActor = canvas.tokens.get(parentShipTokenId)?.document?.actor ?? null;
 
     const candidates = canvas.tokens.placeables.filter(t => {
       if (!shipTypes.includes(t.document.actor?.type) && !(isFighter && isOrdnance(t.document.actor))) return false;
@@ -92,7 +98,7 @@ export class StrikeCraftAttackPopupV1 extends foundry.appv1.api.Application {
       if (parentShipTokenId && t.id === parentShipTokenId) return false;
       const tParent = t.document.actor?.system?.parentShipTokenId;
       if (tParent && tParent === parentShipTokenId) return false;
-      return true;
+      return isTargetableContactToken(t, parentShipActor);
     });
 
     const targets = [];
@@ -126,7 +132,9 @@ export class StrikeCraftAttackPopupV1 extends foundry.appv1.api.Application {
       const adapter      = SystemAdapter.current;
       const lockBonus    = lockTier >= 4 ? adapter.getHitBonusStep() : 0;
       const finalZoneMod = (zone.zone === 3 && lockTier >= 4) ? 0 : zone.modifier;
-      let totalAccuracy  = sensor.rating + finalZoneMod + lockBonus;
+      const targetData   = adapter.getShipData(candidate.document.actor) ?? {};
+      const stanceHitMod = getAttackStanceModifier(parentShipData, targetData, adapter.getModifierStepSize());
+      let totalAccuracy  = sensor.rating + finalZoneMod + lockBonus + stanceHitMod;
 
       let zone1Bonus = 0;
       if (zone.zone === 1) {
@@ -143,6 +151,7 @@ export class StrikeCraftAttackPopupV1 extends foundry.appv1.api.Application {
       const breakdown = [`Base: ${adapter.formatTargetNumber(sensor.rating)}`];
       if (finalZoneMod !== 0) breakdown.push(`Distance: ${adapter.formatModifier(finalZoneMod)}`);
       if (lockBonus    !== 0) breakdown.push(`Lock Tier: ${adapter.formatModifier(lockBonus)}`);
+      if (stanceHitMod !== 0) breakdown.push(`Stance: ${adapter.formatModifier(stanceHitMod)}`);
       if (zone1Bonus   !== 0) breakdown.push(`Close Scan: ${adapter.formatModifier(zone1Bonus)}`);
       const accuracyTooltip = breakdown.join("\n");
       const targetAC = adapter.getTargetAC(candidate.document.actor);

@@ -33,6 +33,7 @@ import { registerLangSubstitution } from "./scripts/lang.js";
 import { BDAPopup, launchBDAFromChat } from "./scripts/apps/BDAPopup.js";
 import { getOrdnanceControllerUserId, resolveStationOperatorActor } from "./scripts/roles/crew-operators.js";
 import { registerAnimations } from "./scripts/animations.js";
+import { getStanceMovementModifiers } from "./scripts/stances.js";
 import { PartialRegistry, CORE_PARTIAL_DEFAULTS, loadAllTemplates } from "./scripts/templates.js";
 import { TargetingPopupV1 }
   from "./scripts/apps/TargetingPopupV1.js";
@@ -515,8 +516,11 @@ Hooks.on("updateCombat", async (combat, changes) => {
     const isRealistic = game.settings.get(MODULE_ID, "movementMode") === "realistic";
 
     if (token) {
-      const speed = (ship.system.movement?.speed ?? 6)
-                  + (ship.system.resources?.pilot?.allocSpeed ?? 0);
+      const shipData = SystemAdapter.current.getShipData(ship) ?? {};
+      const stanceSpeed = getStanceMovementModifiers(shipData).speed;
+      const speed = (shipData.movement?.speed ?? 6)
+                  + (shipData.resources?.pilot?.allocSpeed ?? 0)
+                  + stanceSpeed;
 
       if (isRealistic) {
         // Realistic: always auto-drift the remaining uncarried portion of velocity,

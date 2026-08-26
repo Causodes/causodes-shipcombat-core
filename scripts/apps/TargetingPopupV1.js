@@ -18,8 +18,10 @@ import { isOrdnance }
   from "../actors/ordnance/ordnance-types.js";
 import { classifyZone, getHitQuadrant, testArc }
   from "./TargetingPopup.js";
-import { getContactDisplayName }
+import { getContactDisplayName, isTargetableContactToken }
   from "../targeting/contact-intelligence.js";
+import { getAttackStanceModifier }
+  from "../stances.js";
 
 // ── TargetingPopupV1 ─────────────────────────────────────────────────────────
 
@@ -60,7 +62,8 @@ export class TargetingPopupV1 extends foundry.appv1.api.Application {
     const ship = this.weapon?.parent;
     if (!ship || !this.weapon) return { ...context, targets: [], weapon: null };
 
-    const sys       = ship.system;
+    const adapter   = SystemAdapter.current;
+    const sys       = adapter.getShipData(ship) ?? {};
     const gunnerRes = sys.resources?.gunner ?? {};
     const tokens    = ship.getActiveTokens?.() ?? [];
     if (!tokens.length) return { ...context, targets: [], weapon: null };
@@ -91,12 +94,8 @@ export class TargetingPopupV1 extends foundry.appv1.api.Application {
     const weaponRange     = Number(this.weapon.system.range) || 0;
     const fireModeDetails = this._getFireModeDetails(gunnerRes);
 
-    const adapter       = SystemAdapter.current;
     const step          = adapter.getModifierStepSize();
-    const hbs           = adapter.getHitBonusStep();  // fixed hit-bonus step (lock, ranging, BDA, battle clarity)
-    const captainStance = sys.resources?.captain?.stance ?? "none";
-    const stanceHitMod  = captainStance === "aggressive" ? step
-                        : captainStance === "defensive"  ? -step : 0;
+    const hbs           = adapter.getHitBonusStep();  // fixed hit-bonus step (lock, ranging, BDA, Priority Target)
 
     // Hostile sensor effects on the FIRING ship (registered by an enemy Sensors
     // Officer): Disruption penalises all rolls by the disruptor's sensor hit
@@ -108,8 +107,7 @@ export class TargetingPopupV1 extends foundry.appv1.api.Application {
     // Find valid target tokens: exclude own ship and own torpedoes / strike craft
     const shipTokenId = token.id;
     const candidates = canvas.tokens.placeables.filter(t => {
-      if (!t.visible) return false;
-      if (t.document.actor?.id === ship.id) return false;
+      if (!isTargetableContactToken(t, ship)) return false;
       // Exclude own ordnance that was launched by this ship
       if (isOrdnance(t.document.actor) && t.document.actor.system?.parentShipTokenId === shipTokenId) return false;
       return true;
@@ -143,7 +141,8 @@ export class TargetingPopupV1 extends foundry.appv1.api.Application {
       const lockAccuracyBonus = lockTier >= 4 ? hbs : 0;
       const finalZoneMod      = (zone.zone === 3 && lockTier >= 4) ? 0 : zone.modifier;
 
-      const targetSys       = candidate.document.actor?.system ?? {};
+      const targetSys       = adapter.getShipData(candidate.document.actor) ?? {};
+      const stanceHitMod    = getAttackStanceModifier(sys, targetSys, step);
       const allocAccuracy   = sys.resources?.gunner?.allocAccuracy ?? 0;
       const weaponHitMod    = this.weapon?.system?.traits?.hitRatingModifier ?? 0;
 
@@ -200,7 +199,7 @@ export class TargetingPopupV1 extends foundry.appv1.api.Application {
       if (weaponHitMod !== 0)                 breakdownParts.push(`Weapon Rating: ${adapter.formatModifier(weaponHitMod)}`);
       if (adjustBearingBonus !== 0)           breakdownParts.push(`Adj. Bearing: ${adapter.formatModifier(adjustBearingBonus)}`);
       if (rangingFireBonus !== 0)             breakdownParts.push(`Ranging Fire: ${adapter.formatModifier(rangingFireBonus)}`);
-      if (battleClarityBonus !== 0)           breakdownParts.push(`Battle Clarity: ${adapter.formatModifier(battleClarityBonus)}`);
+      if (battleClarityBonus !== 0)           breakdownParts.push(`Priority Target: ${adapter.formatModifier(battleClarityBonus)}`);
       if (captainHitBonus !== 0)              breakdownParts.push(`Insp. Targeting: ${adapter.formatModifier(captainHitBonus)}`);
       if (evasionPenalty !== 0)               breakdownParts.push(`Target Evasion: ${adapter.formatModifier(evasionPenalty)}`);
       if (disruptionPenalty !== 0)            breakdownParts.push(`Sensor Disruption: ${adapter.formatModifier(disruptionPenalty)}`);
@@ -300,6 +299,7 @@ export class TargetingPopupV1 extends foundry.appv1.api.Application {
       hasOvercharge: !!(this.weapon?.system?.traits?.overcharge) && this.weaponType === "heat",
       isOvercharged: this.isOvercharged,
       overchargedTraits: this._buildOverchargedTraits(),
+      markerPalette: adapter.targetMarkerPalette(),
     };
   }
 

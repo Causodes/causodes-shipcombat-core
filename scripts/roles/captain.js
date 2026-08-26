@@ -436,7 +436,7 @@ async function _onCaptainCoreAction(event, target) {
     return;
   }
 
-  // ── Battle Clarity: open target-picker popup (Lock 1+ only) ──
+  // ── Priority Target: open target-picker popup (Lock 1+ only) ──
   if (actionId === "battleClarity") {
     const BattleClarityPopupClass = ShipCombat._popupClass("battleClarity", BattleClarityPopup);
     const popup = new BattleClarityPopupClass();

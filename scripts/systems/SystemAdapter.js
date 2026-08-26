@@ -351,7 +351,7 @@ export class SystemAdapter {
    *   - Lock-tier 4 accuracy bonus
    *   - BDA adjust-bearing correction
    *   - Ranging-fire correction
-   *   - Battle-clarity pierce
+   *   - Priority Target
    *   - Captain "Inspired Targeting" action (captain-state.js)
    *
    * Defaults to getModifierStepSize(). Override when fixed bonuses use a
@@ -796,5 +796,16 @@ export class SystemAdapter {
    */
   radarPalette() {
     return {};  // use SensorRadar green defaults
+  }
+
+  /**
+   * Semantic colours for crew target markers shown in shared popup templates.
+   * Companion systems may override these for contrast against their own UI.
+   */
+  targetMarkerPalette() {
+    return {
+      recommended: "#a7f3e6",
+      priority:    "#ff8fa3",
+    };
   }
 }

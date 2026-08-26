@@ -29,6 +29,7 @@ import { POWER_CORE_STATION_ROLES, getPowerCoreCount, getPowerCorePoolRole } fro
 import { prepareCaptainHandForRound } from "../captain/card-instances.js";
 import { getContactDisplayName } from "../targeting/contact-intelligence.js";
 import { isAllocationResource, validateAllocationChange } from "./allocation-guard.js";
+import { getStanceMovementModifiers, hasDevastationProtocol } from "../stances.js";
 
 export class ShipCombatState {
 
@@ -551,6 +552,20 @@ export class ShipCombatState {
       }
     }
 
+    // ── Red Alert: resolve with the same atomic reset as all core pools ──────
+    // pendingStance takes effect for the round now starting. Each station gets
+    // one core; combined-crew layouts intentionally accumulate multiple station
+    // grants in their shared operator pool.
+    const activeStance = pendingStanceVal || (data.resources?.captain?.stance ?? "none");
+    if (activeStance === "redAlert") {
+      updates.internalFire = (updates.internalFire ?? data.internalFire ?? 0) + 5;
+      for (const stationRole of POWER_CORE_STATION_ROLES) {
+        const poolRole = getPowerCorePoolRole(data, stationRole);
+        const key = `resources.${poolRole}.coreCount`;
+        updates[key] = (updates[key] ?? 0) + 1;
+      }
+    }
+
     await this.withPowerCoreTransaction(() => this.update(updates));
 
     if (nextCards.discardedOverflowCount > 0) {
@@ -899,7 +914,8 @@ export class ShipCombatState {
     const driftBurned = data.resources?.pilot?.driftBurned ?? 0;
     const allocSpeed  = data.resources?.pilot?.allocSpeed  ?? 0;
     const baseSpeed   = data.movement?.speed ?? 0;
-    const effSpeed    = baseSpeed + allocSpeed;
+    const stanceSpeed = getStanceMovementModifiers(data).speed;
+    const effSpeed    = baseSpeed + allocSpeed + stanceSpeed;
     const prevTurnMove = fuelBurned > 0
       ? (fuelBurned / 100) * effSpeed + driftBurned
       : (data.resources?.pilot?.prevTurnMove ?? 0);
@@ -1145,10 +1161,6 @@ export class ShipCombatState {
       "resources.pilot.bearing": 0,
     });
 
-    // ── Stance: derive active stance from snapshot (promotion happens atomically in resetActions) ──
-    const pendingStance = data.resources?.captain?.pendingStance ?? "";
-    const activeStance  = pendingStance || (data.resources?.captain?.stance ?? "none");
-
     // ── Per-round condition effects (player ship) ─────────────────────────────
     const conditions  = data.conditions ?? {};
     const condUpdates = {};
@@ -1194,22 +1206,6 @@ export class ShipCombatState {
     await this.processOrdnanceLifecycle();
     await this.resetHelmState();
     await this.resetActions();
-
-    // ── Red Alert stance: +5 internal fire + grant 1 free core to each role ──────
-    if (activeStance === "redAlert") {
-      await this.withPowerCoreTransaction(async () => {
-        const fresh = this.getData();
-        const redAlertUpdates = {
-          internalFire: (fresh.internalFire ?? 0) + 5,
-        };
-        for (const stationRole of ["gunner", "pilot", "sensors", "ordnance", "captain"]) {
-          const poolRole = getPowerCorePoolRole(fresh, stationRole);
-          const key = `resources.${poolRole}.coreCount`;
-          redAlertUpdates[key] = (redAlertUpdates[key] ?? getPowerCoreCount(fresh, stationRole)) + 1;
-        }
-        await this.update(redAlertUpdates);
-      });
-    }
 
     // ── NPC per-round resource replenishment (25% of max, rounded down) ────────
     if (canvas?.scene) {
@@ -1415,12 +1411,17 @@ export class ShipCombatState {
    * through the same resolution path as the gunner.
    * Called via socket from StrikeCraftAttackPopup._onConfirmAttack.
    */
-  static async strikeCraftAttack({ craftName, craftImg, targetTokenId, hitQuadrant, accuracy, damage, payloadDiceCount, payloadDiceSize, traits, salvoSize = 1, payloadDamageType = null }) {
+  static async strikeCraftAttack({ craftActorId, craftName, craftImg, targetTokenId, hitQuadrant, accuracy, damage, payloadDiceCount, payloadDiceSize, traits, salvoSize = 1, payloadDamageType = null }) {
     const targetTok   = canvas.tokens.get(targetTokenId);
     const targetActor = targetTok?.document?.actor ?? null;
     if (!targetActor) return;
 
     const sys              = SystemAdapter.current.getShipData(targetActor);
+    const craftActor       = game.actors.get(craftActorId);
+    const parentShipTokenId = SystemAdapter.current.getShipData(craftActor)?.parentShipTokenId;
+    const parentShipActor  = canvas.tokens.get(parentShipTokenId)?.document?.actor ?? null;
+    const attackerSys      = SystemAdapter.current.getShipData(parentShipActor) ?? {};
+    const isDevastation    = hasDevastationProtocol(attackerSys, sys);
     const qLabel           = game.i18n.localize(
       "SHIPCOMBAT.Sector." + hitQuadrant.charAt(0).toUpperCase() + hitQuadrant.slice(1)
     );
@@ -1453,7 +1454,11 @@ export class ShipCombatState {
       const roll = await new Roll(formula).evaluate();
       if (game.dice3d) game.dice3d.showForRoll(roll, game.user, true);
       const hit    = adapter.isHit(roll, accuracy, targetAC);
-      const isCrit = hit && !isOrdnanceTarget && (adapter.isAutomaticCrit(roll) || adapter.isCriticalHit(roll, accuracy, targetAC, traits));
+      const isCrit = hit && !isOrdnanceTarget && (
+        isDevastation
+        || adapter.isAutomaticCrit(roll)
+        || adapter.isCriticalHit(roll, accuracy, targetAC, traits)
+      );
       salvoRolls.push({
         roll:        roll.total,
         target:      accuracy,
@@ -1616,7 +1621,7 @@ export class ShipCombatState {
 
     // ── Crit ──
     const critResult = totalDamage > 0
-      ? await CritState.rollCrit.call(ShipCombatState, targetActor, totalDamage, anyCrit)
+      ? await CritState.rollCrit.call(ShipCombatState, targetActor, totalDamage, anyCrit || isDevastation)
       : null;
 
     // ── Chat ──
@@ -1652,11 +1657,16 @@ export class ShipCombatState {
    * Apply torpedo detonation damage to a ship.
    * Called via socket from TorpedoSheet._onDetonate.
    */
-  static async torpedoDamage({ targetActorId, torName, torImg, damage, diceFormula, hitQuadrant, traits, payloadDamageType = null }) {
+  static async torpedoDamage({ torpedoActorId, targetActorId, torName, torImg, damage, diceFormula, hitQuadrant, traits, payloadDamageType = null }) {
     const target = game.actors.get(targetActorId);
     if (!target) return;
 
     const sys             = SystemAdapter.current.getShipData(target);
+    const torpedoActor    = game.actors.get(torpedoActorId);
+    const parentShipTokenId = SystemAdapter.current.getShipData(torpedoActor)?.parentShipTokenId;
+    const parentShipActor = canvas.tokens.get(parentShipTokenId)?.document?.actor ?? null;
+    const attackerSys     = SystemAdapter.current.getShipData(parentShipActor) ?? {};
+    const isDevastation   = hasDevastationProtocol(attackerSys, sys);
     // Roll damage dice if a formula was provided.  Systems that also carry a
     // flat bonus (addsFlatBonusToDice) add it to the total; the bonus here is
     // already scaled by warhead count and distance decay in the caller.
@@ -1755,7 +1765,7 @@ export class ShipCombatState {
 
     // Crit check  -  torpedo damage triggers crits like any other weapon
     const critResult = appliedDamage > 0
-      ? await CritState.rollCrit.call(ShipCombatState, target, appliedDamage, false)
+      ? await CritState.rollCrit.call(ShipCombatState, target, appliedDamage, isDevastation)
       : null;
 
     // Chat message
@@ -1843,7 +1853,6 @@ ShipCombatState.registerSensorContacts = SensorsState.registerSensorContacts;
 ShipCombatState.getLockTier          = SensorsState.getLockTier;
 ShipCombatState.getEffectiveLockTier = SensorsState.getEffectiveLockTier;
 ShipCombatState.setRecommendedTarget = SensorsState.setRecommendedTarget;
-ShipCombatState.setDebugBattleClarityTarget = SensorsState.setDebugBattleClarityTarget;
 ShipCombatState.clearTargetReferences = SensorsState.clearTargetReferences;
 ShipCombatState.consumeLock          = SensorsState.consumeLock;
 ShipCombatState.removeLock           = SensorsState.removeLock;

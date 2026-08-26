@@ -11,6 +11,7 @@ import { rollCrit } from "./crit-state.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
 import { getSensorsOperatorUserId } from "../roles/crew-operators.js";
 import { getContactDisplayName } from "../targeting/contact-intelligence.js";
+import { hasDevastationProtocol } from "../stances.js";
 
 /** Allocate an opaque BDA key without ever overwriting a live attack record. */
 export function allocateBdaAttackId(existingAttacks = {}) {
@@ -177,7 +178,7 @@ export async function fireWeapon({ weaponId, actorId, fireMode, targetToken, hit
 
   // The targeting popups pass a fully composed hit modifier (sensor rating,
   // zone/distance, fire mode, lock tier, SL allocation, weapon rating, stance,
-  // BDA corrections, Battle Clarity, captain boosts).  Do NOT re-add those
+  // BDA corrections, Priority Target, captain boosts).  Do NOT re-add those
   // here — only the Fire Control Failure penalty, which the popups don't know
   // about, is applied at resolution time.
   const adapter          = SystemAdapter.current;
@@ -322,7 +323,7 @@ export async function fireWeapon({ weaponId, actorId, fireMode, targetToken, hit
   const shieldBurnVal = (traits.overcharge && isOvercharged)
     ? (traits.shieldBurn ?? 0) * 3
     : (traits.shieldBurn ?? 0);
-  // Battle Clarity: +2 void shield burn against the nominated priority target
+  // Priority Target: +2 void shield burn against the nominated priority target
   const priorityTargetId       = sys.resources?.captain?.priorityTargetId ?? null;
   const battleClarityShieldBurn = (!isNpcFire && priorityTargetId && priorityTargetId === targetToken) ? 2 : 0;
   const effectiveShieldBurn = shieldBurnVal + scatterShieldBurn + battleClarityShieldBurn;
@@ -365,7 +366,7 @@ export async function fireWeapon({ weaponId, actorId, fireMode, targetToken, hit
   const apShellsBonus = (gunnerRes.payload === "apShells") ? 2 : 0;
   // BDA "Target Weak Point" correction: +SL to armour penetration for this attack
   const twpBonus = (fireCorrection?.type === "targetWeakPoint") ? (fireCorrection.sl ?? 0) : 0;
-  // Battle Clarity (captain core action): +2 armour penetration + 2 void shield burn against nominated priority target
+  // Priority Target (captain core action): +2 armour penetration + 2 void shield burn against nominated priority target
   const battleClarityPierce = (!isNpcFire && priorityTargetId && priorityTargetId === targetToken) ? 2 : 0;
   const ap = ((traits.overcharge && isOvercharged) ? (traits.armourPenetration ?? 0) * 3 : (traits.armourPenetration ?? 0)) + allocPenetration + apShellsBonus + twpBonus + battleClarityPierce;
   const effectiveArmour = Math.max(0, sectorArmour - ap);
@@ -499,7 +500,7 @@ export async function fireWeapon({ weaponId, actorId, fireMode, targetToken, hit
   // ── 6. Crit check ──
   const critResults = [];
   if (targetActor && totalHits > 0 && totalDamage > 0) {
-    const isDevastation = sys.resources?.captain?.stance === "devastation";
+    const isDevastation = hasDevastationProtocol(sys, targetSys);
     const critHitCount  = adapter.getCritHitCount(salvoRolls, hitsThroughShield, isDevastation);
 
     if (critHitCount !== null) {

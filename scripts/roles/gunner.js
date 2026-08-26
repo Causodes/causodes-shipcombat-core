@@ -22,6 +22,7 @@ import { TargetingPopup } from "../apps/TargetingPopup.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
 import { heatColor } from "../theme.js";
 import { getPowerCoreCount, resolveStationOperatorActor } from "./crew-operators.js";
+import { getAttackStanceModifier } from "../stances.js";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -434,8 +435,7 @@ export function buildGunnerContext(sys, opts = {}) {
   const weaponsSensorsTier = conditions.weaponsSensors?.tier;
   const blindedSectionId    = conditions.weaponsSensors?.blindedSectionId ?? null;
   const fireControlPenalty  = weaponsSensorsTier === "high" ? -2 * _dispStep : 0;
-  const stance             = sys.resources?.captain?.stance ?? "none";
-  const stanceHitMod       = stance === "aggressive" ? _dispStep : stance === "defensive" ? -_dispStep : 0;
+  const stanceHitMod       = getAttackStanceModifier(sys, null, _dispStep);
 
   return {
     ammo,

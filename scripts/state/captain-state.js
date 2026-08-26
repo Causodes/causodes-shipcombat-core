@@ -18,7 +18,7 @@
 import { MODULE_ID, CAPTAIN_CARDS, CAPTAIN_CORE_ACTIONS, buildCaptainDeck } from "../constants.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
 import { getPowerCoreCount, getPowerCorePoolRole } from "../roles/crew-operators.js";
-import { ensureContactRecord } from "../targeting/contact-intelligence.js";
+import { ensureContactRecord, isTargetableContactToken } from "../targeting/contact-intelligence.js";
 import { normalizeCaptainZone, shuffleCaptainCards } from "../captain/card-instances.js";
 
 const HAND_CAP   = 3;
@@ -34,6 +34,17 @@ const CORE_GRANT_CARD_IDS = new Set([
 ]);
 const DEAD_RECKONING_RESERVATIONS = new Map();
 const DEAD_RECKONING_PREVIEW_LIMIT = 12;
+
+function _distanceSquaresToTarget(target, ship) {
+  const own = ship?.getActiveTokens?.()?.[0];
+  const gs = canvas?.grid?.size;
+  if (!target || !own || !gs) return Infinity;
+  const tx = target.x + (target.document.width * gs) / 2;
+  const ty = target.y + (target.document.height * gs) / 2;
+  const sx = own.x + (own.document.width * gs) / 2;
+  const sy = own.y + (own.document.height * gs) / 2;
+  return Math.hypot(tx - sx, ty - sy) / gs;
+}
 
 function _grantCore(sys, updates, stationRole, count = 1) {
   const poolRole = getPowerCorePoolRole(sys, stationRole);
@@ -496,15 +507,20 @@ export async function captainCoreAction({ actionId, tokenId, cardInstanceId } = 
     updates[SystemAdapter.current.systemPath("resources.captain.discardPile")]  = discard;
   }
 
-  // ── Battle Clarity: mark priority target; +10 acc, pierce 2 shields ──
+  // ── Priority Target: mark one target; +10 acc, pierce 2 shields ──
   else if (actionId === "battleClarity") {
     if (!tokenId) return;
+    const target = canvas?.tokens?.get(tokenId);
+    if (!isTargetableContactToken(target, this.ship)) return;
+    const lockTier = this.getEffectiveLockTier(
+      tokenId,
+      _distanceSquaresToTarget(target, this.ship),
+    );
+    if (lockTier < 1) return;
     updates[SystemAdapter.current.systemPath("resources.captain.priorityTargetId")] = tokenId;
-    const lockTier = (sys.resources?.sensors?.locks ?? [])
-      .find(lock => lock.targetTokenId === tokenId)?.tier ?? 1;
     const ensured = ensureContactRecord(sys, tokenId, {
       tier: lockTier,
-      realName: canvas?.tokens?.get(tokenId)?.document?.name ?? null,
+      realName: target.document?.name ?? null,
     });
     updates[SystemAdapter.current.systemPath("resources.sensors.contacts")] = ensured.contacts;
     updates[SystemAdapter.current.systemPath("resources.sensors.nextContactOrdinal")] = ensured.nextContactOrdinal;

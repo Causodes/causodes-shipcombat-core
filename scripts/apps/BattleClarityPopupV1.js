@@ -10,7 +10,9 @@ import { emitToGM }
   from "../socket.js";
 import { ShipCombatState }
   from "../state/ShipCombatState.js";
-import { getContactDisplayName } from "../targeting/contact-intelligence.js";
+import { SystemAdapter }
+  from "../systems/SystemAdapter.js";
+import { getContactDisplayName, isTargetableContactToken } from "../targeting/contact-intelligence.js";
 
 // ── Shared ───────────────────────────────────────────────────────────────────
 // Lock tier colour palette used by BattleClarityPopupV1 (mirrors Core).
@@ -57,12 +59,9 @@ export class BattleClarityPopupV1 extends foundry.appv1.api.Application {
 
     const data    = ShipCombatState.getData();
 
-    const candidates = canvas.tokens?.placeables?.filter(t => {
-      if (!t.actor || !t.visible) return false;
-      const disp = t.document.disposition;
-      return disp === CONST.TOKEN_DISPOSITIONS.HOSTILE
-          || disp === CONST.TOKEN_DISPOSITIONS.NEUTRAL;
-    }) ?? [];
+    const candidates = canvas.tokens?.placeables?.filter(
+      token => isTargetableContactToken(token, ShipCombatState.ship),
+    ) ?? [];
 
     const sortedContactIds = candidates.map(target => target.id).filter(Boolean).sort();
     const recommendedTargetId = data.resources?.sensors?.recommendedTargetId ?? null;
@@ -87,7 +86,12 @@ export class BattleClarityPopupV1 extends foundry.appv1.api.Application {
       };
     }).filter(Boolean).sort((a, b) => Number(b.isRecommended) - Number(a.isRecommended) || b.lockTier - a.lockTier);
 
-    return { ...context, targets, noTargets: targets.length === 0 };
+    return {
+      ...context,
+      targets,
+      noTargets: targets.length === 0,
+      markerPalette: SystemAdapter.current.targetMarkerPalette(),
+    };
   }
 
   activateListeners($html) {

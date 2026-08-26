@@ -228,14 +228,6 @@ async function _onRecommendTarget(event, target) {
   await emitToGM("setRecommendedTarget", { targetTokenId });
 }
 
-/** GM-only diagnostic toggle; bypasses Captain core consumption. */
-async function _onDebugBattleClarity(event, target) {
-  if (!game.user.isGM) return;
-  const targetTokenId = target.dataset.targetTokenId;
-  if (!targetTokenId) return;
-  await ShipCombatState.setDebugBattleClarityTarget({ targetTokenId });
-}
-
 /**
  * Open the BDA popup for the Augur.
  * The popup handles both the roll phase and the fire-correction selection.
@@ -416,8 +408,6 @@ export function buildSensorsContext(sys, opts = {}) {
     sensorBlind,
     sensorPriorityActive,
     recommendedTargetId: sys.resources?.sensors?.recommendedTargetId ?? null,
-    priorityTargetId: sys.resources?.captain?.priorityTargetId ?? null,
-    isGM: !!game.user?.isGM,
     captainBoosts,
     // NPC conditions: visible when Sensors holds an active L3+ lock on that token
     npcConditions: _buildNpcConditions(locks),
@@ -486,7 +476,6 @@ export const SENSORS_ACTIONS = {
   sensorAction:       _onSensorAction,
   sensorCoreAction:   _onSensorCoreAction,
   recommendTarget:    _onRecommendTarget,
-  debugBattleClarity: _onDebugBattleClarity,
   toggleBearing:      _onToggleBearing,
   popOutRadar:        _onPopOutRadar,
   openBDAPopup:       _onOpenBDAPopup,

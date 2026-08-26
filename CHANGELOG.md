@@ -12,10 +12,9 @@
 - Unify Captain, Red Alert, and Engineer Power Core grants into one receiving-operator pool, with Engineer assignment retained only as its once-per-role distribution ledger; reduced-crew stations now read and spend their shared operator pool while keeping the existing available/unavailable overlays
 - Serialize every GM-side Power Core grant, spend, and reset in one per-ship transaction queue; consumption and action telemetry commit together, preventing both double-spends and grant/spend lost updates; remove the obsolete direct assign/revoke API
 - Balance Sensor Priority by halving Lock 1 and Lock 2 AP costs for the round, rounding up after the sensor component's AP modifier, instead of making those upgrades free
-- Add persistent per-ship contact designations shared across radar and targeting interfaces, plus crew-visible canvas markers for the Sensors recommendation and Captain's Battle Clarity target
-- Add a GM-only radar control that marks or clears Battle Clarity for testing without playing the Captain card or consuming a Power Core
+- Add persistent per-ship contact designations shared across radar and targeting interfaces, plus crew-visible canvas markers for the Sensors recommendation and Captain's Priority Target
 - Correct Sensor Radar heading transforms after the ship-forward convention change and rotate the true compass beneath relative/heading-up mode
-- Restyle Marked Target and Battle Clarity as high-opacity translucent pale teal/red indicators outside the shield and bow-indicator radius, with two-line, lock-coloured canvas labels and `Bandit-a: Name` contact formatting
+- Restyle Marked Target and Priority Target as high-opacity translucent pale teal/red indicators outside the shield and bow-indicator radius, with two-line, lock-coloured canvas labels and `Bandit-a: Name` contact formatting
 - Fix NPC ordnance salvo and flight-size fields being locked to 1 by persisting edits to the embedded template and applying the current field value when launching
 - Rework Captain Standing Orders: remove manual draw/full-hand mulligan controls, make Resolve fund per-slot mulligans that lock allocation on first use, and make Inspire set the next round's hand limit above a base of 3
 - Make Captain cards instance-aware so duplicate orders remain independently selectable and reorderable
@@ -26,6 +25,13 @@
 - Make the Standing Orders next-round counter project the refilled hand, and defer discard recycling until a round begins with an empty draw pile so a partially exhausted pile produces one intentionally short hand
 - Define one universal Captain-card surface contract for sheets, chat, Emergency Salvage, and Dead Reckoning so companion-system themes apply consistently without consumer-specific copies
 - Serialize and validate Captain, Gunner, Pilot, and Ordnance point allocations on the GM, enforcing pool totals, roll prerequisites, and post-action locks across full and reduced crews; apply equivalent guards to NPC helm and gunnery allocation controls
+- Fix Red Alert at the real Foundry round boundary: its internal fire increase and per-station Power Core grants now commit atomically with the round reset, including shared operator pools in reduced crews
+- Apply Aggressive and Defensive stance modifiers on both sides of ship and strike-craft attacks, and use their Speed/Maneuverability changes in actual helm previews, movement, rams, and drift rather than display only
+- Apply Devastating Protocol to incoming as well as outgoing weapon, strike-craft, torpedo, and ramming hits
+- Increase Dead Reckoning footer-button padding so Confirm Order and Cancel labels no longer crowd their right edges
+- Classify radar contacts by token allegiance (hostile Bandits, neutral Bogeys, named friendlies), exclude the acting ship and its allies from every shared target picker while preserving hostile-NPC targeting, and enforce the same rule in GM-side target-marking handlers
+- Replace the Mark for Crew flag with a crosshair and show Marked/Priority contacts directly on the Sensor Radar; pale-teal intercardinal ticks identify crew marks, Priority doubles the normal ring thickness in pale red, and mirrored name placement keeps the upper label clear
+- Rename Battle Clarity to Priority Target
 
 ## 2.2.4
 - Fix NPC ship weapon delete controls doing nothing by registering the shared embedded-item actions on both AppV2 and legacy AppV1 NPC sheets
@@ -46,7 +52,7 @@
 
 ## v2.2.0
 - Fix weapon accuracy being double-counted: the targeting popups pass a fully composed hit modifier, and `fireWeapon` no longer re-adds allocation/stance/weapon-rating/captain bonuses on top of it — only the Fire Control Failure penalty (unknown to the popups) is applied at resolution time. Rolls now match the value shown in the targeting popup
-- Use the fixed hit-bonus step (`getHitBonusStep`) for the Lock 4, BDA Adjust Bearing, Ranging Fire, and Battle Clarity bonuses in the core targeting popups (no change for d100 systems, where both steps are equal)
+- Use the fixed hit-bonus step (`getHitBonusStep`) for the Lock 4, BDA Adjust Bearing, Ranging Fire, and Priority Target bonuses in the core targeting popups (no change for d100 systems, where both steps are equal)
 - Fix target Evasion double-dipping on d20 systems: the accuracy-side evasion penalty in the targeting popups now only applies on roll-under systems (`getTargetAC` → null); d20 adapters carry evasion on the target's AC
 - Enforce **Sensor Disruption**: the disrupted ship now takes an adapter-defined penalty (`getSensorDisruptionPenalty`, default one range band) on weapon fire and NPC ship checks
 - Enforce **Sensor Overcharge**: an overcharged ship's weapons can only target within its own auto-scan range
