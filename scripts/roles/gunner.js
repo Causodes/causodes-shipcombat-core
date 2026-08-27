@@ -397,6 +397,7 @@ export function buildGunnerContext(sys, opts = {}) {
   const allocFirepower  = gunner.allocFirepower ?? 0;
   const slLocked        = gunner.slLocked ?? false;
   const ordnanceRolled  = gunner.ordnanceRolled ?? false;
+  const allocationLocked = slLocked || (gunner.firedWeaponIds ?? []).length > 0;
   const remainingSL     = ordnanceSL - allocAccuracy - allocPenetration - allocFirepower;
 
   const hasCoreAssigned = getPowerCoreCount(sys, "gunner") > 0;
@@ -463,8 +464,9 @@ export function buildGunnerContext(sys, opts = {}) {
     allocPenetration,
     allocFirepower,
     slLocked,
+    allocationLocked,
     remainingSL,
-    allocLocked: slLocked || !ordnanceRolled,
+    allocLocked: allocationLocked || !ordnanceRolled,
     // Arc overlay
     arcOverlayActive:    gunner.arcOverlayActive ?? false,
     chooseCritLocation:  gunner.chooseCritLocation ?? false,

@@ -31,7 +31,7 @@ async function _onAllocBonus(event, target) {
   const ramAllocLocked = sys.resources?.pilot?.ramAllocLocked ?? false;
   const hasRolledPiloting = !!sys.resources?.pilot?.pilotingMessageId;
 
-  if (fuelBurned > 0 || ramAllocLocked || (delta > 0 && !hasRolledPiloting)) return;
+  if (fuelBurned > 0 || ramAllocLocked || !hasRolledPiloting) return;
 
   let newAllocSpeed   = allocSpeed;
   let newAllocMano    = allocMano;

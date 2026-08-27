@@ -218,6 +218,7 @@ export function buildCaptainContext(sys, opts = {}) {
     hasPendingStance:  !!pending,
     // Leadership roll / alloc
     leadershipRolled:       captain.leadershipRolled  ?? false,
+    hasRolledInitiative:    opts.hasRolledInitiative ?? false,
     leadershipSL:           captain.leadershipSL      ?? 0,
     allocInspire:           captain.allocInspire      ?? 0,
     allocResolve:           captain.allocResolve      ?? 0,
@@ -329,7 +330,7 @@ async function _onRollInitiative() {
     },
   );
 
-  emitToGM("updateResource", { roleId: "captain", key: "rolledInitiative", value: total });
+  emitToGM("updateResource", { roleId: "captain", key: "initiativeTotal", value: total });
 }
 
 /** Roll Presence (Leadership) to generate the SL pool for inspire/resolve/initiative allocation. */

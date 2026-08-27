@@ -60,6 +60,7 @@
                 <div class="shipcombat-alloc-row">
                     <button type="button" class="shipcombat-alloc-btn" data-action="allocLeadershipSL" data-stat="initiative" data-delta="-1"
                             {{#unless captainCtx.leadershipRolled}}disabled{{/unless}}
+                            {{#unless captainCtx.hasRolledInitiative}}disabled{{/unless}}
                             {{#if captainCtx.allocationLocked}}disabled{{/if}}
                             {{#unless captainCtx.allocInitiative}}disabled{{/unless}}>
                         &minus;
@@ -67,6 +68,7 @@
                     <span class="shipcombat-helm-stat-value">{{captainCtx.allocInitiative}}</span>
                     <button type="button" class="shipcombat-alloc-btn" data-action="allocLeadershipSL" data-stat="initiative" data-delta="1"
                             {{#unless captainCtx.leadershipRolled}}disabled{{/unless}}
+                            {{#unless captainCtx.hasRolledInitiative}}disabled{{/unless}}
                             {{#if captainCtx.allocationLocked}}disabled{{/if}}
                             {{#if (gte (add (add captainCtx.allocInspire captainCtx.allocResolve) captainCtx.allocInitiative) captainCtx.leadershipSL)}}disabled{{/if}}>
                         +

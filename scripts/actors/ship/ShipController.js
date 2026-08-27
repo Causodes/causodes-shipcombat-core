@@ -32,6 +32,7 @@ import { HelmPreview } from "../../canvas/HelmPreview.js";
 import { WeaponArcOverlay } from "../../canvas/WeaponArcOverlay.js";
 import { SensorRadar } from "../../canvas/SensorRadar.js";
 import { SystemAdapter } from "../../systems/SystemAdapter.js";
+import { hasPlayerShipInitiative } from "../../initiative.js";
 import { normalizeCaptainZone } from "../../captain/card-instances.js";
 import { SHIP_PARTS, SHIP_TABS } from "./parts.js";
 
@@ -619,6 +620,7 @@ export class ShipController {
         const ctx = buildCaptainContext(sys, {
           reactorStats: ShipCombatState.getReactorStats(this.actor),
           shieldStats:  ShipCombatState.getShieldStats(this.actor),
+          hasRolledInitiative: hasPlayerShipInitiative({ shipActor: this.actor }),
         });
         ctx.rollLabel = _resolveRollLabel(sys, "captain", "SHIPCOMBAT.Captain.RollLeadership");
         ctx.slLabel   = _resolveSlLabel(sys, "captain", "SHIPCOMBAT.Captain.LeadershipSL");

@@ -10,7 +10,7 @@
 - Resolve every station operator from the 3–6 person crew layout, including reduced-crew helm, sensor visibility, ordnance rolls, and deployed-craft control
 - Use collision-checked 20-character BDA attack IDs and mark completed or round-reset assessment cards as expired
 - Derive accuracy copy and fire-tier modifiers from the active system adapter; fix d20 allocation/fire-mode scaling and remove percentile-only strike-craft displays
-- Preserve the Captain's rolled initiative as the additive baseline for next-round initiative allocations across core and system-specific combat-tracker roll paths
+- Apply Captain initiative allocation as a reversible combat-tracker bonus, replacing only the prior turn's Ship Combat bonus so rolled initiative never persists through actor state or carries between combats; disable initiative allocation until the ship has rolled tracker initiative
 - Unify Captain, Red Alert, and Engineer Power Core grants into one receiving-operator pool, with Engineer assignment retained only as its once-per-role distribution ledger; reduced-crew stations now read and spend their shared operator pool while keeping the existing available/unavailable overlays
 - Simplify Engineer Core Distribution rows by placing the ready-core `×n` count beside the clickable allocation bolt
 - Centralize Harden Shields bypass suppression across weapons, strike craft, and torpedoes
@@ -30,6 +30,7 @@
 - Make the Standing Orders next-round counter project the refilled hand, and defer discard recycling until a round begins with an empty draw pile so a partially exhausted pile produces one intentionally short hand
 - Define one universal Captain-card surface contract for sheets, chat, Emergency Salvage, and Dead Reckoning so companion-system themes apply consistently without consumer-specific copies
 - Serialize and validate Captain, Gunner, Pilot, and Ordnance point allocations on the GM, enforcing pool totals, roll prerequisites, and post-action locks across full and reduced crews; apply equivalent guards to NPC helm and gunnery allocation controls
+- Expose canonical committed-allocation locks to companion templates for Gunner and Ordnance, including fired-weapon and shared-crew lock states; disable allocation decrements when their raw allocated or staged value is already zero, and require each role's pool-generating roll before either allocation direction is enabled or accepted
 - Fix Red Alert at the real Foundry round boundary: discard unused temporary cores, apply its internal fire increase atomically, and grant exactly one fresh Power Core to each receiving operator, including shared pools in reduced crews
 - Apply Aggressive and Defensive stance modifiers on both sides of ship and strike-craft attacks, and use their Speed/Maneuverability changes in actual helm previews, movement, rams, and drift rather than display only
 - Apply Devastating Protocol to incoming as well as outgoing weapon, strike-craft, torpedo, and ramming hits

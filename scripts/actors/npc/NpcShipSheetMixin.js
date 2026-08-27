@@ -788,7 +788,7 @@ async function _onNpcAllocBonus(event, target) {
   const allocMano    = pilot.allocMano    ?? 0;
   const allocEvasion = pilot.allocEvasion ?? 0;
   if ((pilot.fuelBurned ?? 0) > 0 || pilot.ramAllocLocked) return;
-  if (delta > 0 && !pilot.pilotingMessageId) return;
+  if (!pilot.pilotingMessageId) return;
   const proposed = {
     speed: Math.max(0, allocSpeed + (stat === "speed" ? delta : 0)),
     mano: Math.max(0, allocMano + (stat === "mano" ? delta : 0)),

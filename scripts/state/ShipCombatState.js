@@ -24,7 +24,7 @@ import * as CritState      from "./crit-state.js";
 import * as CaptainState   from "./captain-state.js";
 import { HelmPreview }     from "../canvas/HelmPreview.js";
 import { SystemAdapter }   from "../systems/SystemAdapter.js";
-import { recordPlayerShipInitiative } from "../initiative.js";
+import { applyPlayerShipInitiativeBonus, hasPlayerShipInitiative, recordPlayerShipInitiative } from "../initiative.js";
 import { POWER_CORE_STATION_ROLES, getPowerCoreCount, getPowerCorePoolRole, getPowerCorePoolRoles } from "../roles/crew-operators.js";
 import { prepareCaptainHandForRound } from "../captain/card-instances.js";
 import { getContactDisplayName } from "../targeting/contact-intelligence.js";
@@ -359,15 +359,18 @@ export class ShipCombatState {
     updates["resources.captain.mulligansSpent"]       = 0;
     updates["resources.captain.allocationLocked"]     = false;
 
-    // ── Initiative: carry allocInitiative bonus forward to Foundry combat tracker ──
-    const rolledInitiative_ar = data.resources?.captain?.rolledInitiative ?? 0;
-    const allocInitiative_ar  = data.resources?.captain?.allocInitiative  ?? 0;
-    if ((rolledInitiative_ar > 0 || allocInitiative_ar > 0) && game.combat) {
-      const shipCombatant = game.combat.combatants.find(c => c.actor?.id === this.ship?.id);
-      if (shipCombatant) {
-        await game.combat.setInitiative(shipCombatant.id, rolledInitiative_ar + allocInitiative_ar);
-      }
-    }
+    // Replace only Ship Combat's previously applied initiative delta, leaving
+    // the combat tracker's rolled value authoritative.
+    const previousInitiativeBonus = data.resources?.captain?.prevTurnInitiativeBonus ?? 0;
+    const allocatedInitiativeBonus = data.resources?.captain?.allocInitiative ?? 0;
+    const nextInitiative = await applyPlayerShipInitiativeBonus({
+      shipActor: this.ship,
+      previousBonus: previousInitiativeBonus,
+      bonus: allocatedInitiativeBonus,
+    });
+    updates["resources.captain.prevTurnInitiativeBonus"] = nextInitiative == null
+      ? 0
+      : allocatedInitiativeBonus;
 
     updates["resources.captain.leadershipRolled"]     = false;
     updates["resources.captain.leadershipSL"]         = 0;
@@ -617,8 +620,8 @@ export class ShipCombatState {
     if (roleId.includes(".")) {
       return this.update({ [`${roleId}.${key}`]: value });
     }
-    // When rolledInitiative is set (captain rolls initiative formula), update combatant initiative
-    if (roleId === "captain" && key === "rolledInitiative") {
+    // Initiative totals are tracker state, not a persistent ship resource.
+    if (roleId === "captain" && key === "initiativeTotal") {
       return recordPlayerShipInitiative({ shipActor: this.ship, rawTotal: value });
     }
     if (roleId === "engineer" && key === "auxiliaryPower") {
@@ -632,6 +635,8 @@ export class ShipCombatState {
     if (isAllocationResource(roleId, key)) {
       return this.withAllocationTransaction(async () => {
         const data = this.getData();
+        if (roleId === "captain" && key === "allocInitiative"
+          && !hasPlayerShipInitiative({ shipActor: this.ship })) return;
         const validated = validateAllocationChange(data, roleId, key, value);
         if (!validated) return;
         return this.update({ [`resources.${roleId}.${key}`]: validated.value });
@@ -944,6 +949,10 @@ export class ShipCombatState {
 
   static async fullReset() {
     const data = this.getData();
+    await applyPlayerShipInitiativeBonus({
+      shipActor: this.ship,
+      previousBonus: data.resources?.captain?.prevTurnInitiativeBonus ?? 0,
+    });
     const prevResetId = data.resources?.pilot?.helmResetId ?? 0;
     const shieldCfg   = this.getShieldStats();
     const reactor     = this.getReactorStats();
@@ -1091,7 +1100,7 @@ export class ShipCombatState {
     updates["resources.captain.payload"]              = "";
     updates["resources.captain.leadershipRolled"]     = false;
     updates["resources.captain.leadershipSL"]         = 0;
-    updates["resources.captain.rolledInitiative"]     = 0;
+    updates["resources.captain.prevTurnInitiativeBonus"] = 0;
     updates["resources.captain.allocInspire"]         = 0;
     updates["resources.captain.allocResolve"]         = 0;
     updates["resources.captain.allocInitiative"]      = 0;
@@ -1281,7 +1290,7 @@ export class ShipCombatState {
       "resources.captain.payload":               "",
       "resources.captain.leadershipRolled":      false,
       "resources.captain.leadershipSL":          0,
-      "resources.captain.rolledInitiative":      0,
+      "resources.captain.prevTurnInitiativeBonus": 0,
       "resources.captain.allocInspire":          0,
       "resources.captain.allocResolve":          0,
       "resources.captain.allocInitiative":       0,
@@ -1322,7 +1331,15 @@ export class ShipCombatState {
   }
 
   static async endCombat() {
-    return this.update({ active: false });
+    const data = this.getData();
+    await applyPlayerShipInitiativeBonus({
+      shipActor: this.ship,
+      previousBonus: data.resources?.captain?.prevTurnInitiativeBonus ?? 0,
+    });
+    return this.update({
+      active: false,
+      "resources.captain.prevTurnInitiativeBonus": 0,
+    });
   }
 
   /**

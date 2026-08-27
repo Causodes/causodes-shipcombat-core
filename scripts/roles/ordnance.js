@@ -426,6 +426,7 @@ export function buildOrdnanceContext(sys, opts = {}) {
     bosunSL,
     bosunRolled,
     actionUsed,
+    allocationLocked: actionUsed,
     coreUsed,
     coreCount,
     hasCoreAssigned,

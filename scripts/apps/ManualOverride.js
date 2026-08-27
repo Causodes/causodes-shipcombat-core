@@ -14,7 +14,7 @@ const ENGINEER_ACTIONS = ["cores", "heat", "fire", "repair"];
 const RESOURCE_KEYS_BY_ROLE = {
   captain: new Set([
     "leadershipSL", "leadershipRolled", "allocationLocked",
-    "allocInspire", "allocResolve", "allocInitiative", "rolledInitiative",
+    "allocInspire", "allocResolve", "allocInitiative",
     "triageCount", "currentHandCap", "handCapBonus", "mulligansSpent",
     "holdTheLineActive", "hardenedShields", "acceleratedLoadingActive",
   ]),

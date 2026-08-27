@@ -15,30 +15,30 @@
         <span class="shipcombat-helm-stat-label">{{localize "SHIPCOMBAT.Helm.Speed"}}</span>
         <div class="shipcombat-alloc-row">
             <button type="button" class="shipcombat-alloc-btn" data-action="allocBonus" data-stat="speed" data-delta="-1"
-                    {{#if helm.allocLocked}}disabled{{/if}}>&minus;</button>
+                    {{#unless helm.hasRolledPiloting}}disabled{{/unless}}{{#if helm.allocLocked}}disabled{{/if}}{{#unless helm.allocSpeed}}disabled{{/unless}}>&minus;</button>
             <span class="shipcombat-helm-stat-value">{{helm.effectiveSpeed}}</span>
             <button type="button" class="shipcombat-alloc-btn" data-action="allocBonus" data-stat="speed" data-delta="1"
-                    {{#if helm.allocLocked}}disabled{{/if}}>+</button>
+                    {{#unless helm.hasRolledPiloting}}disabled{{/unless}}{{#if helm.allocLocked}}disabled{{/if}}>+</button>
         </div>
     </div>
     <div class="shipcombat-helm-stat" data-tooltip="{{helm.manoTooltip}}">
         <span class="shipcombat-helm-stat-label">{{localize "SHIPCOMBAT.Helm.Maneuverability"}}</span>
         <div class="shipcombat-alloc-row">
             <button type="button" class="shipcombat-alloc-btn" data-action="allocBonus" data-stat="mano" data-delta="-1"
-                    {{#if helm.allocLocked}}disabled{{/if}}>&minus;</button>
+                    {{#unless helm.hasRolledPiloting}}disabled{{/unless}}{{#if helm.allocLocked}}disabled{{/if}}{{#unless helm.allocMano}}disabled{{/unless}}>&minus;</button>
             <span class="shipcombat-helm-stat-value">{{helm.effectiveMano}}</span>
             <button type="button" class="shipcombat-alloc-btn" data-action="allocBonus" data-stat="mano" data-delta="1"
-                    {{#if helm.allocLocked}}disabled{{/if}}>+</button>
+                    {{#unless helm.hasRolledPiloting}}disabled{{/unless}}{{#if helm.allocLocked}}disabled{{/if}}>+</button>
         </div>
     </div>
     <div class="shipcombat-helm-stat" data-tooltip="{{localize "SHIPCOMBAT.Helm.EvasionTooltip"}}">
         <span class="shipcombat-helm-stat-label">{{localize "SHIPCOMBAT.Helm.Evasion"}}</span>
         <div class="shipcombat-alloc-row">
             <button type="button" class="shipcombat-alloc-btn" data-action="allocBonus" data-stat="evasion" data-delta="-1"
-                    {{#if helm.allocLocked}}disabled{{/if}}>&minus;</button>
+                    {{#unless helm.hasRolledPiloting}}disabled{{/unless}}{{#if helm.allocLocked}}disabled{{/if}}{{#unless helm.allocEvasion}}disabled{{/unless}}>&minus;</button>
             <span class="shipcombat-helm-stat-value">{{helm.allocEvasion}}</span>
             <button type="button" class="shipcombat-alloc-btn" data-action="allocBonus" data-stat="evasion" data-delta="1"
-                    {{#if helm.allocLocked}}disabled{{/if}}>+</button>
+                    {{#unless helm.hasRolledPiloting}}disabled{{/unless}}{{#if helm.allocLocked}}disabled{{/if}}>+</button>
         </div>
     </div>
 </div>
