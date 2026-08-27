@@ -139,7 +139,7 @@
       "Severity": "Severity",
       "ActionSelection": "Action Selection",
       "StatusTitle": "Reactor Status",
-      "CoreBank": "Auxiliary Power",
+      "AuxiliaryPower": "Auxiliary Power",
       "ReadyCores": "Ready ×{count}",
       "VentLocked": "Vent Locked",
       "VentLockedDesc": "Reactor Offline This Turn",

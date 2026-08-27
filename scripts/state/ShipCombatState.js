@@ -616,9 +616,6 @@ export class ShipCombatState {
     if (roleId === "hull") {
       return this.update({ [`hull.${key}`]: value });
     }
-    if (roleId === "coreBank") {
-      return this.update({ coreBank: value });
-    }
     if (roleId.includes(".")) {
       return this.update({ [`${roleId}.${key}`]: value });
     }
@@ -1008,7 +1005,6 @@ export class ShipCombatState {
       internalFire: 0,
       "shieldPool.current":   shieldCfg.maxVoidFlux,
       "shieldPool.committed": 0,
-      coreBank: 0,
       ventLocked: false,
       ventPending: false,
     };
@@ -1253,7 +1249,6 @@ export class ShipCombatState {
       "resources.engineer.extraActions":  0,
       "shieldPool.current":   shieldCfg.maxVoidFlux,
       "shieldPool.committed": 0,
-      coreBank: 0,
       ventLocked: false,
       ventPending: false,
       // ── Conditions: clear all at start of combat ──

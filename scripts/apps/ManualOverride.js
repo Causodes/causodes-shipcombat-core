@@ -21,7 +21,7 @@ const RESOURCE_KEYS_BY_ROLE = {
   engineer: new Set([
     "heat", "powerCores", "auxiliaryPower", "extraActions",
     "stagedShieldCores", "stagedAuxCores", "committedAuxCores",
-    "heatCoresStaged", "fireCoresStaged",
+    "heatCoresStaged", "fireCoresStaged", "repairAuxPowerStaged",
   ]),
   pilot: new Set([
     "pilotingSL", "allocSpeed", "allocMano", "allocEvasion",
@@ -75,6 +75,7 @@ const RESOURCE_LABELS = {
   allocExpedience: "Expedience Allocation",
   autoArmTimer: "Auto-arm Torpedo Timer",
   autoLoadTimer: "Auto-load Payload Timer",
+  repairAuxPowerStaged: "Hull Repair Auxiliary Power",
 };
 const RESOURCE_ORDER = {
   captain: [
@@ -463,7 +464,6 @@ export class ManualOverride extends foundry.appv1.api.FormApplication {
       resourceGroups: resourceGroups(sys),
       weapons: configurableWeapons(this.actor, sys),
       shipFields: [
-        { path: "coreBank", label: game.i18n.localize("SHIPCOMBAT.Engineer.CoreBank"), value: sys.coreBank ?? 0, isNumber: true },
         { path: "ventLocked", label: game.i18n.localize("SHIPCOMBAT.Engineer.VentLocked"), value: !!sys.ventLocked, isBoolean: true },
         { path: "ventPending", label: game.i18n.localize("SHIPCOMBAT.Override.VentPending"), value: !!sys.ventPending, isBoolean: true },
       ],
@@ -481,7 +481,6 @@ export class ManualOverride extends foundry.appv1.api.FormApplication {
     const editableFields = [
       ...["hull.value", "hull.max", "shieldPool.current", "internalFire", ...["bow", "stern", "port", "starboard"].flatMap(sector => [`shields.${sector}`, `armourRend.${sector}`])]
         .map(path => ({ path, value: readValue(sys, path), isNumber: true })),
-      { path: "coreBank", value: sys.coreBank ?? 0, isNumber: true },
       { path: "ventLocked", value: !!sys.ventLocked, isBoolean: true },
       { path: "ventPending", value: !!sys.ventPending, isBoolean: true },
       ...resourceGroups(sys).flatMap(group => group.fields),
@@ -580,7 +579,7 @@ export class ManualOverride extends foundry.appv1.api.FormApplication {
 
     await this.actor.update(updates);
     ui.notifications.warn(game.i18n.format("SHIPCOMBAT.Override.Applied", { count: trackedPaths.length, ship: this.actor.name }));
-    await this.render(true);
+    await this.close();
   }
 
 }

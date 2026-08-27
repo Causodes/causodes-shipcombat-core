@@ -153,19 +153,27 @@ export async function upgradeLock({ targetTokenId, tier }) {
   });
 }
 
-/**
- * Upgrade every existing sensor lock to at least the requested tier.
- * The full lock array is calculated and persisted once so callers cannot lose
- * upgrades through concurrent read/modify/write socket requests.
- */
+/** Upgrade every explicit or auto-scan lock in one actor update. */
 export async function upgradeAllLocks({ tier }) {
   const targetTier = Math.max(1, Math.min(4, Number(tier) || 1));
   const data = this.getData();
   const locks = data.resources?.sensors?.locks ?? [];
   const decay = LOCK_DECAY_ROUNDS[targetTier] ?? 1;
-  let changed = false;
+  const locksByTarget = new Map(locks.map(lock => [lock.targetTokenId, lock]));
 
-  const upgradedLocks = locks.map(lock => {
+  const scanRange = this.getSensorStats?.()?.autoScanRange ?? 0;
+  if (scanRange > 0) {
+    for (const target of canvas?.tokens?.placeables ?? []) {
+      if (!isTargetableContactToken(target, this.ship, { requireVisible: false })) continue;
+      if (_distanceSquaresToTarget(target.id, this.ship) > scanRange) continue;
+      if (!locksByTarget.has(target.id)) {
+        locksByTarget.set(target.id, { targetTokenId: target.id, tier: 2, decayRounds: 0 });
+      }
+    }
+  }
+
+  let changed = locksByTarget.size !== locks.length;
+  const upgradedLocks = [...locksByTarget.values()].map(lock => {
     if ((lock.tier ?? 0) >= targetTier) return lock;
     changed = true;
     return { ...lock, tier: targetTier, decayRounds: decay };

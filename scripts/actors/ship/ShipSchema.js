@@ -91,8 +91,6 @@ export const ShipSchemaMixin = (BaseClass) => class extends BaseClass {
       committed: new fields.NumberField({ initial: 0, min: 0, integer: true }),
     });
 
-    // ── Core Bank ────────────────────────────────────────────────────────────
-    schema.coreBank   = new fields.NumberField({ initial: 0, min: 0, integer: true });
     schema.ventLocked = new fields.BooleanField({ initial: false });
     schema.ventPending = new fields.BooleanField({ initial: false });
 

@@ -3,6 +3,7 @@
 - Centralize allocation terminology in the active system adapter, including count-aware singular/plural forms used by localization, templates, BDA badges, and generated UI copy
 - Fix nested role-name localization tokens so companion role overrides resolve cleanly in warnings and Captain-card descriptions
 - Fix Combat Telemetry only upgrading one target by applying all lock upgrades in one atomic GM-side actor update
+- Fix Combat Telemetry skipping targets within auto-scan range
 - Keep BDA results isolated per attack so overlapping assessments cannot display another shot's hit count or damage
 - Resolve the BDA operator from crew layout, allow the Captain to operate Sensors in 4-person crews, and retain GM launch access
 - Resolve every station operator from the 3–6 person crew layout, including reduced-crew helm, sensor visibility, ordnance rolls, and deployed-craft control
@@ -37,6 +38,7 @@
 - Harden various emit to GM transport contracts
 - Add confirmation dialogue on allocation locking actions
 - Add GM Manual Override to player ship stats to the bottom of the Configuration tab
+- Remove stale/legacy resource keys
 - Add a world-level Shield Resolution setting with backward-compatible Hit Negation and optional Damage Pool modes; Damage Pool applies Shield Burn before absorbing normal damage point-for-point and discards excess Burn instead of spilling it into armour or hull, while weapon, strike-craft, and torpedo attacks consistently respect Shield Bypass, Harden Shields, immunity, Rend, and partial damage overflow
 
 ## 2.2.4

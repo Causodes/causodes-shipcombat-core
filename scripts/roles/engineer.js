@@ -236,7 +236,7 @@ async function _onSuppressFire() {
   emitToGM("updateResource", { roleId: "engineer", key: "fireCoresStaged", value: 1 });
 }
 
-/** Adjust heatCoresStaged by delta, clamped [1, coreBank]. */
+/** Adjust heatCoresStaged by delta, clamped to available Auxiliary Power. */
 async function _onAdjustHeatCores(event, target) {
   const delta = Number(target.dataset.delta) || 0;
   const sys = SystemAdapter.current.getShipData(this.actor);
@@ -246,7 +246,7 @@ async function _onAdjustHeatCores(event, target) {
   emitToGM("updateResource", { roleId: "engineer", key: "heatCoresStaged", value: next });
 }
 
-/** Adjust fireCoresStaged by delta, clamped [1, min(coreBank, internalFire)]. */
+/** Adjust fireCoresStaged by delta, clamped to Auxiliary Power and internal fire. */
 async function _onAdjustFireCores(event, target) {
   const delta = Number(target.dataset.delta) || 0;
   const sys = SystemAdapter.current.getShipData(this.actor);
@@ -258,19 +258,19 @@ async function _onAdjustFireCores(event, target) {
   emitToGM("updateResource", { roleId: "engineer", key: "fireCoresStaged", value: next });
 }
 
-/** Adjust repairPlasmaStaged by delta, clamped [1, coreBank]. */
-async function _onAdjustRepairPlasma(event, target) {
+/** Adjust repairAuxPowerStaged by delta, clamped to available Auxiliary Power. */
+async function _onAdjustRepairAuxPower(event, target) {
   const delta = Number(target.dataset.delta) || 0;
   const sys = SystemAdapter.current.getShipData(this.actor);
   const bank = sys.resources?.engineer?.auxiliaryPower ?? 0;
-  const current = sys.resources?.engineer?.repairPlasmaStaged ?? 1;
+  const current = sys.resources?.engineer?.repairAuxPowerStaged ?? 1;
   const next = Math.max(1, Math.min(bank, current + delta));
-  emitToGM("updateResource", { roleId: "engineer", key: "repairPlasmaStaged", value: next });
+  emitToGM("updateResource", { roleId: "engineer", key: "repairAuxPowerStaged", value: next });
 }
 
 /**
  * Hull Repair: costs 2 heat + N plasma reserves (banked cores).
- * Engineering test, hull restored = plasmaSpent + SL (min 0).
+ * Engineering test, hull restored = Auxiliary Power spent + SL (min 0).
  * Cannot repair while internal fire is active.
  */
 async function _onRepairHull() {
@@ -300,20 +300,19 @@ async function _onRepairHull() {
     return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoEngineer"));
   }
 
-  const plasmaSpent = Math.max(1, Math.min(bank, sys.resources?.engineer?.repairPlasmaStaged ?? 1));
+  const auxiliaryPowerSpent = Math.max(1, Math.min(bank, sys.resources?.engineer?.repairAuxPowerStaged ?? 1));
 
-  // Spend banked cores (plasma reserves)
-  emitToGM("spendBankedCores", { count: plasmaSpent });
+  emitToGM("spendBankedCores", { count: auxiliaryPowerSpent });
 
   // Engineering test
   const result = await SystemAdapter.current.rollSkillTest(crewActor, sys.roleSkillOverrides?.engineer ?? "engineering");
   if (!result) return;
 
   const sl = Math.max(0, result.SL);
-  emitToGM("repairHull", { plasmaSpent, sl });
+  emitToGM("repairHull", { auxiliaryPowerSpent, sl });
 
   // Reset staged value
-  emitToGM("updateResource", { roleId: "engineer", key: "repairPlasmaStaged", value: 1 });
+  emitToGM("updateResource", { roleId: "engineer", key: "repairAuxPowerStaged", value: 1 });
 }
 
 /** Convert 1 voidshield flux into 1 Auxiliary Power. */
@@ -339,7 +338,7 @@ export const ENGINEER_ACTIONS = {
   adjustHeatCores:     _onAdjustHeatCores,
   adjustFireCores:     _onAdjustFireCores,
   repairHull:          _onRepairHull,
-  adjustRepairPlasma:  _onAdjustRepairPlasma,
+  adjustRepairAuxPower: _onAdjustRepairAuxPower,
   fluxToCharge:        _onFluxToCharge,
 };
 
@@ -364,7 +363,7 @@ export function buildEngineerContext(sys, opts = {}) {
   const shieldCurrent   = sys.shieldPool?.current   ?? 0;
   const heatCoresStaged = Math.max(1, Math.min(auxiliaryPower, sys.resources?.engineer?.heatCoresStaged ?? 1));
   const fireCoresStaged = Math.max(1, Math.min(Math.min(auxiliaryPower, internalFire), sys.resources?.engineer?.fireCoresStaged ?? 1));
-  const repairPlasmaStaged = Math.max(1, Math.min(auxiliaryPower, sys.resources?.engineer?.repairPlasmaStaged ?? 1));
+  const repairAuxPowerStaged = Math.max(1, Math.min(auxiliaryPower, sys.resources?.engineer?.repairAuxPowerStaged ?? 1));
 
   const { reactorStats, shieldStats } = opts;
   const shieldStrengthPerCore = reactorStats?.shieldStrengthPerCore ?? 0;
@@ -430,7 +429,7 @@ export function buildEngineerContext(sys, opts = {}) {
     reserveMultiplier,
     heatCoresStaged,
     fireCoresStaged,
-    repairPlasmaStaged,
+    repairAuxPowerStaged,
     overclockTier:     overclockTier.label,
     overclockModifier: overclockTier.modifier,
     overclockTooltip,

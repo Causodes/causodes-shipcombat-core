@@ -187,7 +187,7 @@ export async function adjustShieldZone(sector, value) {
 
 // ── Hull Repair ────────────────────────────────────────────────────────────
 
-export async function repairHull(plasmaSpent, sl) {
+export async function repairHull(auxiliaryPowerSpent, sl) {
   const sys = SystemAdapter.current.getShipData(this.ship);
   if (!sys) return;
 
@@ -202,7 +202,7 @@ export async function repairHull(plasmaSpent, sl) {
   const heatMax    = reactor.heatCapacity;
   const heatRoom   = Math.max(0, heatMax - heat);
   // Repair is capped to available heat budget (1 heat per HP) and remaining damage headroom.
-  const repairAttempted = Math.max(0, plasmaSpent + sl);
+  const repairAttempted = Math.max(0, auxiliaryPowerSpent + sl);
   const hullCurrent = sys.hull?.value ?? 0;
   const hullMax     = sys.hull?.max ?? 50;
   const isHPMode    = SystemAdapter.current.hullDisplayMode === "hpRemaining";

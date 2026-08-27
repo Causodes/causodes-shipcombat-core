@@ -324,7 +324,7 @@ async function _handleAction(action, payload = {}) {
     }
 
     case "repairHull":
-      await ShipCombatState.repairHull(payload.plasmaSpent, payload.sl);
+      await ShipCombatState.repairHull(payload.auxiliaryPowerSpent, payload.sl);
       break;
 
     case "addSensorEffect":
