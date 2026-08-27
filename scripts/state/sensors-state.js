@@ -26,6 +26,20 @@ function _warnSensorBlind() {
   ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Crit.SensorBlindDisabled"));
 }
 
+async function _updateBDAChatMessage(attack, messageId, content) {
+  if (!messageId || typeof content !== "string") return;
+  if (attack.messageId && messageId !== attack.messageId) return;
+
+  const message = game.messages.get(messageId);
+  const flags = message?.flags?.[MODULE_ID];
+  if (flags?.type !== "bdaPending"
+    || flags.attackId !== attack.attackId
+    || flags.attackCreatedAt !== attack.createdAt
+    || flags.shipUuid !== attack.shipUuid) return;
+
+  await message.update({ content });
+}
+
 function _contactUpdates(data, targets) {
   let sensors = {
     ...(data.resources?.sensors ?? {}),
@@ -353,7 +367,7 @@ export async function removeLock(targetTokenId) {
  * BDA resolution: retain partial lock based on SL thresholds.
  * SL 0  = reveal damage only (lock lost). SL 1+ = Tier 1. SL 2+ = Tier 2. SL 3+ = Tier 3. SL 4+ = Tier 4.
  */
-export async function resolveBDA({ attackId, sl, messageId }) {
+export async function resolveBDA({ attackId, sl, messageId, messageContent }) {
   const data = this.getData();
   const attack = data.resources?.sensors?.bdaAttacks?.[attackId];
   if (!attack) return;
@@ -409,6 +423,8 @@ export async function resolveBDA({ attackId, sl, messageId }) {
     }
   }
 
+  await _updateBDAChatMessage(attack, resolvedMessageId, messageContent);
+
   if (sl >= 1) {
     updates[`resources.sensors.bdaAttacks.${attackId}`] = {
       ...attack,
@@ -424,8 +440,11 @@ export async function resolveBDA({ attackId, sl, messageId }) {
 }
 
 /** Remove one completed per-attack BDA record. */
-export async function completeBDA({ attackId }) {
+export async function completeBDA({ attackId, messageId, messageContent }) {
   if (!attackId) return;
+  const attack = this.getData().resources?.sensors?.bdaAttacks?.[attackId];
+  if (!attack) return;
+  await _updateBDAChatMessage(attack, messageId ?? attack.messageId ?? null, messageContent);
   return this.update({ [`resources.sensors.bdaAttacks.-=${attackId}`]: null });
 }
 

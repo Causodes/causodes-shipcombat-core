@@ -107,13 +107,11 @@ export async function launchBDAFromChat(ship, message, attackId = null) {
   // Shown for any non-negative SL (SL 0 = marginal pass  -  lock lost but data gathered).
   const fireResultHtml = await _renderFireResult(attack, rawSL);
 
-  // Notify GM - resolves only this attack's lock retention and state.
-  emitToGM("resolveBDA", { attackId, sl: rawSL, messageId: message?.id ?? null });
-
-  // Update the BDA chat card with roll result + embedded fire result
+  // Render the BDA chat card update for the GM-owned resolution path.
+  let messageContent = null;
   if (message) {
     const signedSL = rawSL >= 0 ? `+${rawSL}` : `${rawSL}`;
-    const updatedContent = await renderTemplate(
+    messageContent = await renderTemplate(
       `modules/${CORE_MODULE_ID}/templates/chat/bda-pending.hbs`,
       {
         targetName,
@@ -127,8 +125,15 @@ export async function launchBDAFromChat(ship, message, attackId = null) {
         correctionChosen: false,
       }
     );
-    await message.update({ content: updatedContent });
   }
+
+  // The GM resolves state and updates the matching chat card authoritatively.
+  await emitToGM("resolveBDA", {
+    attackId,
+    sl: rawSL,
+    messageId: message?.id ?? null,
+    messageContent,
+  });
 
   // Auto-open corrections popup only on a passing roll (SL ≥ 1)
   if (rawSL >= 1) {
@@ -236,15 +241,16 @@ export class BDAPopup extends foundry.appv1.api.Application {
       });
     }
 
-    // Update the originating BDA chat card with the chosen correction
+    // Render the originating BDA card update for the GM-owned completion path.
     const messageId = this.messageId ?? attack?.messageId ?? null;
+    let messageContent = null;
     if (messageId) {
       const message = game.messages.get(messageId);
       if (message) {
         const targetName = this.targetName ?? message.flags?.[MODULE_ID]?.targetName ?? "Unknown";
         const signedSL   = sl >= 0 ? `+${sl}` : `${sl}`;
         const fireResultHtml = this.fireResultHtml ?? await _renderFireResult(attack, sl);
-        const updatedContent = await renderTemplate(
+        messageContent = await renderTemplate(
           `modules/${CORE_MODULE_ID}/templates/chat/bda-pending.hbs`,
           {
             targetName,
@@ -261,11 +267,14 @@ export class BDAPopup extends foundry.appv1.api.Application {
             correctionDesc:   game.i18n.localize(correction.desc),
           }
         );
-        await message.update({ content: updatedContent });
       }
     }
 
-    emitToGM("completeBDA", { attackId: this.attackId });
+    await emitToGM("completeBDA", {
+      attackId: this.attackId,
+      messageId,
+      messageContent,
+    });
     this.close();
   }
 }

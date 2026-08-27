@@ -179,12 +179,10 @@
 }
 
 .shipcombat-core-ready-count {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.2rem;
-  margin-left: 0.45rem;
   color: #e6b84a;
+  font-size: 0.75rem;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .shipcombat-core-alloc-ctrl {
@@ -194,6 +192,28 @@
   justify-content: center;
   gap: 4px;
   min-width: 5rem;
+}
+
+.shipcombat-core-alloc-ctrl--role {
+  position: relative;
+  flex: 0 0 5rem;
+  display: block;
+  width: 5rem;
+  height: 1.5rem;
+}
+
+.shipcombat-core-alloc-ctrl--role > :first-child {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.shipcombat-core-alloc-ctrl--role > .shipcombat-core-ready-count {
+  position: absolute;
+  top: 50%;
+  left: calc(50% + 0.85rem);
+  transform: translateY(-50%);
 }
 
 .shipcombat-core-alloc-count {

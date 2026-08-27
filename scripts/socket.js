@@ -15,6 +15,7 @@ function _confirmAllocationAction(action, payload) {
     pilotRam: ["pilot", "pilot.ram", "SHIPCOMBAT.Helm.Ram"],
     commitOrdnanceAction: ["ordnance", "ordnance.commit", ORDNANCE_MASTER_ACTIONS[payload.actionId]?.label],
     mulligan: ["captain", "captain.mulligan", "SHIPCOMBAT.Captain.Mulligan"],
+    beginDeadReckoning: ["captain", "captain.deadReckoning", "SHIPCOMBAT.Captain.Core.DeadReckoning.label"],
   };
 
   let policy = policies[action];

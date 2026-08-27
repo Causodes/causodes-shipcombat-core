@@ -36,6 +36,11 @@ export function getPowerCorePoolRole(shipOrData, stationRole) {
   return getStationOperatorRole(shipOrData, stationRole);
 }
 
+/** Return each distinct operator pool represented by the requested stations. */
+export function getPowerCorePoolRoles(shipOrData, stationRoles = POWER_CORE_STATION_ROLES) {
+  return [...new Set(stationRoles.map(roleId => getPowerCorePoolRole(shipOrData, roleId)))];
+}
+
 /** Return the number of ready Power Cores available to a station's operator. */
 export function getPowerCoreCount(shipOrData, stationRole) {
   const sys = _shipData(shipOrData);

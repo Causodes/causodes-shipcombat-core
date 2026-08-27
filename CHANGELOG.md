@@ -6,11 +6,13 @@
 - Fix Combat Telemetry skipping targets within auto-scan range
 - Keep BDA results isolated per attack so overlapping assessments cannot display another shot's hit count or damage
 - Resolve the BDA operator from crew layout, allow the Captain to operate Sensors in 4-person crews, and retain GM launch access
+- Route BDA result and correction chat-card updates through the GM so assigned Sensors operators can complete Combat Assessment without ChatMessage permission errors
 - Resolve every station operator from the 3–6 person crew layout, including reduced-crew helm, sensor visibility, ordnance rolls, and deployed-craft control
 - Use collision-checked 20-character BDA attack IDs and mark completed or round-reset assessment cards as expired
 - Derive accuracy copy and fire-tier modifiers from the active system adapter; fix d20 allocation/fire-mode scaling and remove percentile-only strike-craft displays
 - Preserve the Captain's rolled initiative as the additive baseline for next-round initiative allocations across core and system-specific combat-tracker roll paths
 - Unify Captain, Red Alert, and Engineer Power Core grants into one receiving-operator pool, with Engineer assignment retained only as its once-per-role distribution ledger; reduced-crew stations now read and spend their shared operator pool while keeping the existing available/unavailable overlays
+- Simplify Engineer Core Distribution rows by placing the ready-core `×n` count beside the clickable allocation bolt
 - Centralize Harden Shields bypass suppression across weapons, strike craft, and torpedoes
 - Serialize every GM-side Power Core grant, spend, and reset in one per-ship transaction queue; consumption and action telemetry commit together, preventing both double-spends and grant/spend lost updates; remove the obsolete direct assign/revoke API
 - Balance Sensor Priority by halving Lock 1 and Lock 2 AP costs for the round, rounding up after the sensor component's AP modifier, instead of making those upgrades free
@@ -23,11 +25,12 @@
 - Rework Emergency Salvage to preview full card effects, add the chosen order to hand with a Salvaged tag regardless of hand limit, recycle the remaining discard pile, and return the Salvaged order to the bottom of the draw pile whenever it leaves hand
 - Show full order names, categories, and descriptions while reordering the draw pile with Dead Reckoning
 - Spend Captain's Power Core before revealing the draw-pile preview in Dead Reckoning; cancelling or closing the preview no longer avoids the cost
+- Show the allocation warning before Dead Reckoning commits the Captain's unrolled or unspent allocation points
 - Remove the redundant Active Standing Orders panel from Captain tabs; active stance remains in the top status bar and role-specific order effects remain visible to affected crew
 - Make the Standing Orders next-round counter project the refilled hand, and defer discard recycling until a round begins with an empty draw pile so a partially exhausted pile produces one intentionally short hand
 - Define one universal Captain-card surface contract for sheets, chat, Emergency Salvage, and Dead Reckoning so companion-system themes apply consistently without consumer-specific copies
 - Serialize and validate Captain, Gunner, Pilot, and Ordnance point allocations on the GM, enforcing pool totals, roll prerequisites, and post-action locks across full and reduced crews; apply equivalent guards to NPC helm and gunnery allocation controls
-- Fix Red Alert at the real Foundry round boundary: its internal fire increase and per-station Power Core grants now commit atomically with the round reset, including shared operator pools in reduced crews
+- Fix Red Alert at the real Foundry round boundary: discard unused temporary cores, apply its internal fire increase atomically, and grant exactly one fresh Power Core to each receiving operator, including shared pools in reduced crews
 - Apply Aggressive and Defensive stance modifiers on both sides of ship and strike-craft attacks, and use their Speed/Maneuverability changes in actual helm previews, movement, rams, and drift rather than display only
 - Apply Devastating Protocol to incoming as well as outgoing weapon, strike-craft, torpedo, and ramming hits
 - Increase Dead Reckoning footer-button padding so Confirm Order and Cancel labels no longer crowd their right edges

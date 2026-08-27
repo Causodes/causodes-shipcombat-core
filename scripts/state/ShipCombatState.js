@@ -25,7 +25,7 @@ import * as CaptainState   from "./captain-state.js";
 import { HelmPreview }     from "../canvas/HelmPreview.js";
 import { SystemAdapter }   from "../systems/SystemAdapter.js";
 import { recordPlayerShipInitiative } from "../initiative.js";
-import { POWER_CORE_STATION_ROLES, getPowerCoreCount, getPowerCorePoolRole } from "../roles/crew-operators.js";
+import { POWER_CORE_STATION_ROLES, getPowerCoreCount, getPowerCorePoolRole, getPowerCorePoolRoles } from "../roles/crew-operators.js";
 import { prepareCaptainHandForRound } from "../captain/card-instances.js";
 import { getContactDisplayName } from "../targeting/contact-intelligence.js";
 import { isAllocationResource, validateAllocationChange } from "./allocation-guard.js";
@@ -555,16 +555,13 @@ export class ShipCombatState {
     }
 
     // ── Red Alert: resolve with the same atomic reset as all core pools ──────
-    // pendingStance takes effect for the round now starting. Each station gets
-    // one core; combined-crew layouts intentionally accumulate multiple station
-    // grants in their shared operator pool.
+    // pendingStance takes effect for the round now starting. Each receiving
+    // operator gets exactly one fresh core after temporary grants are cleared.
     const activeStance = pendingStanceVal || (data.resources?.captain?.stance ?? "none");
     if (activeStance === "redAlert") {
       updates.internalFire = (updates.internalFire ?? data.internalFire ?? 0) + 5;
-      for (const stationRole of POWER_CORE_STATION_ROLES) {
-        const poolRole = getPowerCorePoolRole(data, stationRole);
-        const key = `resources.${poolRole}.coreCount`;
-        updates[key] = (updates[key] ?? 0) + 1;
+      for (const poolRole of getPowerCorePoolRoles(data)) {
+        updates[`resources.${poolRole}.coreCount`] = 1;
       }
     }
 

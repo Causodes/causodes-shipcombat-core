@@ -89,14 +89,8 @@
                 <span class="shipcombat-core-alloc-name">{{labelLocalized}}</span>
                 <span class="shipcombat-core-alloc-detail shipcombat-muted">
                     {{#if assignedActor}}{{assignedActor.name}}{{else}}&mdash;{{/if}}
-                    {{#if operatedCoreCount}}
-                    <span class="shipcombat-core-ready-count">
-                        <i class="fa-solid fa-bolt"></i>
-                        {{localize "SHIPCOMBAT.Engineer.ReadyCores" count=operatedCoreCount}}
-                    </span>
-                    {{/if}}
                 </span>
-                <div class="shipcombat-core-alloc-ctrl">
+                <div class="shipcombat-core-alloc-ctrl shipcombat-core-alloc-ctrl--role">
                     {{#if hasCoreAssigned}}
                         <span class="shipcombat-core-btn--assigned"><i class="fa-solid fa-check"></i></span>
                     {{else if canStageCore}}
@@ -105,6 +99,9 @@
                            data-tooltip="{{localize 'SHIPCOMBAT.Tooltip.ToggleCore'}}">
                             <i class="fa-solid fa-bolt"></i>
                         </a>
+                        {{#if operatedCoreCount}}
+                        <span class="shipcombat-core-ready-count">&times;{{operatedCoreCount}}</span>
+                        {{/if}}
                     {{else}}
                         <span class="shipcombat-muted">&mdash;</span>
                     {{/if}}
