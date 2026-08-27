@@ -22,6 +22,8 @@ import { TargetingPopup } from "../../apps/TargetingPopup.js";
 import { RecoverCraftPopup } from "../../apps/StrikeCraftPopups.js";
 import { coerceEmptyNumberInputs } from "../../sheet-utils.js";
 import { RamTargetPopup } from "../../apps/RamTargetPopup.js";
+import { npcCoreBlocksPowerGeneration } from "../../state/npc-condition-effects.js";
+import { getDisabledWeaponSectionId } from "../../state/weapon-section.js";
 import { SystemAdapter } from "../../systems/SystemAdapter.js";
 import { SHARED_ACTIONS } from "../../roles/shared.js";
 
@@ -121,7 +123,7 @@ export const NpcShipSheetMixin = (BaseClass) => {
 
       const components = this.actor.items.filter(i => i.type === `${MODULE_ID}.component`);
       const weaponComponents = components.filter(c => c.system.slot === "weapon");
-      const gunnerCtx = _buildNpcGunnerContext(sys);
+      const gunnerCtx = _buildNpcGunnerContext(sys, this.actor.items);
 
       const weaponSections = WEAPON_SECTIONS.map(def => {
         const sectionItems = weaponComponents.filter(item => {
@@ -187,7 +189,7 @@ export const NpcShipSheetMixin = (BaseClass) => {
             hasCondition:   !!tier,
             locLabel:       game.i18n.localize(`SHIPCOMBAT.Crit.Location.${loc.id}`),
             conditionName:  tier ? game.i18n.localize(`SHIPCOMBAT.Crit.Condition.${loc.id}.${tier}`) : "",
-            conditionEffect: tier ? game.i18n.localize(`SHIPCOMBAT.Crit.Effect.${loc.id}.${tier}`) : "",
+            conditionEffect: tier ? game.i18n.localize(`SHIPCOMBAT.Crit.${loc.id === "coreSystems" ? "NpcEffect" : "Effect"}.${loc.id}.${tier}`) : "",
             tierLabel:      tier ? game.i18n.localize(`SHIPCOMBAT.Crit.Tier.${tier.charAt(0).toUpperCase() + tier.slice(1)}`) : "",
             tierClass:     tier ? `shipcombat-crit-tier--${tier}` : "",
           };
@@ -507,7 +509,7 @@ const AMMO_MAX   = 20;
 const POWER_MAX  = 20;
 const HEAT_MAX   = 10;
 
-function _buildNpcGunnerContext(sys) {
+function _buildNpcGunnerContext(sys, actorItems) {
   const ammo     = sys.resources?.gunner?.ammo ?? 0;
   const power    = sys.resources?.gunner?.power ?? 0;
   const heat     = sys.heat ?? 0;
@@ -548,7 +550,9 @@ function _buildNpcGunnerContext(sys) {
     slLabel:   game.i18n.localize("SHIPCOMBAT.Gunner.OrdnanceSL"),
     rollLabel: game.i18n.localize("SHIPCOMBAT.Gunner.RollOrdnance"),
     slTooltip: game.i18n.localize("SHIPCOMBAT.Gunner.OrdnanceSLTooltip"),
-    blindedSectionId: sys.conditions?.weaponsSensors?.blindedSectionId ?? null,
+    blindedSectionId: getDisabledWeaponSectionId(sys, actorItems?.filter?.(
+      item => item.type === `${MODULE_ID}.component` && item.system?.slot === "weapon",
+    ) ?? []),
   };
 }
 
@@ -1095,6 +1099,7 @@ async function _onFullReset() {
     [SystemAdapter.current.systemPath("resources.gunner.slLocked")]:         false,
     [SystemAdapter.current.systemPath("resources.gunner.firedWeaponIds")]:   [],
     [SystemAdapter.current.systemPath("heat")]: 0,
+    [SystemAdapter.current.systemPath("movement.coreSpeedPenalty")]: 0,
   };
   if (isRealistic) {
     const token    = this.actor.getActiveTokens()?.[0];
@@ -1150,6 +1155,9 @@ function _onRefillShields() {
 
 function _onFluxToCharge() {
   const sys = SystemAdapter.current.getShipData(this.actor);
+  if (npcCoreBlocksPowerGeneration(sys)) {
+    return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NpcPowerShutdown"));
+  }
   const flux = sys.voidshieldFluxRemaining ?? 0;
   if (flux <= 0) return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.NpcShip.NoFluxRemaining"));
   const power = sys.resources?.gunner?.power ?? 0;
@@ -1513,7 +1521,7 @@ export const NpcShipSheetV1Mixin = (BaseClass) => {
 
       const components       = this.actor.items.filter(i => i.type === `${MODULE_ID}.component`);
       const weaponComponents = components.filter(c => c.system.slot === "weapon");
-      const gunnerCtx        = _buildNpcGunnerContext(sys);
+      const gunnerCtx        = _buildNpcGunnerContext(sys, this.actor.items);
 
       const weaponSections = WEAPON_SECTIONS.map(def => {
         const sectionItems = weaponComponents.filter(item => {
@@ -1607,7 +1615,7 @@ export const NpcShipSheetV1Mixin = (BaseClass) => {
             hasCondition:    !!tier,
             locLabel:        game.i18n.localize(`SHIPCOMBAT.Crit.Location.${loc.id}`),
             conditionName:   tier ? game.i18n.localize(`SHIPCOMBAT.Crit.Condition.${loc.id}.${tier}`) : "",
-            conditionEffect: tier ? game.i18n.localize(`SHIPCOMBAT.Crit.Effect.${loc.id}.${tier}`) : "",
+            conditionEffect: tier ? game.i18n.localize(`SHIPCOMBAT.Crit.${loc.id === "coreSystems" ? "NpcEffect" : "Effect"}.${loc.id}.${tier}`) : "",
             tierLabel:       tier ? game.i18n.localize(`SHIPCOMBAT.Crit.Tier.${tier.charAt(0).toUpperCase() + tier.slice(1)}`) : "",
             tierClass:       tier ? `shipcombat-crit-tier--${tier}` : "",
           };

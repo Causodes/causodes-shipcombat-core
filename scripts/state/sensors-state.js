@@ -17,6 +17,15 @@ function _targetName(targetTokenId) {
   return canvas?.tokens?.get(targetTokenId)?.document?.name ?? null;
 }
 
+function _sensorBlindBlocksTier(data, tier) {
+  const conditionTier = data.conditions?.weaponsSensors?.tier;
+  return (conditionTier === "medium" || conditionTier === "high") && Number(tier) >= 2;
+}
+
+function _warnSensorBlind() {
+  ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Crit.SensorBlindDisabled"));
+}
+
 function _contactUpdates(data, targets) {
   let sensors = {
     ...(data.resources?.sensors ?? {}),
@@ -138,6 +147,10 @@ export async function stripQuadrantShields({ targetTokenId }) {
  */
 export async function upgradeLock({ targetTokenId, tier }) {
   const data = this.getData();
+  if (_sensorBlindBlocksTier(data, tier)) {
+    _warnSensorBlind();
+    return false;
+  }
   const locks = [...(data.resources?.sensors?.locks ?? [])];
   const idx   = locks.findIndex(l => l.targetTokenId === targetTokenId);
   const decay = LOCK_DECAY_ROUNDS[tier] ?? 1;
@@ -157,6 +170,10 @@ export async function upgradeLock({ targetTokenId, tier }) {
 export async function upgradeAllLocks({ tier }) {
   const targetTier = Math.max(1, Math.min(4, Number(tier) || 1));
   const data = this.getData();
+  if (_sensorBlindBlocksTier(data, targetTier)) {
+    _warnSensorBlind();
+    return false;
+  }
   const locks = data.resources?.sensors?.locks ?? [];
   const decay = LOCK_DECAY_ROUNDS[targetTier] ?? 1;
   const locksByTarget = new Map(locks.map(lock => [lock.targetTokenId, lock]));
@@ -348,6 +365,7 @@ export async function resolveBDA({ attackId, sl, messageId }) {
   let retainedTier = SystemAdapter.current.getLockTierForSL(sl);
   // Cap: BDA cannot restore higher than the original lock tier
   retainedTier = Math.min(retainedTier, originalLockTier);
+  if (_sensorBlindBlocksTier(data, retainedTier)) retainedTier = 1;
 
   const updates = {};
 

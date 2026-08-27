@@ -264,6 +264,10 @@ async function _playCard({ cardId, cardInstanceId, sector }) {
       break;
     // Emergency Reserves: replenish AP by 50%
     case "emergencyReserves": {
+      if (sys.conditions?.coreSystems?.tier === "high") {
+        ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.APShutdown"));
+        break;
+      }
       const ap    = sys.resources?.engineer?.auxiliaryPower ?? 0;
       const apMax = this.getReactorStats().auxPowerCapacity;
       updates["resources.engineer.auxiliaryPower"] = Math.min(apMax, ap + Math.ceil(apMax / 2));

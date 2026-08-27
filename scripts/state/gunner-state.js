@@ -12,7 +12,8 @@ import { SystemAdapter } from "../systems/SystemAdapter.js";
 import { getSensorsOperatorUserId } from "../roles/crew-operators.js";
 import { getContactDisplayName } from "../targeting/contact-intelligence.js";
 import { hasDevastationProtocol } from "../stances.js";
-import { resolveShieldHit, usesDamagePoolShields } from "./shield-resolution.js";
+import { attackBypassesShields, resolveShieldHit, usesDamagePoolShields } from "./shield-resolution.js";
+import { getDisabledWeaponSectionId, getWeaponSectionId } from "./weapon-section.js";
 
 /** Allocate an opaque BDA key without ever overwriting a live attack record. */
 export function allocateBdaAttackId(existingAttacks = {}) {
@@ -45,6 +46,14 @@ export async function fireWeapon({ weaponId, actorId, fireMode, targetToken, hit
   const isNpcFire = firingActor.id !== ship.id;
   // NPC fire reads from the NPC actor's own system; player fire reads from the player ship
   const sys = isNpcFire ? SystemAdapter.current.getShipData(firingActor) : SystemAdapter.current.getShipData(ship);
+
+  const disabledSectionId = getDisabledWeaponSectionId(sys, [...firingActor.items.values()].filter(
+    item => item.type === `${MODULE_ID}.component` && item.system?.slot === "weapon",
+  ));
+  if (disabledSectionId && getWeaponSectionId(weapon) === disabledSectionId) {
+    ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Crit.WeaponSectionJammedDesc"));
+    return false;
+  }
 
   const gunnerRes = sys.resources?.gunner ?? {};
   const weaponType = weapon.system.resourceType;
@@ -331,8 +340,7 @@ export async function fireWeapon({ weaponId, actorId, fireMode, targetToken, hit
   const priorityTargetId       = sys.resources?.captain?.priorityTargetId ?? null;
   const battleClarityShieldBurn = (!isNpcFire && priorityTargetId && priorityTargetId === targetToken) ? 2 : 0;
   const effectiveShieldBurn = shieldBurnVal + scatterShieldBurn + battleClarityShieldBurn;
-  const hardenedShields = targetSys.resources?.captain?.hardenedShields ?? false;
-  const shieldBypass = hardenedShields ? false : !!traits.shieldBypass;
+  const shieldBypass = attackBypassesShields(traits, targetSys);
 
   // Hit-negation mode can resolve shields before rolling damage. Damage-pool
   // mode resolves each hit below, after its incoming damage is known.

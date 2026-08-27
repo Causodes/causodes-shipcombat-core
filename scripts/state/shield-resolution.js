@@ -10,6 +10,12 @@ export function usesDamagePoolShields() {
   return game.settings.get(MODULE_ID, SHIELD_RESOLUTION_SETTING) === SHIELD_RESOLUTION_MODES.DAMAGE_POOL;
 }
 
+/** Whether an attack bypasses shields after applying defender-side orders. */
+export function attackBypassesShields(traits, targetData) {
+  if (targetData?.resources?.captain?.hardenedShields) return false;
+  return !!traits?.shieldBypass;
+}
+
 /** Resolve one hit against one shield facing using the configured shield model. */
 export function resolveShieldHit({
   shields,

@@ -30,7 +30,8 @@ import { prepareCaptainHandForRound } from "../captain/card-instances.js";
 import { getContactDisplayName } from "../targeting/contact-intelligence.js";
 import { isAllocationResource, validateAllocationChange } from "./allocation-guard.js";
 import { getStanceMovementModifiers, hasDevastationProtocol } from "../stances.js";
-import { resolveShieldHit, usesDamagePoolShields } from "./shield-resolution.js";
+import { attackBypassesShields, resolveShieldHit, usesDamagePoolShields } from "./shield-resolution.js";
+import { getNpcRoundConditionEffects } from "./npc-condition-effects.js";
 
 export class ShipCombatState {
 
@@ -623,6 +624,14 @@ export class ShipCombatState {
     if (roleId === "captain" && key === "rolledInitiative") {
       return recordPlayerShipInitiative({ shipActor: this.ship, rawTotal: value });
     }
+    if (roleId === "engineer" && key === "auxiliaryPower") {
+      const data = this.getData();
+      const current = data.resources?.engineer?.auxiliaryPower ?? 0;
+      if (data.conditions?.coreSystems?.tier === "high" && Number(value) > current) {
+        ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.APShutdown"));
+        return false;
+      }
+    }
     if (isAllocationResource(roleId, key)) {
       return this.withAllocationTransaction(async () => {
         const data = this.getData();
@@ -1127,6 +1136,7 @@ export class ShipCombatState {
           [SystemAdapter.current.systemPath("conditions.manoeuvring")]:    { ...npcCondClear },
           [SystemAdapter.current.systemPath("conditions.coreSystems")]:    { ...npcCondClear },
           [SystemAdapter.current.systemPath("conditions.weaponsSensors")]: { ...npcCondClear },
+          [SystemAdapter.current.systemPath("movement.coreSpeedPenalty")]:  0,
         };
         for (const sector of ["bow", "stern", "port", "starboard"]) {
           npcUpdate[`system.armourRend.${sector}`] = 0;
@@ -1213,15 +1223,18 @@ export class ShipCombatState {
         const powerMax = npcSys.resources?.gunner?.powerMax ?? 20;
         const ammoGain  = Math.floor(ammoMax  * 0.25);
         const powerGain = Math.floor(powerMax * 0.25);
+        const conditionEffects = getNpcRoundConditionEffects(npcSys, SystemAdapter.current.hullDisplayMode);
         const npcRoundUpdates = {
           [SystemAdapter.current.systemPath("resources.gunner.ammo")]:  Math.min(ammoMax,  (npcSys.resources?.gunner?.ammo  ?? 0) + ammoGain),
-          [SystemAdapter.current.systemPath("resources.gunner.power")]: Math.min(powerMax, (npcSys.resources?.gunner?.power ?? 0) + powerGain),
         };
-        // Core Systems (any tier): −1 Speed per round (replaces player-side core distribution lock)
-        const npcCoreTier = npcSys.conditions?.coreSystems?.tier;
-        if (npcCoreTier) {
-          const currentSpeed = npcSys.movement?.speed ?? 6;
-          npcRoundUpdates["system.movement.speed"] = Math.max(1, currentSpeed - 1);
+        if (!conditionEffects.blocksPowerGeneration) {
+          npcRoundUpdates[SystemAdapter.current.systemPath("resources.gunner.power")] = Math.min(
+            powerMax,
+            (npcSys.resources?.gunner?.power ?? 0) + powerGain,
+          );
+        }
+        for (const [path, value] of Object.entries(conditionEffects.updates)) {
+          npcRoundUpdates[SystemAdapter.current.systemPath(path)] = value;
         }
         await td.actor.update(npcRoundUpdates);
       }
@@ -1526,8 +1539,7 @@ export class ShipCombatState {
     let shieldCostTotal = 0;
     let shieldDamageAbsorbed = 0;
     const damagePoolShields = usesDamagePoolShields();
-    const hardenedShields = SystemAdapter.current.getShipData(targetActor)?.resources?.captain?.hardenedShields ?? false;
-    const shieldBypass  = hardenedShields ? false : (traits?.shieldBypass ?? false);
+    const shieldBypass  = attackBypassesShields(traits, sys);
     const shieldBurnVal = traits?.shieldBurn ?? 0;
 
     // ── Damage-type IWR ── immunity is checked before shields so immune
@@ -1731,8 +1743,7 @@ export class ShipCombatState {
     let shieldCostTotal  = 0;
     let shieldDamageAbsorbed = 0;
     const damagePoolShields = usesDamagePoolShields();
-    const hardenedShields = SystemAdapter.current.getShipData(target)?.resources?.captain?.hardenedShields ?? false;
-    const shieldBypass   = hardenedShields ? false : (traits?.shieldBypass ?? false);
+    const shieldBypass   = attackBypassesShields(traits, sys);
     const shieldBurnVal  = traits?.shieldBurn ?? 0;
 
     const shieldResult = isDamageImmune ? {

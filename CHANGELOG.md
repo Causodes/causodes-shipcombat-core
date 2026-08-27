@@ -11,6 +11,7 @@
 - Derive accuracy copy and fire-tier modifiers from the active system adapter; fix d20 allocation/fire-mode scaling and remove percentile-only strike-craft displays
 - Preserve the Captain's rolled initiative as the additive baseline for next-round initiative allocations across core and system-specific combat-tracker roll paths
 - Unify Captain, Red Alert, and Engineer Power Core grants into one receiving-operator pool, with Engineer assignment retained only as its once-per-role distribution ledger; reduced-crew stations now read and spend their shared operator pool while keeping the existing available/unavailable overlays
+- Centralize Harden Shields bypass suppression across weapons, strike craft, and torpedoes
 - Serialize every GM-side Power Core grant, spend, and reset in one per-ship transaction queue; consumption and action telemetry commit together, preventing both double-spends and grant/spend lost updates; remove the obsolete direct assign/revoke API
 - Balance Sensor Priority by halving Lock 1 and Lock 2 AP costs for the round, rounding up after the sensor component's AP modifier, instead of making those upgrades free
 - Add persistent per-ship contact designations shared across radar and targeting interfaces, plus crew-visible canvas markers for the Sensors recommendation and Captain's Priority Target
@@ -40,6 +41,9 @@
 - Add GM Manual Override to player ship stats to the bottom of the Configuration tab
 - Remove stale/legacy resource keys
 - Add a world-level Shield Resolution setting with backward-compatible Hit Negation and optional Damage Pool modes; Damage Pool applies Shield Burn before absorbing normal damage point-for-point and discards excess Burn instead of spilling it into armour or hull, while weapon, strike-craft, and torpedo attacks consistently respect Shield Bypass, Harden Shields, immunity, Rend, and partial damage overflow
+- Enforce critical-condition effects during movement, weapon fire, lock upgrades, Power Core distribution, and Auxiliary Power generation instead of relying on disabled controls alone
+- Enforce NPC critical effects across round damage, internal fire, heat, movement degradation, weapon sections, fire control, and power generation in every hull-storage mode
+- Mark critically disabled weapon sections with a named, system-themed lockout overlay, including deterministic fallback selection for legacy or manually applied conditions
 
 ## 2.2.4
 - Fix NPC ship weapon delete controls doing nothing by registering the shared embedded-item actions on both AppV2 and legacy AppV1 NPC sheets

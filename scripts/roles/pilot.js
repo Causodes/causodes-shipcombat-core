@@ -15,6 +15,7 @@ import { MODULE_ID } from "../constants.js";
 import { getEffectiveSkillSpec } from "../actors/ship/ShipSheetMixin.js";
 import { getPowerCoreCount, resolveStationOperatorActor } from "./crew-operators.js";
 import { getStanceMovementModifiers } from "../stances.js";
+import { getMovementConditionPenalties } from "../state/movement-conditions.js";
 
 // ── Action handlers (static, `this` = sheet instance) ──────────────────────
 
@@ -99,7 +100,7 @@ async function _onConfirmHelm() {
 
   const sys        = SystemAdapter.current.getShipData(this.actor);
   const stanceMods = getStanceMovementModifiers(sys);
-  const speed      = (sys.movement?.speed ?? 6) + (sys.resources?.pilot?.allocSpeed ?? 0) + stanceMods.speed;
+  const speed      = Math.max(0, (sys.movement?.speed ?? 6) + (sys.resources?.pilot?.allocSpeed ?? 0) + stanceMods.speed);
   const fuelBurned = sys.resources?.pilot?.fuelBurned ?? 0;
   const fuelSlider = this._helmState?.fuelSlider ?? fuelBurned;
   const bearing    = this._helmState?.bearing ?? 0;
@@ -425,18 +426,17 @@ export function buildHelmContext(sys, opts = {}) {
 
   // ── Crit condition penalties ───────────────────────────────────────────────────────
   const conditions = sys.conditions ?? {};
-  const engineTier = conditions.engines?.tier;
-  const manTier    = conditions.manoeuvring?.tier;
-  const enginePenalty = engineTier === "high" ? 4 : engineTier === "medium" ? 2 : engineTier === "low" ? 1 : 0;
-  const manPenalty    = manTier    === "high" ? 4 : manTier    === "medium" ? 2 : manTier    === "low" ? 1 : 0;
+  const conditionPenalties = getMovementConditionPenalties(sys);
+  const enginePenalty = conditionPenalties.speed;
+  const manPenalty    = conditionPenalties.maneuverability;
 
   // ── Captain stance modifiers ───────────────────────────────────────────────────
   const stanceMods     = getStanceMovementModifiers(sys);
   const stanceSpeedMod = stanceMods.speed;
   const stanceManoMod  = stanceMods.maneuverability;
 
-  const effSpeed   = Math.max(0, baseSpeed + allocSpeed + speedPayloadBonus + stanceSpeedMod - enginePenalty);
-  const effMano    = Math.max(0, effectiveBaseMano + allocMano + manoPayloadBonus + stanceManoMod - manPenalty);
+  const effSpeed   = Math.max(0, baseSpeed + allocSpeed + speedPayloadBonus + stanceSpeedMod);
+  const effMano    = Math.max(0, effectiveBaseMano + allocMano + manoPayloadBonus + stanceManoMod);
   const overdriveMult = overdrive ? 2 : 1;
   const powerPerAP    = engineComponent?.system?.powerPerAP ?? 0;
   const auxiliaryPower = sys.resources?.engineer?.auxiliaryPower ?? 0;
@@ -935,7 +935,7 @@ export function helmUpdatePreview(sheet) {
 
   const sys          = SystemAdapter.current.getShipData(sheet.actor);
   const stanceSpeed  = getStanceMovementModifiers(sys).speed;
-  const speed        = (sys.movement?.speed ?? 6) + (sys.resources?.pilot?.allocSpeed ?? 0) + stanceSpeed;
+  const speed        = Math.max(0, (sys.movement?.speed ?? 6) + (sys.resources?.pilot?.allocSpeed ?? 0) + stanceSpeed);
   const prevTurnMove = sys.resources?.pilot?.prevTurnMove ?? 0;
   const minMove      = Math.ceil(prevTurnMove / 2);
   const fuelBurned   = sys.resources?.pilot?.fuelBurned ?? 0;

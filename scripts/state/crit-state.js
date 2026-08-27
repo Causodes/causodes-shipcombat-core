@@ -12,6 +12,7 @@
 
 import { MODULE_ID, CRIT_CONDITIONS, CRIT_LOCATIONS, critLocationFromRoll, critSeverityFromRoll } from "../constants.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
+import { getWeaponSectionId } from "./weapon-section.js";
 
 const TIER_ORDER = ["low", "medium", "high"];
 
@@ -121,10 +122,7 @@ export async function rollCrit(targetActor, totalDamage, forceCrit = false, thre
     ) ?? [];
 
     if (weapons.length > 0 && !newMeta.blindedSectionId) {
-      const sections = [...new Set(weapons.map(w => {
-        const pos = w.system?.weaponPosition ?? "prow";
-        return (pos === "flank") ? (w.system?.weaponBay ?? "port") : pos;
-      }))];
+      const sections = [...new Set(weapons.map(getWeaponSectionId))];
       newMeta.blindedSectionId = sections[Math.floor(Math.random() * sections.length)];
     }
   }
@@ -133,7 +131,9 @@ export async function rollCrit(targetActor, totalDamage, forceCrit = false, thre
   const updates = { [SystemAdapter.current.systemPath(`conditions.${locId}`)]: newMeta };
   if (extraHullDmg > 0) {
     const hullVal = SystemAdapter.current.getShipData(targetActor)?.hull?.value ?? 0;
-    updates[SystemAdapter.current.systemPath("hull.value")] = Math.min(hullMax, hullVal + extraHullDmg);
+    updates[SystemAdapter.current.systemPath("hull.value")] = SystemAdapter.current.hullDisplayMode === "hpRemaining"
+      ? Math.max(0, hullVal - extraHullDmg)
+      : Math.min(hullMax, hullVal + extraHullDmg);
   }
   await targetActor.update(updates);
 

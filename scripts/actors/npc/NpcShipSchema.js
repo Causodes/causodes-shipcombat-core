@@ -90,6 +90,7 @@ export const NpcShipSchemaMixin = (BaseClass) => class extends BaseClass {
       maneuverability:    new fields.NumberField({ initial: 0, min: 0, integer: true }),
       baseSpeed:          new fields.NumberField({ initial: 0, min: 0, integer: true }),
       baseManeuverability: new fields.NumberField({ initial: 0, min: 0, integer: true }),
+      coreSpeedPenalty:   new fields.NumberField({ initial: 0, min: 0, integer: true }),
     });
 
     // ── Heat & Internal Fire ─────────────────────────────────────────────────
@@ -253,6 +254,7 @@ export const NpcShipSchemaMixin = (BaseClass) => class extends BaseClass {
       const speedPenalty = { low: 1, medium: 2, high: 4 };
       this.movement.speed = Math.max(1, this.movement.speed - (speedPenalty[engineCondTier] ?? 0));
     }
+    this.movement.speed = Math.max(1, this.movement.speed - (this.movement.coreSpeedPenalty ?? 0));
 
     // Manoeuvring crit condition: −1/−2/−4 Maneuverability
     const manoCondTier = this.conditions?.manoeuvring?.tier;

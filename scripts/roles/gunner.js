@@ -23,6 +23,7 @@ import { SystemAdapter } from "../systems/SystemAdapter.js";
 import { heatColor } from "../theme.js";
 import { getPowerCoreCount, resolveStationOperatorActor } from "./crew-operators.js";
 import { getAttackStanceModifier } from "../stances.js";
+import { getDisabledWeaponSectionId } from "../state/weapon-section.js";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -385,7 +386,7 @@ export function buildGunnerContext(sys, opts = {}) {
   const heat   = sys.resources?.engineer?.heat ?? 0;
   const gunner = sys.resources?.gunner ?? {};
 
-  const { reactorStats, ordnanceBayStats } = opts;
+  const { reactorStats, ordnanceBayStats, weaponItems = [] } = opts;
   const heatMax   = reactorStats?.heatCapacity ?? 0;
   const ammoMax   = ordnanceBayStats?.ammoCapacity ?? 0;
   const powerMax = reactorStats?.auxPowerCapacity ?? 0;
@@ -433,7 +434,7 @@ export function buildGunnerContext(sys, opts = {}) {
   const _dispStep         = SystemAdapter.current.getModifierStepSize();
   const conditions        = sys.conditions ?? {};
   const weaponsSensorsTier = conditions.weaponsSensors?.tier;
-  const blindedSectionId    = conditions.weaponsSensors?.blindedSectionId ?? null;
+  const blindedSectionId    = getDisabledWeaponSectionId(sys, weaponItems);
   const fireControlPenalty  = weaponsSensorsTier === "high" ? -2 * _dispStep : 0;
   const stanceHitMod       = getAttackStanceModifier(sys, null, _dispStep);
 

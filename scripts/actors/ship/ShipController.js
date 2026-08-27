@@ -595,6 +595,7 @@ export class ShipController {
         const ctx = buildGunnerContext(sys, {
           reactorStats:     ShipCombatState.getReactorStats(this.actor),
           ordnanceBayStats: ShipCombatState.getOrdnanceBayStats(this.actor),
+          weaponItems:      components.filter(item => item.system.slot === "weapon"),
         });
         ctx.rollLabel = _resolveRollLabel(sys, "gunner", "SHIPCOMBAT.Gunner.RollOrdnance");
         ctx.slLabel   = _resolveSlLabel(sys, "gunner", "SHIPCOMBAT.Gunner.OrdnanceSL");

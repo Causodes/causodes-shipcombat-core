@@ -37,7 +37,7 @@
                     <div class="shipcombat-resource-bar-track shipcombat-resource-bar-track--plasma">
                         <div class="shipcombat-resource-bar-fill shipcombat-bar-charge" style="width: {{gunnerCtx.powerPct}}%"></div>
                     </div>
-                    <span class="shipcombat-resource-bar-value" style="color: #7ec8e3">
+                    <span class="shipcombat-resource-bar-value shipcombat-resource-bar-value--plasma">
                         <input type="number" name="system.resources.gunner.power" value="{{gunnerCtx.power}}" min="0" class="shipcombat-npc-resource-input">
                         /
                         <input type="number" name="system.resources.gunner.powerMax" value="{{gunnerCtx.powerMax}}" min="1" class="shipcombat-npc-resource-input shipcombat-npc-max-input">
@@ -109,9 +109,10 @@
         {{/if}}
         {{#if (and this.items.length (shipcombatEq this.id @root.gunnerCtx.blindedSectionId))}}
         <div class="shipcombat-section-overlay shipcombat-section-overlay--critical">
-            <div class="shipcombat-overlay-lock-indicator shipcombat-overlay-lock-indicator--critical">
-                <i class="fa-solid fa-triangle-exclamation fa-lg"></i>
-                <span>{{localize "SHIPCOMBAT.Crit.WeaponSectionJammed"}}</span>
+            <div class="shipcombat-critical-disable-graphic">
+                <span class="shipcombat-critical-disable-icon"><i class="fa-solid fa-triangle-exclamation"></i></span>
+                <span class="shipcombat-critical-disable-label">{{localize "SHIPCOMBAT.Crit.WeaponSectionDisabled"}}</span>
+                <span class="shipcombat-critical-disable-section">{{this.labelLocalized}}</span>
                 <span class="shipcombat-overlay-crit-desc">{{localize "SHIPCOMBAT.Crit.WeaponSectionJammedDesc"}}</span>
             </div>
         </div>

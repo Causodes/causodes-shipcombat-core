@@ -247,6 +247,8 @@
       "NoGunnerAssigned": "No crew actor is assigned to the {{SHIPCOMBAT.Role.Gunner}} role.",
       "CoreAlreadySpent": "{{SHIPCOMBAT.Term.PowerCore}} already consumed this turn.",
       "PowerFluctuation": "Power Fluctuation: core distribution is disabled while a Core Systems condition is active.",
+      "APShutdown": "AP Shutdown: Auxiliary Power cannot be generated while a High Core Systems condition is active.",
+      "NpcPowerShutdown": "AP Shutdown: this ship cannot generate weapon power while a High Core Systems condition is active.",
       "NoTriagesLeft": "No damage control actions remaining this round.",
       "TriageAlreadyUsed": "Already applied damage control to this location this round.",
       "CaptainHandFull": "{{SHIPCOMBAT.Role.Captain}}'s orders are full (6 maximum).",
@@ -926,6 +928,7 @@
       "MaxTierHull": "Breach cannot worsen - hull takes {dmg} direct damage",
       "RoleLocked": "{role} station locked out",
       "WeaponSectionJammed": "Critical Damage: Weapons Jammed",
+      "WeaponSectionDisabled": "SECTION DISABLED",
       "WeaponSectionJammedDesc": "This weapon section is disabled by battle damage",
       "SensorBlindDisabled": "Sensor Blind - Fire Control impaired",
       "SensorBlindSection": "Sensors offline - weapons inactive",
@@ -1000,6 +1003,13 @@
           "low": "One weapon section disabled.",
           "medium": "One weapon section disabled; sensor offline (lock upgrades blocked).",
           "high": "All weapons: {{SHIPCOMBAT.ModifierCopy.DoubleModifierPenalty}} to hit; one weapon section disabled; sensor offline."
+        }
+      },
+      "NpcEffect": {
+        "coreSystems": {
+          "low": "−1 base Speed per round.",
+          "medium": "−1 base Speed and +5 heat per round.",
+          "high": "−1 base Speed and +5 heat per round; weapon power generation disabled."
         }
       },
       "SensorBlindRadar": "Sensor offline"

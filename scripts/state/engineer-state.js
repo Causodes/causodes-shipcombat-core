@@ -122,6 +122,10 @@ export async function spendBankedCores(count) {
 
 export async function commitShieldCores(count) {
   const data = this.getData();
+  if (data.conditions?.coreSystems?.tier) {
+    ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.PowerFluctuation"));
+    return false;
+  }
   const available = data.resources?.engineer?.powerCores ?? 0;
   const currentStaged = data.resources?.engineer?.stagedShieldCores ?? 0;
   const shieldCfg    = this.getShieldStats();
@@ -152,6 +156,10 @@ export async function uncommitShieldCore() {
 
 export async function commitAuxCore() {
   const data = this.getData();
+  if (data.conditions?.coreSystems?.tier) {
+    ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.PowerFluctuation"));
+    return false;
+  }
   const available = data.resources?.engineer?.powerCores ?? 0;
   if (available <= 0) return;
   const currentStaged = data.resources?.engineer?.stagedAuxCores ?? 0;

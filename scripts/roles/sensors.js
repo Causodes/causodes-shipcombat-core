@@ -446,7 +446,7 @@ function _buildNpcConditions(locks) {
           hasCondition: !!tier,
           locLabel:     game.i18n.localize(`SHIPCOMBAT.Crit.Location.${locId}`),
           conditionName:   tier ? game.i18n.localize(`SHIPCOMBAT.Crit.Condition.${locId}.${tier}`) : "",
-          conditionEffect: tier ? game.i18n.localize(`SHIPCOMBAT.Crit.Effect.${locId}.${tier}`) : "",
+          conditionEffect: tier ? game.i18n.localize(`SHIPCOMBAT.Crit.${locId === "coreSystems" ? "NpcEffect" : "Effect"}.${locId}.${tier}`) : "",
           tierLabel:    tier ? game.i18n.localize(`SHIPCOMBAT.Crit.Tier.${tier.charAt(0).toUpperCase() + tier.slice(1)}`) : "",
           tierClass:    tier ? `shipcombat-crit-tier--${tier}` : "",
         };
