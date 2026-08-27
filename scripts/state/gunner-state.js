@@ -12,6 +12,7 @@ import { SystemAdapter } from "../systems/SystemAdapter.js";
 import { getSensorsOperatorUserId } from "../roles/crew-operators.js";
 import { getContactDisplayName } from "../targeting/contact-intelligence.js";
 import { hasDevastationProtocol } from "../stances.js";
+import { resolveShieldHit, usesDamagePoolShields } from "./shield-resolution.js";
 
 /** Allocate an opaque BDA key without ever overwriting a live attack record. */
 export function allocateBdaAttackId(existingAttacks = {}) {
@@ -319,7 +320,10 @@ export async function fireWeapon({ weaponId, actorId, fireMode, targetToken, hit
   const targetShields = targetSys.shields?.[hitQuadrant] ?? 0;
   let shieldsRemaining = targetShields;
   let hitsAbsorbed = 0;
+  let hitsThroughShield = 0;
   let shieldCostTotal = 0;
+  let shieldDamageAbsorbed = 0;
+  const damagePoolShields = usesDamagePoolShields();
   const shieldBurnVal = (traits.overcharge && isOvercharged)
     ? (traits.shieldBurn ?? 0) * 3
     : (traits.shieldBurn ?? 0);
@@ -327,39 +331,27 @@ export async function fireWeapon({ weaponId, actorId, fireMode, targetToken, hit
   const priorityTargetId       = sys.resources?.captain?.priorityTargetId ?? null;
   const battleClarityShieldBurn = (!isNpcFire && priorityTargetId && priorityTargetId === targetToken) ? 2 : 0;
   const effectiveShieldBurn = shieldBurnVal + scatterShieldBurn + battleClarityShieldBurn;
+  const hardenedShields = targetSys.resources?.captain?.hardenedShields ?? false;
+  const shieldBypass = hardenedShields ? false : !!traits.shieldBypass;
 
-  if (!_isImmune) {
-    if (traits.shieldBypass) {
-      // Shield Bypass: all hits pass through, but Shield Burn still degrades shields
-      if (effectiveShieldBurn > 0 && shieldsRemaining > 0) {
-        const burnTotal = effectiveShieldBurn * totalHits;
-        shieldsRemaining = Math.max(0, shieldsRemaining - burnTotal);
-        shieldCostTotal = targetShields - shieldsRemaining;
-      }
-    } else if (shieldsRemaining > 0) {
-      const shieldCostPerHit = 1 + effectiveShieldBurn;
-      for (let i = 0; i < totalHits; i++) {
-        if (shieldsRemaining <= 0) break;
-        shieldsRemaining = Math.max(0, shieldsRemaining - shieldCostPerHit);
-        shieldCostTotal += shieldCostPerHit;
-        hitsAbsorbed++;
-      }
+  // Hit-negation mode can resolve shields before rolling damage. Damage-pool
+  // mode resolves each hit below, after its incoming damage is known.
+  if (!_isImmune && !damagePoolShields) {
+    for (let i = 0; i < totalHits; i++) {
+      const result = resolveShieldHit({
+        shields: shieldsRemaining,
+        incomingDamage: 1,
+        shieldBurn: effectiveShieldBurn,
+        bypass: shieldBypass,
+      });
+      shieldsRemaining = result.remaining;
+      shieldCostTotal += result.shieldDrain;
+      if (result.hitAbsorbed) hitsAbsorbed++;
+      else hitsThroughShield++;
     }
   }
 
-  // Immune targets: all hits are blocked by immunity (no shield drain). The
-  // absorbed count reflects this so the chat card shows "N absorbed (0 shield
-  // drain) → 0 through" and no damage section is shown.
   if (_isImmune) hitsAbsorbed = totalHits;
-  const hitsThroughShield = totalHits - hitsAbsorbed;
-  const shieldResults = {
-    sectorShields: targetShields,
-    absorbed: hitsAbsorbed,
-    shieldCostTotal,
-    remaining: shieldsRemaining,
-    bypassed: traits.shieldBypass,
-    hitsThroughShield,
-  };
 
   // ── 3. Damage per surviving hit (with SL allocation bonuses) ──
   const sectorArmour = targetSys.armour?.[hitQuadrant] ?? 0;
@@ -395,14 +387,20 @@ export async function fireWeapon({ weaponId, actorId, fireMode, targetToken, hit
     ? (traits.devastating ?? 0) * 3
     : (traits.devastating ?? 0);
 
-  const damageRollValues = [];  // { value, isCrit } one per hit-through-shield when formula has dice
+  const damageRollValues = [];
   let totalDamage = 0;
   const hitDetails = [];
+  const penetratingSalvoRolls = [];
   let rendTotal = 0;
   let _sumRawDamage = 0;
+  const successfulSalvoRolls = salvoRolls.filter(result => result.hit);
+  const hitsToResolve = damagePoolShields && !_isImmune ? totalHits : hitsThroughShield;
 
-  for (let i = 0; i < hitsThroughShield; i++) {
-    const isCritHit = salvoRolls[i]?.isCrit ?? false;
+  for (let i = 0; i < hitsToResolve; i++) {
+    const salvoResult = damagePoolShields
+      ? successfulSalvoRolls[i]
+      : successfulSalvoRolls[hitsAbsorbed + i];
+    const isCritHit = salvoResult?.isCrit ?? false;
     let baseDamageThisHit = 0;
     try {
       const _dmgRoll = new Roll(_scaledFormula);
@@ -422,7 +420,23 @@ export async function fireWeapon({ weaponId, actorId, fireMode, targetToken, hit
     const { finalDamage: typeModDamage, immune, note } = (_weaponDamageType && targetActor)
       ? SystemAdapter.current.modifyDamageForType(preArmorDamage, _weaponDamageType, targetActor)
       : { finalDamage: preArmorDamage, immune: false, note: null };
-    const finalDamage = immune ? 0 : Math.max(0, typeModDamage - effectiveArmour);
+    let damageBeforeArmour = immune ? 0 : typeModDamage;
+    if (damagePoolShields && !immune) {
+      const shieldResult = resolveShieldHit({
+        shields: shieldsRemaining,
+        incomingDamage: damageBeforeArmour,
+        shieldBurn: effectiveShieldBurn,
+        bypass: shieldBypass,
+        damagePool: true,
+      });
+      shieldsRemaining = shieldResult.remaining;
+      shieldCostTotal += shieldResult.shieldDrain;
+      shieldDamageAbsorbed += shieldResult.damageAbsorbed;
+      damageBeforeArmour = shieldResult.damageThrough;
+      if (shieldResult.hitAbsorbed) hitsAbsorbed++;
+      if (shieldResult.damageThrough > 0) hitsThroughShield++;
+    }
+    const finalDamage = Math.max(0, damageBeforeArmour - effectiveArmour);
     totalDamage += finalDamage;
     hitDetails.push({ damage: finalDamage, isCrit: isCritHit, immune, note });
 
@@ -430,14 +444,26 @@ export async function fireWeapon({ weaponId, actorId, fireMode, targetToken, hit
     const rendPerHit = (traits.overcharge && isOvercharged)
       ? (traits.rend ?? 0) * 3
       : (traits.rend ?? 0);
-    if (rendPerHit > 0) {
+    if (rendPerHit > 0 && damageBeforeArmour > 0) {
       rendTotal += rendPerHit;
     }
+    if (damageBeforeArmour > 0 && salvoResult) penetratingSalvoRolls.push(salvoResult);
   }
 
+  const shieldResults = {
+    sectorShields: targetShields,
+    absorbed: hitsAbsorbed,
+    damageAbsorbed: shieldDamageAbsorbed,
+    damagePool: damagePoolShields,
+    shieldCostTotal,
+    remaining: shieldsRemaining,
+    bypassed: shieldBypass,
+    hitsThroughShield,
+  };
+
   // rawDamagePerHit: average across hits for display; pre-computed if no hits went through
-  const rawDamagePerHit = hitsThroughShield > 0
-    ? Math.round(_sumRawDamage / hitsThroughShield)
+  const rawDamagePerHit = hitsToResolve > 0
+    ? Math.round(_sumRawDamage / hitsToResolve)
     : Math.floor((parseFloat(_scaledFormula) || 0) * lanceMult) + allocFirepower;
   const damagePerHit = Math.max(0, rawDamagePerHit - effectiveArmour);
 
@@ -458,6 +484,8 @@ export async function fireWeapon({ weaponId, actorId, fireMode, targetToken, hit
     damageFlatBonus: allocFirepower > 0 ? allocFirepower : 0,
     hasDamageRolls:  damageRollValues.length > 0,
     isSalvo:         hitsThroughShield > 1,
+    damagePool:      damagePoolShields,
+    resolvedHits:    hitsToResolve,
   };
 
   // ── 5. Apply damage to TARGET actor ──
@@ -501,7 +529,7 @@ export async function fireWeapon({ weaponId, actorId, fireMode, targetToken, hit
   const critResults = [];
   if (targetActor && totalHits > 0 && totalDamage > 0) {
     const isDevastation = hasDevastationProtocol(sys, targetSys);
-    const critHitCount  = adapter.getCritHitCount(salvoRolls, hitsThroughShield, isDevastation);
+    const critHitCount  = adapter.getCritHitCount(penetratingSalvoRolls, hitsThroughShield, isDevastation);
 
     if (critHitCount !== null) {
       // Per-crit-hit path (SF2e): one Low-tier crit per critting shot

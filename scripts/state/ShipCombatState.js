@@ -30,6 +30,7 @@ import { prepareCaptainHandForRound } from "../captain/card-instances.js";
 import { getContactDisplayName } from "../targeting/contact-intelligence.js";
 import { isAllocationResource, validateAllocationChange } from "./allocation-guard.js";
 import { getStanceMovementModifiers, hasDevastationProtocol } from "../stances.js";
+import { resolveShieldHit, usesDamagePoolShields } from "./shield-resolution.js";
 
 export class ShipCombatState {
 
@@ -1526,7 +1527,10 @@ export class ShipCombatState {
     const targetShields = sys.shields?.[hitQuadrant] ?? 0;
     let shieldsRemaining = targetShields;
     let hitsAbsorbed    = 0;
+    let hitsThroughShield = 0;
     let shieldCostTotal = 0;
+    let shieldDamageAbsorbed = 0;
+    const damagePoolShields = usesDamagePoolShields();
     const hardenedShields = SystemAdapter.current.getShipData(targetActor)?.resources?.captain?.hardenedShields ?? false;
     const shieldBypass  = hardenedShields ? false : (traits?.shieldBypass ?? false);
     const shieldBurnVal = traits?.shieldBurn ?? 0;
@@ -1541,58 +1545,76 @@ export class ShipCombatState {
       ? SystemAdapter.current.modifyDamageForType(v, payloadDamageType, targetActor).finalDamage
       : v;
 
-    if (_iwrImmune) {
-      // Immune: no shield drain, no hull damage — hits pass through harmlessly.
-    } else if (shieldBypass) {
-      if (shieldBurnVal > 0 && shieldsRemaining > 0) {
-        shieldsRemaining = Math.max(0, shieldsRemaining - shieldBurnVal * totalHits);
-        shieldCostTotal  = targetShields - shieldsRemaining;
-      }
-    } else if (shieldsRemaining > 0) {
-      const costPerHit = 1 + shieldBurnVal;
-      for (let i = 0; i < totalHits; i++) {
-        if (shieldsRemaining <= 0) break;
-        shieldsRemaining = Math.max(0, shieldsRemaining - costPerHit);
-        shieldCostTotal += costPerHit;
-        hitsAbsorbed++;
-      }
-    }
-
-    const hitsThroughShield = totalHits - hitsAbsorbed;
-
     // ── Armour & damage ──
     const sectorArmour    = sys.armour?.[hitQuadrant] ?? 0;
     const ap              = traits?.armourPenetration ?? 0;
     const effectiveArmour = Math.max(0, sectorArmour - ap);
     const rendVal         = traits?.rend ?? 0;
-    const rendTotal       = rendVal > 0 ? rendVal * hitsThroughShield : 0;
+    let rendTotal = 0;
 
     let totalDamage = 0;
     let strikeDiceBreakdown = null;
-    if (hitsThroughShield > 0 && !_iwrImmune) {
-      if (payloadDiceCount && payloadDiceSize) {
-        // Roll scaled dice (one die-set per hit through shields).  Systems that
-        // also carry a flat per-hit bonus (addsFlatBonusToDice) add it to the
-        // total; SF2e overrides that flag to false (dice-only damage model).
-        const dmgFormula = `${hitsThroughShield * payloadDiceCount}${payloadDiceSize}`;
-        const dmgRoll = await new Roll(dmgFormula).evaluate();
-        if (game.dice3d) game.dice3d.showForRoll(dmgRoll, game.user, true);
-        const flatBonus = SystemAdapter.current.addsFlatBonusToDice
-          ? (rawDamage ?? 0) * hitsThroughShield
-          : 0;
-        const preMitigation = dmgRoll.total + flatBonus;
-        // Weaknesses/resistances applied to the pre-armour damage.
-        totalDamage = Math.max(0, _applyIwr(preMitigation) - effectiveArmour);
-        const diceResults = dmgRoll.terms?.[0]?.results?.map(r => r.result) ?? [];
-        if (diceResults.length > 0) {
-          const breakdownFormula = flatBonus > 0 ? `${dmgFormula} + ${flatBonus}` : dmgFormula;
-          strikeDiceBreakdown = { formula: breakdownFormula, dice: diceResults, total: preMitigation };
+    const strikeDice = [];
+    let strikeRawTotal = 0;
+    if (!_iwrImmune) {
+      for (let i = 0; i < totalHits; i++) {
+        if (!damagePoolShields) {
+          const shieldResult = resolveShieldHit({
+            shields: shieldsRemaining,
+            incomingDamage: 1,
+            shieldBurn: shieldBurnVal,
+            bypass: shieldBypass,
+          });
+          shieldsRemaining = shieldResult.remaining;
+          shieldCostTotal += shieldResult.shieldDrain;
+          if (shieldResult.hitAbsorbed) {
+            hitsAbsorbed++;
+            continue;
+          }
         }
-      } else {
-        // Weaknesses/resistances applied per hit to the pre-armour damage.
-        const damagePerHit = Math.max(0, _applyIwr(rawDamage) - effectiveArmour);
-        totalDamage = hitsThroughShield * damagePerHit;
+        let incomingDamage = rawDamage ?? 0;
+        if (payloadDiceCount && payloadDiceSize) {
+          const formula = `${payloadDiceCount}${payloadDiceSize}`;
+          const damageRoll = await new Roll(formula).evaluate();
+          if (game.dice3d) game.dice3d.showForRoll(damageRoll, game.user, true);
+          const dice = damageRoll.terms?.[0]?.results?.map(result => result.result) ?? [];
+          strikeDice.push(...dice);
+          incomingDamage = damageRoll.total + (SystemAdapter.current.addsFlatBonusToDice ? (rawDamage ?? 0) : 0);
+        }
+        incomingDamage = _applyIwr(incomingDamage);
+        strikeRawTotal += incomingDamage;
+        let damageThrough = incomingDamage;
+        if (damagePoolShields) {
+          const shieldResult = resolveShieldHit({
+            shields: shieldsRemaining,
+            incomingDamage,
+            shieldBurn: shieldBurnVal,
+            bypass: shieldBypass,
+            damagePool: true,
+          });
+          shieldsRemaining = shieldResult.remaining;
+          shieldCostTotal += shieldResult.shieldDrain;
+          shieldDamageAbsorbed += shieldResult.damageAbsorbed;
+          damageThrough = shieldResult.damageThrough;
+          if (shieldResult.hitAbsorbed) hitsAbsorbed++;
+        }
+        if (damageThrough > 0) {
+          hitsThroughShield++;
+          totalDamage += Math.max(0, damageThrough - effectiveArmour);
+          if (rendVal > 0) rendTotal += rendVal;
+        }
       }
+    } else {
+      hitsAbsorbed = totalHits;
+    }
+    if (strikeDice.length > 0) {
+      const diceFormula = `${totalHits * payloadDiceCount}${payloadDiceSize}`;
+      const flatBonus = SystemAdapter.current.addsFlatBonusToDice ? (rawDamage ?? 0) * totalHits : 0;
+      strikeDiceBreakdown = {
+        formula: flatBonus > 0 ? `${diceFormula} + ${flatBonus}` : diceFormula,
+        dice: strikeDice,
+        total: strikeRawTotal,
+      };
     }
 
     // ── Apply to target ──
@@ -1627,10 +1649,12 @@ export class ShipCombatState {
     // ── Chat ──
     const content = await renderTemplate(templatePath, {
       ..._baseData(),
-      hasShieldResults: hitsAbsorbed > 0 || (shieldBypass && shieldCostTotal > 0),
+      hasShieldResults: targetShields > 0 && shieldCostTotal > 0,
       shieldResults: {
         bypassed:          shieldBypass,
         absorbed:          hitsAbsorbed,
+        damageAbsorbed:     shieldDamageAbsorbed,
+        damagePool:         damagePoolShields,
         shieldCostTotal,
         hitsThroughShield,
       },
@@ -1693,9 +1717,11 @@ export class ShipCombatState {
     // whose adapter doesn't implement IWR.  Immunity zeroes rawDamage before
     // the shield block below, which also prevents shield absorption and
     // shield burn (both key off rawDamage > 0).
+    let isDamageImmune = false;
     if (payloadDamageType) {
       const iwr = SystemAdapter.current.modifyDamageForType(rawDamage, payloadDamageType, target);
-      rawDamage = iwr.immune ? 0 : iwr.finalDamage;
+      isDamageImmune = iwr.immune;
+      rawDamage = isDamageImmune ? 0 : iwr.finalDamage;
     }
 
     const qLabel          = game.i18n.localize(
@@ -1707,25 +1733,31 @@ export class ShipCombatState {
     let targetShields    = sys.shields?.[hitQuadrant] ?? 0;
     let shieldsRemaining = targetShields;
     let hitsAbsorbed     = 0;
-    let costPerHit       = 0;
+    let shieldCostTotal  = 0;
+    let shieldDamageAbsorbed = 0;
+    const damagePoolShields = usesDamagePoolShields();
     const hardenedShields = SystemAdapter.current.getShipData(target)?.resources?.captain?.hardenedShields ?? false;
     const shieldBypass   = hardenedShields ? false : (traits?.shieldBypass ?? false);
-    const shieldBurnVal  = Math.min(traits?.shieldBurn ?? 0, rawDamage);
+    const shieldBurnVal  = traits?.shieldBurn ?? 0;
 
-    if (shieldBypass) {
-      // Bypass: damage goes through, but shield burn still applies
-      if (shieldBurnVal > 0) {
-        shieldsRemaining = Math.max(0, targetShields - shieldBurnVal);
-      }
-    } else {
-      // Normal shield absorption: 1 shield absorbs 1 hit, shield burn increases cost
-      costPerHit = 1 + shieldBurnVal;
-      if (targetShields >= costPerHit && rawDamage > 0) {
-        hitsAbsorbed = 1; // torpedoes are single-hit
-        shieldsRemaining = Math.max(0, targetShields - costPerHit);
-        rawDamage = 0;
-      }
-    }
+    const shieldResult = isDamageImmune ? {
+      remaining: shieldsRemaining,
+      shieldDrain: 0,
+      damageAbsorbed: 0,
+      damageThrough: 0,
+      hitAbsorbed: true,
+    } : resolveShieldHit({
+      shields: shieldsRemaining,
+      incomingDamage: rawDamage,
+      shieldBurn: shieldBurnVal,
+      bypass: shieldBypass,
+      damagePool: damagePoolShields,
+    });
+    shieldsRemaining = shieldResult.remaining;
+    shieldCostTotal = shieldResult.shieldDrain;
+    shieldDamageAbsorbed = shieldResult.damageAbsorbed;
+    hitsAbsorbed = shieldResult.hitAbsorbed ? 1 : 0;
+    rawDamage = shieldResult.damageThrough;
 
     if (shieldsRemaining !== targetShields) {
       hullUpdates[`system.shields.${hitQuadrant}`] = shieldsRemaining;
@@ -1749,7 +1781,7 @@ export class ShipCombatState {
 
     // Rend  -  applies even if armour blocks all hull damage
     const rendVal = traits?.rend ?? 0;
-    if (rendVal > 0) {
+    if (rendVal > 0 && rawDamage > 0) {
       const currentRend = sys.armourRend?.[hitQuadrant] ?? 0;
       hullUpdates[`system.armourRend.${hitQuadrant}`] = currentRend + rendVal;
       // For NPC ships, armour is stored as a direct current value (not derived from rend)
@@ -1777,12 +1809,14 @@ export class ShipCombatState {
         fireModeLabel:    game.i18n.localize("SHIPCOMBAT.TorpedoDamage.Title"),
         targetName:       target.name,
         hitQuadrantLabel: qLabel,
-        hasShieldResults: hitsAbsorbed > 0 || (shieldBypass && shieldBurnVal > 0),
+        hasShieldResults: targetShields > 0,
         shieldResults: {
           bypassed:          shieldBypass,
           absorbed:          hitsAbsorbed,
-          shieldCostTotal:   costPerHit * hitsAbsorbed,
-          hitsThroughShield: hitsAbsorbed > 0 ? 0 : 1,
+          damageAbsorbed:     shieldDamageAbsorbed,
+          damagePool:         damagePoolShields,
+          shieldCostTotal,
+          hitsThroughShield: rawDamage > 0 ? 1 : 0,
         },
         hasDamageResults: hitsAbsorbed === 0,
         damageResults: {
@@ -1790,7 +1824,7 @@ export class ShipCombatState {
           rawDamagePerHit: rawDamage,
           effectiveArmour,
           ap:              ap > 0 ? ap : null,
-          rendTotal:       rendVal > 0 ? rendVal : null,
+          rendTotal:       rendVal > 0 && rawDamage > 0 ? rendVal : null,
           diceBreakdown,
         },
         critResult: critResult ?? { hasCrit: false },

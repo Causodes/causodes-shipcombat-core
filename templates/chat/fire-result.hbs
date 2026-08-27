@@ -61,8 +61,13 @@
         <i class="fa-solid fa-shield-halved"></i>
         {{#if shieldResults.bypassed}}
             <span class="shipcombat-shield-bypass">{{localize "SHIPCOMBAT.Fire.ShieldBypassed"}}</span>
+            {{#if shieldResults.shieldCostTotal}}<span>({{shieldResults.shieldCostTotal}} {{localize "SHIPCOMBAT.Fire.ShieldDrain"}})</span>{{/if}}
         {{else}}
+            {{#if shieldResults.damagePool}}
+            <span>{{shieldResults.damageAbsorbed}} {{localize "SHIPCOMBAT.Fire.DamageAbsorbed"}} ({{shieldResults.shieldCostTotal}} {{localize "SHIPCOMBAT.Fire.ShieldDrain"}})</span>
+            {{else}}
             <span>{{shieldResults.absorbed}} {{localize "SHIPCOMBAT.Fire.Absorbed"}} ({{shieldResults.shieldCostTotal}} {{localize "SHIPCOMBAT.Fire.ShieldDrain"}})</span>
+            {{/if}}
             <span class="shipcombat-shield-through">→ {{shieldResults.hitsThroughShield}} {{localize "SHIPCOMBAT.Fire.Through"}}</span>
         {{/if}}
     </div>

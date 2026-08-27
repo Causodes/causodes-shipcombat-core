@@ -1,5 +1,6 @@
 import { MODULE_ID } from "./constants.js";
 import { ALLOCATION_WARNING_SETTING, AllocationWarningResetMenu } from "./apps/allocation-warning.js";
+import { SHIELD_RESOLUTION_MODES, SHIELD_RESOLUTION_SETTING } from "./state/shield-resolution.js";
 
 /**
  * Register all module settings.
@@ -57,6 +58,19 @@ export function registerSettings() {
     choices: {
       "simplified": "SHIPCOMBAT.Config.MovementSimplified",
       "realistic":  "SHIPCOMBAT.Config.MovementRealistic",
+    },
+  });
+
+  game.settings.register(MODULE_ID, SHIELD_RESOLUTION_SETTING, {
+    name: "SHIPCOMBAT.Setting.ShieldResolution",
+    hint: "SHIPCOMBAT.Setting.ShieldResolutionHint",
+    scope: "world",
+    config: true,
+    type: String,
+    default: SHIELD_RESOLUTION_MODES.HIT_NEGATION,
+    choices: {
+      [SHIELD_RESOLUTION_MODES.HIT_NEGATION]: "SHIPCOMBAT.Config.ShieldHitNegation",
+      [SHIELD_RESOLUTION_MODES.DAMAGE_POOL]: "SHIPCOMBAT.Config.ShieldDamagePool",
     },
   });
 

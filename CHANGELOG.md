@@ -37,6 +37,7 @@
 - Harden various emit to GM transport contracts
 - Add confirmation dialogue on allocation locking actions
 - Add GM Manual Override to player ship stats to the bottom of the Configuration tab
+- Add a world-level Shield Resolution setting with backward-compatible Hit Negation and optional Damage Pool modes; Damage Pool applies Shield Burn before absorbing normal damage point-for-point and discards excess Burn instead of spilling it into armour or hull, while weapon, strike-craft, and torpedo attacks consistently respect Shield Bypass, Harden Shields, immunity, Rend, and partial damage overflow
 
 ## 2.2.4
 - Fix NPC ship weapon delete controls doing nothing by registering the shared embedded-item actions on both AppV2 and legacy AppV1 NPC sheets
