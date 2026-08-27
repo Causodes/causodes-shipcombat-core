@@ -318,7 +318,7 @@ function _paint(el, sheet) {
       actorSubtype: _ordnanceSubtype(c.document.actor),
       decayRounds: friendly ? 0 : (locks.find(l => l.targetTokenId === tokenId)?.decayRounds ?? 0),
       selected:   c.id === _selectedTokenId,
-      recommended: !friendly && recommendedTargetId === tokenId,
+      recommended: recommendedTargetId === tokenId,
       priority:    !friendly && priorityTargetId === tokenId,
       // Target heading: relative for REL radar, absolute for TRUE radar.
       // Both stored so the rendering code can pick the right one.
@@ -637,9 +637,20 @@ function _paint(el, sheet) {
     }
     ctx.shadowBlur = 0;
 
+    // Friendlies are fully identified but do not have a hostile lock tier.
+    if (b.friendly) {
+      ctx.save();
+      ctx.strokeStyle = tierCol;
+      ctx.lineWidth = 1;
+      ctx.globalAlpha = 0.8;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.arc(bx, by, BLIP_RADIUS + 5, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
     // Lock tier ring (concentric indicator). Priority Target strengthens this
     // same circle instead of adding a second radar shape around the contact.
-    if (b.lockTier > 0) {
+    } else if (b.lockTier > 0) {
       // Tier 1 (Active Ping): filled halo  -  translucent red ring fill + stroke
       if (b.lockTier === 1) {
         ctx.fillStyle   = TIER_COLOUR[1]; // "#ff4444"
@@ -666,7 +677,10 @@ function _paint(el, sheet) {
     ctx.font      = `${isSelected ? "bold " : ""}10px monospace`;
     ctx.textAlign = "center";
     ctx.textBaseline = "bottom";
-    const label   = b.name.length > 14 ? b.name.slice(0, 13) + "\u2026" : b.name;
+    const displayName = b.friendly && !isOrd
+      ? `${game.i18n.localize("SHIPCOMBAT.Sensors.AllyLabel")} · ${b.name}`
+      : b.name;
+    const label = displayName.length > 18 ? displayName.slice(0, 17) + "\u2026" : displayName;
     ctx.fillText(label, bx, by - BLIP_RADIUS - 8);
     ctx.restore();
 
@@ -1252,13 +1266,20 @@ function _buildPopupHTML(blip, ctx, blipEffects) {
   h += `<button class="shipcombat-rpop-close" data-dismiss-popup><i class="fa-solid fa-xmark"></i></button>`;
   h += `</div>`;
 
-  // Lock tier status
-  const tierTip = TIER_TOOLTIP[tier] ?? "";
-  h += `<div class="shipcombat-rpop-lock" style="color:${tierCol}" title="${_esc(tierTip)}">`;
-  h += `<i class="fa-solid fa-crosshairs"></i> `;
-  h += `Lock ${tier}  -  ${TIER_LABEL[tier] ?? "Unknown"}`;
-  if (blip.decayRounds > 0) h += ` <span class="shipcombat-rpop-decay">(${blip.decayRounds} rnd)</span>`;
-  h += `</div>`;
+  // Friendlies are fully identified, but their synthetic tier is not a lock.
+  if (blip.friendly) {
+    h += `<div class="shipcombat-rpop-lock" style="color:${tierCol}">`;
+    h += `<i class="fa-solid fa-shield-halved"></i> `;
+    h += loc("SHIPCOMBAT.Sensors.FriendlyIdentified");
+    h += `</div>`;
+  } else {
+    const tierTip = TIER_TOOLTIP[tier] ?? "";
+    h += `<div class="shipcombat-rpop-lock" style="color:${tierCol}" title="${_esc(tierTip)}">`;
+    h += `<i class="fa-solid fa-crosshairs"></i> `;
+    h += `Lock ${tier}  -  ${TIER_LABEL[tier] ?? "Unknown"}`;
+    if (blip.decayRounds > 0) h += ` <span class="shipcombat-rpop-decay">(${blip.decayRounds} rnd)</span>`;
+    h += `</div>`;
+  }
 
   // Bearing (tier 1+)
   if (tier >= 1) {
@@ -1355,7 +1376,7 @@ function _buildPopupHTML(blip, ctx, blipEffects) {
 
   // ── Shared crew targeting ──────────────────────────────────────
   const recommended = ctx.recommendedTargetId === blip.tokenId;
-  if (!blip.friendly && (tier >= 1 || recommended)) {
+  if (tier >= 1 || recommended) {
     h += `<div class="shipcombat-rpop-divider"></div>`;
     if (tier >= 1 || recommended) {
       h += `<button class="shipcombat-rpop-btn shipcombat-rpop-btn--recommend${recommended ? " is-active" : ""}" `;

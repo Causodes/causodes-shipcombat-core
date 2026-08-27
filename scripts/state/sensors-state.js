@@ -10,6 +10,8 @@ import { SystemAdapter } from "../systems/SystemAdapter.js";
 import {
   ensureContactRecord,
   getContactDisplayName,
+  isFriendlyContactToken,
+  isMarkableContactToken,
   isTargetableContactToken,
 } from "../targeting/contact-intelligence.js";
 
@@ -260,12 +262,14 @@ export async function setRecommendedTarget({ targetTokenId } = {}) {
   }
 
   const target = canvas?.tokens?.get(targetTokenId);
-  if (!isTargetableContactToken(target, this.ship)) return false;
+  if (!isMarkableContactToken(target, this.ship)) return false;
 
-  const tier = this.getEffectiveLockTier(
-    targetTokenId,
-    _distanceSquaresToTarget(targetTokenId, this.ship),
-  );
+  const tier = isFriendlyContactToken(target)
+    ? 4
+    : this.getEffectiveLockTier(
+        targetTokenId,
+        _distanceSquaresToTarget(targetTokenId, this.ship),
+      );
   if (tier < 1) return false;
 
   return this.update({

@@ -395,6 +395,8 @@
       "PowerTrack": "Auxiliary Power",
       "DataTrack": "Auxiliary Power",
       "FocusedScan": "Focused Scan",
+      "AllyLabel": "ALLY",
+      "FriendlyIdentified": "Friendly - Fully Identified",
       "LockTier0": "Tier 0 Contact",
       "LockTier0Desc": "Passive contact trace only. Other crew members cannot see this contact until lock quality is increased.",
       "ActivePing": "Active Ping",

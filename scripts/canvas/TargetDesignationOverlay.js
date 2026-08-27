@@ -1,7 +1,7 @@
 import { ShipCombatState } from "../state/ShipCombatState.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
 import { THEME, pixi } from "../theme.js";
-import { getContactDisplayName, isTargetableContactToken } from "../targeting/contact-intelligence.js";
+import { getContactDisplayName, isMarkableContactToken, isTargetableContactToken } from "../targeting/contact-intelligence.js";
 
 const LOCK_TIER_COLOUR = Object.freeze({
   0: 0x666666,
@@ -68,14 +68,18 @@ export class TargetDesignationOverlay {
 
     for (const tokenId of activeIds) {
       const token = canvas.tokens.get(tokenId);
+      const recommended = recommendedId === tokenId;
+      const priority = priorityId === tokenId;
       // Never let a crew marker reveal a token hidden by current lock quality.
-      if (!isTargetableContactToken(token, ship)) {
+      const canRender = (recommended && isMarkableContactToken(token, ship))
+        || (priority && isTargetableContactToken(token, ship));
+      if (!canRender) {
         this._destroyToken(tokenId);
         continue;
       }
       this._drawToken(token, data, {
-        recommended: recommendedId === tokenId,
-        priority: priorityId === tokenId,
+        recommended,
+        priority,
       });
     }
   }
@@ -198,7 +202,7 @@ export class TargetDesignationOverlay {
       realName: token.document.name ?? "Unknown",
     });
 
-    entry.markText.text = recommended ? "MARKED TARGET" : "";
+    entry.markText.text = recommended ? "MARKED" : "";
     entry.markText.style.fill = pixi(THEME.overlay.sensorRecommendation);
     entry.markText.visible = recommended;
     entry.separatorText.text = recommended && priority ? " | " : "";

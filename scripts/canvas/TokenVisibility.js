@@ -16,8 +16,16 @@ import { MODULE_ID } from "../constants.js";
 import { isOrdnance } from "../actors/ordnance/ordnance-types.js";
 import { ShipCombatState } from "../state/ShipCombatState.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
+import { isFriendlyContactToken } from "../targeting/contact-intelligence.js";
 
 const TIER_ALPHA = [0, 0, 1.00, 1.00, 1.00]; // tier 0 & 1 handled specially; tier 2+ full opacity
+
+function _isFriendlyContact(token, ownToken) {
+  if (isFriendlyContactToken(token)) return true;
+  if (!isOrdnance(token.document.actor)) return false;
+  const parentTokenId = SystemAdapter.current.getShipData(token.document.actor)?.parentShipTokenId;
+  return !!parentTokenId && parentTokenId === ownToken.id;
+}
 
 // ── PIXI outline helpers for Tier 1 tokens ──────────────────────────────────
 
@@ -90,14 +98,10 @@ export function applyTokenVisibility(token) {
   const ownToken = ship.getActiveTokens?.()?.[0];
   if (!ownToken) return;
 
-  // ── Friendly ordnance: always fully visible (Lock 4 equivalent) ──
-  const actorType = token.document.actor?.type;
-  if (isOrdnance(token.document.actor)) {
-    const parentTokenId = SystemAdapter.current.getShipData(token.document.actor)?.parentShipTokenId;
-    if (parentTokenId && parentTokenId === ownToken.id) {
-      _forceVisible(token);
-      return;
-    }
+  // ── Friendly ships and ordnance: always fully visible ──
+  if (_isFriendlyContact(token, ownToken)) {
+    _forceVisible(token);
+    return;
   }
 
   // ── Enemy tokens: tier-based visibility ──
@@ -194,14 +198,10 @@ export function refreshTokenVisibility() {
       continue;
     }
 
-    // Friendly ordnance: always fully visible (Lock 4 equivalent)
-    const actorType = token.document.actor?.type;
-    if (isOrdnance(token.document.actor)) {
-      const parentTokenId = SystemAdapter.current.getShipData(token.document.actor)?.parentShipTokenId;
-      if (parentTokenId && parentTokenId === ownToken.id) {
-        _forceVisible(token);
-        continue;
-      }
+    // Friendly ships and ordnance are always fully visible.
+    if (_isFriendlyContact(token, ownToken)) {
+      _forceVisible(token);
+      continue;
     }
 
     const actorId = token.document.actor?.id;

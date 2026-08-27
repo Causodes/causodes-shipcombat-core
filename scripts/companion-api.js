@@ -50,6 +50,7 @@ export {
   getContactRecord,
   getEffectiveTokenDisposition,
   isFriendlyContactToken,
+  isMarkableContactToken,
   isTargetableContactToken,
 } from "./targeting/contact-intelligence.js";
 export {

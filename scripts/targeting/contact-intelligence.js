@@ -24,7 +24,12 @@ export function getContactRecord(shipData, targetTokenId) {
 }
 
 function _dispositions() {
-  return globalThis.CONST?.TOKEN_DISPOSITIONS ?? { HOSTILE: -1, NEUTRAL: 0, FRIENDLY: 1 };
+  return globalThis.CONST?.TOKEN_DISPOSITIONS ?? { SECRET: -2, HOSTILE: -1, NEUTRAL: 0, FRIENDLY: 1 };
+}
+
+function _normalizeDisposition(disposition) {
+  const { SECRET, NEUTRAL } = _dispositions();
+  return disposition === SECRET ? NEUTRAL : disposition;
 }
 
 /** Resolve ordnance allegiance from its parent ship instead of its neutral token default. */
@@ -33,22 +38,28 @@ export function getEffectiveTokenDisposition(token) {
   const actor = tokenDoc?.actor ?? token?.actor ?? null;
   const parentShipTokenId = SystemAdapter.current.getShipData(actor)?.parentShipTokenId ?? null;
   const parent = parentShipTokenId ? canvas?.tokens?.get(parentShipTokenId) : null;
-  return parent?.document?.disposition ?? tokenDoc?.disposition ?? _dispositions().NEUTRAL;
+  const disposition = parent?.document?.disposition ?? tokenDoc?.disposition ?? _dispositions().NEUTRAL;
+  return _normalizeDisposition(disposition);
 }
 
 export function isFriendlyContactToken(token) {
   return getEffectiveTokenDisposition(token) === _dispositions().FRIENDLY;
 }
 
-/** Shared eligibility rule relative to the acting ship's token disposition. */
-export function isTargetableContactToken(token, ownActor, { requireVisible = true } = {}) {
+/** Shared crew-mark eligibility independent of allegiance. */
+export function isMarkableContactToken(token, ownActor, { requireVisible = true } = {}) {
   const actor = token?.document?.actor ?? token?.actor ?? null;
   if (!actor) return false;
   if (requireVisible && token.visible === false) return false;
   if (ownActor && actor.id === ownActor.id) return false;
   const ownTokenIds = new Set((ownActor?.getActiveTokens?.() ?? []).map(own => own.id));
   if (ownTokenIds.has(token.id ?? token.document?.id)) return false;
+  return true;
+}
 
+/** Shared attack eligibility rule relative to the acting ship's token disposition. */
+export function isTargetableContactToken(token, ownActor, { requireVisible = true } = {}) {
+  if (!isMarkableContactToken(token, ownActor, { requireVisible })) return false;
   const disposition = getEffectiveTokenDisposition(token);
   const { HOSTILE, NEUTRAL, FRIENDLY } = _dispositions();
   if (disposition === NEUTRAL) return true;
