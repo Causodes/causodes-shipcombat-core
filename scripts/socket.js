@@ -94,7 +94,7 @@ async function _handleAction(action, payload = {}) {
 
     case "assignRole": {
       const shipActor = payload.shipActorId ? game.actors.get(payload.shipActorId) : null;
-      if (payload.shipActorId && shipActor?.type !== `${CORE_MODULE_ID}.ship`) {
+      if (payload.shipActorId && shipActor?.type !== `${SystemAdapter.current.moduleId}.ship`) {
         ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoShip"));
         return;
       }
@@ -122,7 +122,7 @@ async function _handleAction(action, payload = {}) {
     case "unassignComponent":
     case "assignEquipment": {
       const shipActor = payload.shipActorId ? game.actors.get(payload.shipActorId) : null;
-      if (payload.shipActorId && shipActor?.type !== `${CORE_MODULE_ID}.ship`) {
+      if (payload.shipActorId && shipActor?.type !== `${SystemAdapter.current.moduleId}.ship`) {
         ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoShip"));
         return;
       }

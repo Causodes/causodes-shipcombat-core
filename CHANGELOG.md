@@ -1,3 +1,6 @@
+## v2.3.2
+- Small hotfix to repair role assignment and component/equipment assignment socket
+
 ## v2.3.1
 ### Bug Fixes
 - Fix Hull Repair failing after its skill check because the extracted Engineer state handler referenced an unavailable class global
