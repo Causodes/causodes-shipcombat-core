@@ -55,14 +55,14 @@
       <td data-tooltip="{{localize 'SHIPCOMBAT.Component.Rating'}}" data-tooltip-direction="UP">RTG</td>
     </tr>
     <tr>
-      <td><input type="number" name="system.attributes.piloting" value="{{sys.attributes.piloting}}"></td>
-      <td><input type="number" name="system.attributes.tech" value="{{sys.attributes.tech}}"></td>
-      <td><input type="number" name="system.attributes.gunnery" value="{{sys.attributes.gunnery}}"></td>
-      <td><input type="number" name="system.movement.baseSpeed" value="{{sys.movement.baseSpeed}}" min="0"></td>
-      <td><input type="number" name="system.movement.baseManeuverability" value="{{sys.movement.baseManeuverability}}" min="0"></td>
-      <td><input type="number" name="system.autoScanRange" value="{{sys.autoScanRange}}" min="0"></td>
-      <td><input type="number" name="system.sensorBandSize" value="{{sys.sensorBandSize}}" min="0"></td>
-      <td><input type="number" name="system.sensorRating" value="{{sys.sensorRating}}" min="0"></td>
+      <td><input type="number" name="system.attributes.piloting" value="{{sys.attributes.piloting}}" step="1"></td>
+      <td><input type="number" name="system.attributes.tech" value="{{sys.attributes.tech}}" step="1"></td>
+      <td><input type="number" name="system.attributes.gunnery" value="{{sys.attributes.gunnery}}" step="1"></td>
+      <td><input type="number" name="system.movement.baseSpeed" value="{{sys.movement.baseSpeed}}" min="0" step="1"></td>
+      <td><input type="number" name="system.movement.baseManeuverability" value="{{sys.movement.baseManeuverability}}" min="0" step="1"></td>
+      <td><input type="number" name="system.autoScanRange" value="{{sys.autoScanRange}}" min="0" step="1"></td>
+      <td><input type="number" name="system.sensorBandSize" value="{{sys.sensorBandSize}}" min="0" step="1"></td>
+      <td><input type="number" name="system.sensorRating" value="{{sys.sensorRating}}" min="0" step="1"></td>
     </tr>
   </table>
 
@@ -79,9 +79,9 @@
       {{#each sectors}}
       <td>
         <span class="shipcombat-npc-armour-compound">
-          <input type="number" name="system.armour.{{id}}" value="{{armour}}" min="0" class="shipcombat-npc-arm-input">
+          <input type="number" name="system.armour.{{id}}" value="{{armour}}" min="0" step="1" class="shipcombat-npc-arm-input">
           <span class="shipcombat-as-sep">|</span>
-          <input type="number" name="system.armourBase.{{id}}" value="{{armourBase}}" min="0" class="shipcombat-npc-arm-input shipcombat-npc-arm-max">
+          <input type="number" name="system.armourBase.{{id}}" value="{{armourBase}}" min="0" step="1" class="shipcombat-npc-arm-input shipcombat-npc-arm-max">
         </span>
       </td>
       {{/each}}
@@ -93,15 +93,15 @@
     <div class="shipcombat-ship-attr-box">
       <div class="shipcombat-ship-attr-label">{{hullBarLabel}}</div>
       <div class="shipcombat-ship-attr-fields">
-        <input type="number" name="system.hull.value" value="{{sys.hull.value}}" min="0">
+        <input type="number" name="system.hull.value" value="{{sys.hull.value}}" min="0" step="1">
         <span class="shipcombat-hull-sep">/</span>
-        <input type="number" name="system.hull.max" value="{{sys.hull.max}}" min="0">
+        <input type="number" name="system.hull.max" value="{{sys.hull.max}}" min="0" step="1">
       </div>
     </div>
     <div class="shipcombat-ship-attr-box">
       <div class="shipcombat-ship-attr-label">{{localize "SHIPCOMBAT.Engineer.InternalFire"}}</div>
       <div class="shipcombat-ship-attr-fields">
-        <input type="number" name="system.internalFire" value="{{sys.internalFire}}" min="0">
+        <input type="number" name="system.internalFire" value="{{sys.internalFire}}" min="0" step="1">
       </div>
     </div>
   </div>

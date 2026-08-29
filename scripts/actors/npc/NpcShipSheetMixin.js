@@ -20,7 +20,7 @@ import { heatColor } from "../../theme.js";
 import { enrichWeaponForGunner } from "../../roles/gunner.js";
 import { TargetingPopup } from "../../apps/TargetingPopup.js";
 import { RecoverCraftPopup } from "../../apps/StrikeCraftPopups.js";
-import { coerceEmptyNumberInputs } from "../../sheet-utils.js";
+import { coerceEmptyNumberInputs, coerceIntegerInputs } from "../../sheet-utils.js";
 import { RamTargetPopup } from "../../apps/RamTargetPopup.js";
 import { npcCoreBlocksPowerGeneration } from "../../state/npc-condition-effects.js";
 import { getDisabledWeaponSectionId } from "../../state/weapon-section.js";
@@ -43,6 +43,25 @@ async function _animateTokenPath(token, waypoints, projected) {
 }
 
 const SECTORS = ["bow", "stern", "port", "starboard"];
+const NPC_INTEGER_FORM_FIELDS = new Set([
+  "system.hull.value",
+  "system.hull.max",
+  "system.internalFire",
+  "system.voidshieldFlux",
+  "system.movement.baseSpeed",
+  "system.movement.baseManeuverability",
+  "system.attributes.piloting",
+  "system.attributes.tech",
+  "system.attributes.gunnery",
+  "system.autoScanRange",
+  "system.sensorBandSize",
+  "system.sensorRating",
+  ...SECTORS.flatMap(sector => [
+    `system.armour.${sector}`,
+    `system.armourBase.${sector}`,
+    `system.shieldMax.${sector}`,
+  ]),
+]);
 const WEAPON_SECTIONS = [
   { id: "port",      label: "SHIPCOMBAT.Slot.Port" },
   { id: "starboard", label: "SHIPCOMBAT.Slot.Starboard" },
@@ -467,6 +486,7 @@ export const NpcShipSheetMixin = (BaseClass) => {
 
     _processFormData(event, form, formData) {
       coerceEmptyNumberInputs(form, formData);
+      coerceIntegerInputs(formData, NPC_INTEGER_FORM_FIELDS);
       return super._processFormData(event, form, formData);
     }
   }

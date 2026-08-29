@@ -1,3 +1,6 @@
+## v2.3.3 (UNRELEASED)
+- Normalize malformed fractional stats while retaining integer schema validation
+
 ## v2.3.2
 - Small hotfix to repair role assignment and component/equipment assignment socket
 

@@ -795,6 +795,7 @@ export class ShipController {
     const _sp = k => SystemAdapter.current.systemPath(k);
     for (const key of [
       _sp("hull.value"), _sp("hull.max"),
+      _sp("internalFire"),
       _sp("movement.speed"), _sp("movement.maneuverability"),
     ]) {
       if (key in obj) obj[key] = Math.round(Number(obj[key]) || 0);

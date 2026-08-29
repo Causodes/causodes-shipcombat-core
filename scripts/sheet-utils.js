@@ -28,3 +28,11 @@ export function coerceEmptyNumberInputs(form, formData) {
     }
   }
 }
+
+/** Round selected numeric form values before integer schema validation. */
+export function coerceIntegerInputs(formData, fieldNames) {
+  for (const key of fieldNames) {
+    const value = Number(formData.object[key]);
+    if (Number.isFinite(value)) formData.object[key] = Math.round(value);
+  }
+}
