@@ -1,4 +1,4 @@
-## v2.3.1 (UNRELEASED)
+## v2.3.1
 ### Bug Fixes
 - Fix Hull Repair failing after its skill check because the extracted Engineer state handler referenced an unavailable class global
 - Scale torpedo detonation damage by surviving warhead sections and blast distance in both remaining-HP and accumulated-damage hull modes
@@ -6,6 +6,7 @@
 - Apply crew assignment, claim, release, and unassignment changes to the ship sheet that initiated them when multiple player ships exist
 - Respect player-ship component capacities when importing items, leave overflow components unequipped, and balance generic flank weapons between Port and Starboard without adding configuration controls
 - Target weapon assignment, equipment swaps, and component removal at the player ship that initiated the action
+- Prune legacy NPC ship schema and configuration fields
 - Bump verified version to 14.367
 
 ## v2.3.0

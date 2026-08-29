@@ -221,6 +221,7 @@
       "NoAssignableUser": "Could not find a non-GM user for that actor.",
       "WrongOrdnanceType": "That actor type does not match this ordnance slot.",
       "WrongWeaponSlot": "This weapon cannot be placed in that position. Flank weapons may go in Port or Starboard only.",
+      "NpcWeaponsOnly": "NPC ships only support Weapon Battery components.",
       "ComponentSlotsFull": "That component's compatible slots are full. It was added to inventory unequipped.",
       "OrdnanceSlotsFull": "Ordnance slots are full. Increase the Ordnance slot count in Configuration.",
       "NeedsPowerCore": "Your Overcharged action requires a {{SHIPCOMBAT.Term.PowerCore}}.",

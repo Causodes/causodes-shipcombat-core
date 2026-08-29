@@ -8,9 +8,9 @@
  *   3. Maximum range   (range → 2×range)   – dim fill
  */
 
-import { MODULE_ID } from "../constants.js";
 import { THEME, pixi } from "../theme.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
+import { ShipCombatState } from "../state/ShipCombatState.js";
 
 // ── Colour palette ───────────────────────────────────────────────────────────
 
@@ -147,18 +147,7 @@ export class WeaponArcOverlay {
     const cy = tok.y + (tok.document.height * gs) / 2;
     const h0 = (tok.document.rotation + 90) * (Math.PI / 180);
 
-    // Look up sensor stats (component items for player ships, flat fields for NPC ships)
-    const sensorComp = this._actor.items.find(
-      i => i.type === `${MODULE_ID}.component` && i.system.slot === "sensor"
-    );
-    const actorSys = SystemAdapter.current.getShipData(this._actor) ?? {};
-    const bandExpanded = !!(actorSys.resources?.gunner?.sensorBandExpanded);
-    const rawBandSize  = Math.max(0, Number(sensorComp?.system?.bandSize) || Number(actorSys.sensorBandSize) || 0);
-    const sensor = {
-      rating:        Math.max(0, Number(sensorComp?.system?.rating) || Number(actorSys.sensorRating) || 0),
-      bandSize:      bandExpanded ? rawBandSize * 2 : rawBandSize,
-      autoScanRange: Math.max(0, Number(sensorComp?.system?.autoScanRange) || Number(actorSys.autoScanRange) || 0),
-    };
+    const sensor = ShipCombatState.getSensorStats(this._actor);
 
     const wanted = this._wanted();
 

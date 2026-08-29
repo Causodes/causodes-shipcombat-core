@@ -125,29 +125,9 @@ export class ShieldArcOverlay {
     return result;
   }
 
-  /**
-   * Compute zone thresholds for an enemy ship from its shield component.
-   */
+  /** Compute zone thresholds from the actor's canonical shield stats. */
   static _getZoneThresholds(actor) {
-    const shieldComp = actor.items?.find?.(
-      i => i.type === `${MODULE_ID}.component` && i.system?.slot === "shields"
-    );
-    if (!shieldComp) {
-      // Fall back to default thresholds based on shield values
-      const shields = SystemAdapter.current.getShipData(actor)?.shields ?? {};
-      const fallbackZT = Math.max(
-        shields.bow ?? 0, shields.stern ?? 0,
-        shields.port ?? 0, shields.starboard ?? 0, 8
-      );
-      return { bow: fallbackZT, stern: fallbackZT, port: fallbackZT, starboard: fallbackZT };
-    }
-    const zt = shieldComp.system?.zoneThresholds ?? {};
-    return {
-      bow:       zt.bow ?? 8,
-      stern:     zt.stern ?? 8,
-      port:      zt.port ?? 8,
-      starboard: zt.starboard ?? 8,
-    };
+    return ShipCombatState.getShieldStats(actor).zoneThresholds;
   }
 
   /**

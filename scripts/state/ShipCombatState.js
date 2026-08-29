@@ -1405,6 +1405,19 @@ export class ShipCombatState {
     const ship = shipActor ?? this.ship;
     const _default = { maxVoidFlux: 20, fluxToAPRate: 1, zoneThresholds: { bow: 8, stern: 8, port: 8, starboard: 8 } };
     if (!ship) return _default;
+    if (ship.type === `${MODULE_ID}.npcShip`) {
+      const sys = SystemAdapter.current.getShipData(ship) ?? {};
+      return {
+        maxVoidFlux: sys.voidshieldFlux ?? 0,
+        fluxToAPRate: 1,
+        zoneThresholds: {
+          bow:       sys.shieldMax?.bow ?? 0,
+          stern:     sys.shieldMax?.stern ?? 0,
+          port:      sys.shieldMax?.port ?? 0,
+          starboard: sys.shieldMax?.starboard ?? 0,
+        },
+      };
+    }
     const shield = ship.items.find(i => i.type === `${MODULE_ID}.component` && i.system.slot === "shields" && i.system.equipped !== false);
     if (!shield) return _default;
     const zt = shield.system.zoneThresholds;
@@ -1423,10 +1436,10 @@ export class ShipCombatState {
   static getSensorStats(shipActor) {
     const ship = shipActor ?? this.ship;
     if (!ship) return { rating: 0, bandSize: 0, autoScanRange: 0, maxRange: 0, apCostMultiplier: 1 };
-    const sensor = ship.items.find(
+    const sys = SystemAdapter.current.getShipData(ship) ?? {};
+    const sensor = ship.type === `${MODULE_ID}.npcShip` ? null : ship.items.find(
       i => i.type === `${MODULE_ID}.component` && i.system.slot === "sensor" && i.system.equipped !== false
     );
-    const sys = SystemAdapter.current.getShipData(ship) ?? {};
     const scanRange = (sensor?.system?.autoScanRange ?? 0) || (sys.autoScanRange ?? 0);
     const rangeAmpActive = (sys.resources?.sensors?.effects ?? []).some(e => e.actionId === "rangeAmplifier");
     const effectiveScanRange = rangeAmpActive ? scanRange * 2 : scanRange;

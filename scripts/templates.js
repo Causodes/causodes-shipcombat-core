@@ -113,7 +113,6 @@ export const STATIC_TEMPLATE_PATHS = Object.freeze([
   `modules/${CORE_MODULE_ID}/templates/actor/tabs/ship-overview.hbs`,
   `modules/${CORE_MODULE_ID}/templates/actor/tabs/ship-config.hbs`,
   `modules/${CORE_MODULE_ID}/templates/actor/tabs/npc/npc-ship-body.hbs`,
-  `modules/${CORE_MODULE_ID}/templates/actor/tabs/npc/npc-ship-config.hbs`,
   `modules/${CORE_MODULE_ID}/templates/actor/tabs/npc/npc-ship-movement.hbs`,
   `modules/${CORE_MODULE_ID}/templates/actor/tabs/npc/npc-ship-gunner.hbs`,
   `modules/${CORE_MODULE_ID}/templates/actor/tabs/npc/npc-ship-ordnance.hbs`,

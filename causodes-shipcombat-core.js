@@ -295,7 +295,7 @@ Hooks.on("preCreateActor", (actor, data) => {
     actor.updateSource({
       "prototypeToken.disposition": CONST.TOKEN_DISPOSITIONS.HOSTILE,
       "prototypeToken.lockRotation": false,
-      "prototypeToken.actorLink": true,
+      "prototypeToken.actorLink": false,
       "prototypeToken.hidden": true,
     });
   } else if (isOrdnance(actor)) {
@@ -307,7 +307,7 @@ Hooks.on("preCreateActor", (actor, data) => {
     actor.updateSource({
       "prototypeToken.disposition":   CONST.TOKEN_DISPOSITIONS.NEUTRAL,
       "prototypeToken.lockRotation":  false,
-      "prototypeToken.actorLink":     true,
+      "prototypeToken.actorLink":     false,
       "prototypeToken.texture.src":   actor.img,
     });
     // When created manually (not from Ordnance Master), set sane hull defaults.

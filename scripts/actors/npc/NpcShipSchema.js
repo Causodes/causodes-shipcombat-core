@@ -20,8 +20,8 @@ import { SystemAdapter } from "../../systems/SystemAdapter.js";
 export const NpcShipSchemaMixin = (BaseClass) => class extends BaseClass {
 
   itemIsAllowed(item) {
-    if (item.type === `${MODULE_ID}.component`) return true;
-    ui.notifications.error("SHIPCOMBAT.Warning.OnlyComponents", { localize: true });
+    if (item.type === `${MODULE_ID}.component` && item.system?.slot === "weapon") return true;
+    ui.notifications.error("SHIPCOMBAT.Warning.NpcWeaponsOnly", { localize: true });
     return false;
   }
 
@@ -34,10 +34,6 @@ export const NpcShipSchemaMixin = (BaseClass) => class extends BaseClass {
     schema.model          = new fields.StringField({ initial: "" });
     schema.shipFaction    = new fields.StringField({ initial: "" });
     schema.shipRole       = new fields.StringField({ initial: "" });
-
-    // ── Combat meta ─────────────────────────────────────────────────────────
-    schema.active = new fields.BooleanField({ initial: false });
-    schema.round  = new fields.NumberField({ initial: 0, min: 0, integer: true });
 
     // ── Hull ─────────────────────────────────────────────────────────────────
     // hull.value = accumulated damage (0 = pristine, max = destroyed)
@@ -124,64 +120,10 @@ export const NpcShipSchemaMixin = (BaseClass) => class extends BaseClass {
     schema.sensorBandSize = new fields.NumberField({ initial: 0, min: 0, integer: true });
     schema.sensorRating   = new fields.NumberField({ initial: 0, min: 0, integer: true });
 
-    // ── Three ammo tracks ────────────────────────────────────────────────────
-    schema.ammoTracks = new fields.SchemaField({
-      a: new fields.SchemaField({
-        label: new fields.StringField({ initial: "Macrocannon" }),
-        value: new fields.NumberField({ initial: 0, min: 0, integer: true }),
-        max:   new fields.NumberField({ initial: 10, min: 0, integer: true }),
-      }),
-      b: new fields.SchemaField({
-        label: new fields.StringField({ initial: "Lance" }),
-        value: new fields.NumberField({ initial: 0, min: 0, integer: true }),
-        max:   new fields.NumberField({ initial: 10, min: 0, integer: true }),
-      }),
-      c: new fields.SchemaField({
-        label: new fields.StringField({ initial: "Torpedo" }),
-        value: new fields.NumberField({ initial: 0, min: 0, integer: true }),
-        max:   new fields.NumberField({ initial: 10, min: 0, integer: true }),
-      }),
-    });
-
-    // ── Slots ────────────────────────────────────────────────────────────────
-    schema.weaponSlots = new fields.SchemaField({
-      port:      new fields.NumberField({ initial: 1, min: 0, integer: true }),
-      starboard: new fields.NumberField({ initial: 1, min: 0, integer: true }),
-      prow:      new fields.NumberField({ initial: 1, min: 0, integer: true }),
-      dorsal:    new fields.NumberField({ initial: 1, min: 0, integer: true }),
-      stern:     new fields.NumberField({ initial: 0, min: 0, integer: true }),
-    });
-
-    schema.equipmentSlots = new fields.SchemaField({
-      shields:    new fields.NumberField({ initial: 1, min: 0, integer: true }),
-      armour:     new fields.NumberField({ initial: 1, min: 0, integer: true }),
-      engine:     new fields.NumberField({ initial: 1, min: 0, integer: true }),
-      sensor:     new fields.NumberField({ initial: 1, min: 0, integer: true }),
-      reactor:    new fields.NumberField({ initial: 1, min: 0, integer: true }),
-      weaponsBay: new fields.NumberField({ initial: 1, min: 0, integer: true }),
-    });
-
-    schema.ordnanceSlots = new fields.SchemaField({
-      torpedo:     new fields.NumberField({ initial: 1, min: 0, integer: true }),
-      strikeCraft: new fields.NumberField({ initial: 0, min: 0, integer: true }),
-      weaponsBay:  new fields.NumberField({ initial: 0, min: 0, integer: true }),
-    });
-
     // ── Ordnance templates ────────────────────────────────────────────────────
     schema.ordnanceActors = new fields.SchemaField({
       torpedo:     new fields.ArrayField(new fields.ObjectField()),
       strikeCraft: new fields.ArrayField(new fields.ObjectField()),
-    });
-
-    const _sidesSchema = () => new fields.SchemaField({
-      bow:       new fields.BooleanField({ initial: true }),
-      port:      new fields.BooleanField({ initial: true }),
-      starboard: new fields.BooleanField({ initial: true }),
-      stern:     new fields.BooleanField({ initial: true }),
-    });
-    schema.ordnanceLaunchSides = new fields.SchemaField({
-      torpedo:    _sidesSchema(),
-      strikeCraft: _sidesSchema(),
     });
 
     // ── Resources (helm + gunner state) ──────────────────────────────────────
@@ -218,11 +160,6 @@ export const NpcShipSchemaMixin = (BaseClass) => class extends BaseClass {
       }),
     });
 
-    // ── Notes ────────────────────────────────────────────────────────────────
-    schema.notes = new fields.SchemaField({
-      gm: new fields.HTMLField({ initial: "" }),
-    });
-
     // NOTE: `combat` SchemaField is NOT defined here.
     // System modules define it in their concrete subclass to add system-specific
     // display stubs (e.g. `action`, `initiative`, `wounds` for warhammer-lib).
@@ -236,15 +173,6 @@ export const NpcShipSchemaMixin = (BaseClass) => class extends BaseClass {
   }
 
   computeDerived() {
-    // Derive movement stats from installed engine component
-    const engine = this.parent?.items?.find(
-      i => i.type === `${MODULE_ID}.component` && i.system.slot === "engine"
-    );
-    if (engine) {
-      this.movement.baseSpeed           = engine.system.speed           ?? this.movement.baseSpeed;
-      this.movement.baseManeuverability = engine.system.maneuverability ?? this.movement.baseManeuverability;
-    }
-
     this.movement.speed           = this.movement.baseSpeed;
     this.movement.maneuverability = this.movement.baseManeuverability;
 

@@ -174,20 +174,7 @@ export class TargetingPopup extends foundry.applications.api.HandlebarsApplicati
     const cy       = token.y + tokenH / 2;
     const heading  = (token.document.rotation + 90) * (Math.PI / 180);
 
-    // Gather sensor stats from installed component (player ships) or flat fields (NPC ships)
-    const sensorComp = ship.items.find(
-      i => i.type === `${MODULE_ID}.component` && i.system.slot === "sensor"
-    );
-    const sensorEffects = sys.resources?.sensors?.effects ?? [];
-    const rangeAmpActive = sensorEffects.some(e => e.actionId === "rangeAmplifier");
-    const baseAutoScanRange = (sensorComp?.system?.autoScanRange ?? 0) || (sys.autoScanRange ?? 0);
-    const bandExpanded = !!(sys.resources?.gunner?.sensorBandExpanded);
-    const rawBandSize  = sensorComp?.system?.bandSize ?? sys.sensorBandSize ?? 0;
-    const sensor = {
-      rating:        sensorComp?.system?.rating ?? sys.sensorRating ?? 0,
-      bandSize:      bandExpanded ? rawBandSize * 2 : rawBandSize,
-      autoScanRange: rangeAmpActive ? baseAutoScanRange * 2 : baseAutoScanRange,
-    };
+    const sensor = ShipCombatState.getSensorStats(ship);
 
     const weaponRange = Number(this.weapon.system.range) || 0;
 
