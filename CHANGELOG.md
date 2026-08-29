@@ -1,4 +1,4 @@
-## v2.3.3 (UNRELEASED)
+## v2.3.3
 - Normalize malformed fractional stats while retaining integer schema validation
 
 ## v2.3.2
