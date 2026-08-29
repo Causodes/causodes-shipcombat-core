@@ -43,7 +43,7 @@ async function _onDeleteEmbedded(event, target) {
 // ── Role management ─────────────────────────────────────────────────────────
 
 async function _onUnassignRole(event, target) {
-  emitToGM("assignRole", { userId: null, roleId: target.dataset.roleId });
+  emitToGM("assignRole", { userId: null, roleId: target.dataset.roleId, shipActorId: this.actor.id });
 }
 
 async function _onClaimRole(event, target) {
@@ -52,6 +52,7 @@ async function _onClaimRole(event, target) {
   emitToGM("assignRole", {
     userId: game.user.id,
     roleId: target.dataset.roleId,
+    shipActorId: this.actor.id,
     actorRef: ref ? {
       id: ref.id,
       uuid: ref.uuid,
@@ -63,7 +64,7 @@ async function _onClaimRole(event, target) {
 
 async function _onReleaseRole(event, target) {
   // Release the current user's own role by un-assigning via the roleId on the row
-  emitToGM("assignRole", { userId: null, roleId: target.dataset.roleId });
+  emitToGM("assignRole", { userId: null, roleId: target.dataset.roleId, shipActorId: this.actor.id });
 }
 
 // ── Captain ─────────────────────────────────────────────────────────────────

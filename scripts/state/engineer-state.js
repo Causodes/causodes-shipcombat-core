@@ -206,7 +206,7 @@ export async function repairHull(auxiliaryPowerSpent, sl) {
   }
 
   const heat = sys.resources?.engineer?.heat ?? 0;
-  const reactor    = ShipCombatState.getReactorStats(this.ship);
+  const reactor    = this.getReactorStats();
   const heatMax    = reactor.heatCapacity;
   const heatRoom   = Math.max(0, heatMax - heat);
   // Repair is capped to available heat budget (1 heat per HP) and remaining damage headroom.

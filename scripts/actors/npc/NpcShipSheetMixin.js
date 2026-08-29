@@ -1206,7 +1206,7 @@ function _npcComputePerpendicularSpawn(token, side) {
   const grid = canvas.grid?.size ?? 100;
   const offset = grid * 1.5;
   const shipRotDeg = token.document?.rotation ?? 0;
-  const headingRad = (shipRotDeg - 90) * (Math.PI / 180);
+  const headingRad = (shipRotDeg + 90) * (Math.PI / 180);
   const perpRad = side === "port" ? headingRad - Math.PI / 2 : headingRad + Math.PI / 2;
   const cx = token.center?.x ?? (token.x + grid / 2);
   const cy = token.center?.y ?? (token.y + grid / 2);
@@ -1222,7 +1222,7 @@ function _npcComputeBowSpawn(token) {
   const grid = canvas.grid?.size ?? 100;
   const offset = grid * 1.5;
   const shipRotDeg = token.document?.rotation ?? 0;
-  const headingRad = (shipRotDeg - 90) * (Math.PI / 180);
+  const headingRad = (shipRotDeg + 90) * (Math.PI / 180);
   const cx = token.center?.x ?? (token.x + grid / 2);
   const cy = token.center?.y ?? (token.y + grid / 2);
   return {
@@ -1237,7 +1237,7 @@ function _npcComputeSternSpawn(token) {
   const grid = canvas.grid?.size ?? 100;
   const offset = grid * 1.5;
   const shipRotDeg = token.document?.rotation ?? 0;
-  const headingRad = (shipRotDeg - 90) * (Math.PI / 180);
+  const headingRad = (shipRotDeg + 90) * (Math.PI / 180);
   const sternRad = headingRad + Math.PI;
   const cx = token.center?.x ?? (token.x + grid / 2);
   const cy = token.center?.y ?? (token.y + grid / 2);

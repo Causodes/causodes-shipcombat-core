@@ -111,8 +111,13 @@ export class ShipCombatState {
     return this.getData().roles?.[userId] ?? null;
   }
 
-  static async assignRole(userId, roleId, actorRef = null) {
-    const data = this.getData();
+  static async assignRole(userId, roleId, actorRef = null, shipActor = null) {
+    const ship = shipActor ?? this.ship;
+    if (!ship) {
+      ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoShip"));
+      return;
+    }
+    const data = SystemAdapter.current.getShipData(ship) ?? foundry.utils.deepClone(DEFAULT_COMBAT_STATE);
     const roles = data.roles ?? {};
     const changes = {};
 
@@ -138,7 +143,11 @@ export class ShipCombatState {
       changes[`crewActors.-=${roleId}`] = null;
     }
 
-    return this.update(changes);
+    const prefixed = {};
+    for (const [key, value] of Object.entries(changes)) {
+      prefixed[`system.${key}`] = value;
+    }
+    return ship.update(prefixed);
   }
 
   // ── Actions ───────────────────────────────────────────────────────────────
@@ -585,32 +594,35 @@ export class ShipCombatState {
    * Assign a component to a weapon slot position.
    * payload: { itemId, weaponPosition, weaponBay }
    */
-  static async assignWeapon({ itemId, weaponPosition, weaponBay }) {
-    if (!this.ship) return;
+  static async assignWeapon({ itemId, weaponPosition, weaponBay }, shipActor = null) {
+    const ship = shipActor ?? this.ship;
+    if (!ship) return;
     const updates = [{ _id: itemId, "system.equipped": true, "system.weaponPosition": weaponPosition, "system.weaponBay": weaponBay }];
-    return this.ship.updateEmbeddedDocuments("Item", updates);
+    return ship.updateEmbeddedDocuments("Item", updates);
   }
 
   /**
    * Unassign a component from its slot (set equipped = false).
    * payload: { itemId }
    */
-  static async unassignComponent({ itemId }) {
-    if (!this.ship) return;
-    return this.ship.updateEmbeddedDocuments("Item", [{ _id: itemId, "system.equipped": false }]);
+  static async unassignComponent({ itemId }, shipActor = null) {
+    const ship = shipActor ?? this.ship;
+    if (!ship) return;
+    return ship.updateEmbeddedDocuments("Item", [{ _id: itemId, "system.equipped": false }]);
   }
 
   /**
    * Swap which equipment component is active in a given slot type.
    * payload: { slotId, newItemId }  — newItemId may be "" to unequip all
    */
-  static async assignEquipment({ slotId, newItemId }) {
-    if (!this.ship) return;
-    const allOfType = this.ship.items.filter(
+  static async assignEquipment({ slotId, newItemId }, shipActor = null) {
+    const ship = shipActor ?? this.ship;
+    if (!ship) return;
+    const allOfType = ship.items.filter(
       i => i.type === `${MODULE_ID}.component` && i.system.slot === slotId
     );
     const updates = allOfType.map(c => ({ _id: c.id, "system.equipped": c.id === newItemId }));
-    if (updates.length) return this.ship.updateEmbeddedDocuments("Item", updates);
+    if (updates.length) return ship.updateEmbeddedDocuments("Item", updates);
   }
 
   static async updateResource(roleId, key, value) {

@@ -168,6 +168,58 @@ function buildSectionedItems(definitions, items, slotConfig, keyFn = getComponen
   });
 }
 
+function prepareImportedComponentPlacement(shipActor, itemData, explicitWeaponPosition = false) {
+  const system = itemData.system ?? {};
+  if (system.equipped === false) return true;
+
+  const shipData = SystemAdapter.current.getShipData(shipActor);
+  const components = shipActor.items.filter(item =>
+    item.type === `${MODULE_ID}.component` && item.system.equipped !== false
+  );
+
+  if (system.slot === "weapon") {
+    const position = system.weaponPosition ?? "prow";
+    if (position === "flank" && !explicitWeaponPosition) {
+      const bays = ["port", "starboard"].map((id, index) => {
+        const capacity = Math.max(0, Number(shipData.weaponSlots?.[id] ?? 0));
+        const used = components.filter(item =>
+          item.system.slot === "weapon"
+          && (item.system.weaponPosition ?? "prow") === "flank"
+          && (item.system.weaponBay ?? "port") === id
+        ).length;
+        return { id, index, capacity, used };
+      }).filter(bay => bay.used < bay.capacity);
+
+      bays.sort((left, right) =>
+        (left.used / left.capacity) - (right.used / right.capacity) || left.index - right.index
+      );
+      if (bays.length > 0) {
+        system.weaponBay = bays[0].id;
+        return true;
+      }
+    } else {
+      const section = position === "flank" ? (system.weaponBay ?? "port") : position;
+      const capacity = Math.max(0, Number(shipData.weaponSlots?.[section] ?? 0));
+      const used = components.filter(item => {
+        if (item.system.slot !== "weapon") return false;
+        const itemPosition = item.system.weaponPosition ?? "prow";
+        const itemSection = itemPosition === "flank" ? (item.system.weaponBay ?? "port") : itemPosition;
+        return itemSection === section;
+      }).length;
+      if (used < capacity) return true;
+    }
+  } else if (EQUIPMENT_SECTIONS.some(section => section.id === system.slot)) {
+    const capacity = Math.max(0, Number(shipData.equipmentSlots?.[system.slot] ?? 0));
+    const used = components.filter(item => item.system.slot === system.slot).length;
+    if (used < capacity) return true;
+  } else {
+    return true;
+  }
+
+  system.equipped = false;
+  return false;
+}
+
 // ── ShipController ────────────────────────────────────────────────────────
 
 export class ShipController {
@@ -825,6 +877,7 @@ export class ShipController {
     if (!targetUser) return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoAssignableUser"));
     emitToGM("assignRole", {
       userId: targetUser.id, roleId,
+      shipActorId: this.actor.id,
       actorRef: { id: actor.id, uuid: actor.uuid, name: actor.name, img: actor.img },
     });
   }
@@ -871,7 +924,15 @@ export class ShipController {
         }
       }
     }
+    const installed = prepareImportedComponentPlacement(
+      this.actor,
+      createData,
+      targetSlot === "weapon" && Boolean(targetPosition),
+    );
     await this.actor.createEmbeddedDocuments("Item", [createData]);
+    if (!installed) {
+      ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.ComponentSlotsFull"));
+    }
   }
 
   // ── Post-render DOM wiring ──────────────────────────────────────────────
@@ -942,7 +1003,11 @@ export class ShipController {
 
     rootEl.querySelectorAll("[data-equip-slot]").forEach(sel => {
       sel.addEventListener("change", ev => {
-        emitToGM("assignEquipment", { slotId: sel.dataset.equipSlot, newItemId: sel.value });
+        emitToGM("assignEquipment", {
+          slotId: sel.dataset.equipSlot,
+          newItemId: sel.value,
+          shipActorId: this.actor.id,
+        });
       });
     });
 
@@ -956,6 +1021,7 @@ export class ShipController {
           itemId,
           weaponPosition: isFlank ? "flank" : pos,
           weaponBay:      isFlank ? pos : "port",
+          shipActorId:     this.actor.id,
         });
         if (sel.isConnected) sel.value = "";
       });

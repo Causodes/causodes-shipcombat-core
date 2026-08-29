@@ -149,7 +149,11 @@ async function _onOrdDetonate() {
 
   const radius      = sys.payloadRadius;
   const baseDmg     = sys.payloadDamage;
-  const warheads    = Math.max(1, (sys.hull?.max ?? 1) - (sys.hull?.value ?? 0));
+  const hullMax     = sys.hull?.max ?? 1;
+  const hullValue   = sys.hull?.value ?? hullMax;
+  const warheads    = Math.max(1, SystemAdapter.current.hullDisplayMode === "hpRemaining"
+    ? hullValue
+    : hullMax - hullValue);
   const gs          = canvas.grid.size;
   const cx          = token.x + (token.document.width * gs) / 2;
   const cy          = token.y + (token.document.height * gs) / 2;

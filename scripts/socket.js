@@ -92,9 +92,20 @@ export function setupSocket() {
 async function _handleAction(action, payload = {}) {
   switch (action) {
 
-    case "assignRole":
-      await ShipCombatState.assignRole(payload.userId, payload.roleId, payload.actorRef ?? null);
+    case "assignRole": {
+      const shipActor = payload.shipActorId ? game.actors.get(payload.shipActorId) : null;
+      if (payload.shipActorId && shipActor?.type !== `${CORE_MODULE_ID}.ship`) {
+        ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoShip"));
+        return;
+      }
+      await ShipCombatState.assignRole(
+        payload.userId,
+        payload.roleId,
+        payload.actorRef ?? null,
+        shipActor,
+      );
       break;
+    }
 
     case "consumePowerCore":
       return ShipCombatState.consumePowerCore(payload.roleId, payload.actionId ?? null);
@@ -108,16 +119,18 @@ async function _handleAction(action, payload = {}) {
       break;
 
     case "assignWeapon":
-      await ShipCombatState.assignWeapon(payload);
-      break;
-
     case "unassignComponent":
-      await ShipCombatState.unassignComponent(payload);
+    case "assignEquipment": {
+      const shipActor = payload.shipActorId ? game.actors.get(payload.shipActorId) : null;
+      if (payload.shipActorId && shipActor?.type !== `${CORE_MODULE_ID}.ship`) {
+        ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoShip"));
+        return;
+      }
+      if (action === "assignWeapon") await ShipCombatState.assignWeapon(payload, shipActor);
+      else if (action === "unassignComponent") await ShipCombatState.unassignComponent(payload, shipActor);
+      else await ShipCombatState.assignEquipment(payload, shipActor);
       break;
-
-    case "assignEquipment":
-      await ShipCombatState.assignEquipment(payload);
-      break;
+    }
 
     case "startCombat":
       await ShipCombatState.startCombat();
