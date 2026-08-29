@@ -1,16 +1,33 @@
 # Causodes's Ship Combat (Core)
 
+[![Latest Release](https://img.shields.io/github/v/release/Causodes/causodes-shipcombat-core?label=Release&color=2ea44f)](https://github.com/Causodes/causodes-shipcombat-core/releases/latest)
+[![Foundry VTT](https://img.shields.io/badge/Foundry_VTT-13--14-d35400)](https://foundryvtt.com/)
+[![Issues](https://img.shields.io/github/issues/Causodes/causodes-shipcombat-core?label=Issues&color=d29922)](https://github.com/Causodes/causodes-shipcombat-core/issues)
+[![Total Downloads](https://img.shields.io/github/downloads/Causodes/causodes-shipcombat-core/total?label=Downloads&color=0969da)](https://github.com/Causodes/causodes-shipcombat-core/releases)
+[![License](https://img.shields.io/github/license/Causodes/causodes-shipcombat-core?label=License&color=57606a)](LICENSE)
+
 System-agnostic ship combat engine for Foundry VTT. The core module ships the
 data models, sheets, canvas overlays, socket handlers, and templates. All
 system-specific behaviour (roll formulas, success-level math, hit resolution,
 skill labels, model integration) lives in a **companion module** that pairs
 this engine with a specific game system.
 
+**Quick navigation**
+
+[![Docs: Companion Setup](https://img.shields.io/badge/Docs-Companion_Setup-0969da?style=flat-square)](#companion-module-responsibilities)
+[![Docs: Global API](https://img.shields.io/badge/Docs-Global_API-8250df?style=flat-square)](#shipcombat-global-api)
+[![Docs: Adapter Contract](https://img.shields.io/badge/Docs-Adapter_Contract-1f883d?style=flat-square)](#the-systemadapter-contract)
+[![Docs: Partial Overrides](https://img.shields.io/badge/Docs-Partial_Overrides-b35900?style=flat-square)](#partial-override-registry)
+[![Docs: App V1 vs V2](https://img.shields.io/badge/Docs-App_V1_vs_V2-bf3989?style=flat-square)](#appv1-vs-appv2)
+[![Docs: Localisation](https://img.shields.io/badge/Docs-Localisation-57606a?style=flat-square)](#localisation-overrides)
+[![Docs: Lifecycle](https://img.shields.io/badge/Docs-Lifecycle-c21f39?style=flat-square)](#lifecycle-hooks)
+[![Docs: Layout](https://img.shields.io/badge/Docs-Layout-0550ae?style=flat-square)](#layout)
+
 ---
 
 ## Companion module responsibilities
 
-A companion module MUST do four things:
+A companion module has five responsibilities:
 
 1. Subclass `SystemAdapter` and implement the abstract methods.
 2. Call `ShipCombat.configure({ moduleId, adapter })` at module-evaluation
@@ -101,6 +118,8 @@ different behaviour.
 | `get moduleId` | abstract | `string` | Companion module's Foundry ID. Used for socket scopes, flag namespaces, and template paths. |
 | `get systemName` | abstract | `string` | Foundry system ID (e.g. `"impmal"`, `"pf2e"`). Used for gate-checks. |
 | `get allocationUnitTerms` | overridable | `{ singular, plural }` | Global player-facing allocation terminology. Default: `{ singular: "SL", plural: "SL" }`. Override once (for example `{ singular: "point", plural: "points" }`) to update localized descriptions, templates, badges, and generated copy. |
+| `get allocationUnitLabel` | derived | `string` | Backwards-compatible, title-cased plural allocation label derived from `allocationUnitTerms`. |
+| `get englishVariant` | overridable | `"british" \| "american"` | English spelling variant applied to the `SHIPCOMBAT` translation tree at `i18nInit`. Default: `"british"`. |
 
 Use `formatAllocationUnit(count)` for generated text whose number is known;
 it selects the singular form only when the absolute count is exactly 1. The
@@ -169,6 +188,9 @@ systemPath(key)    { return `flags.${this.moduleId}.${key}`; }
 | `rollShipInitiative(crewActor, roleSkill, opts)` | abstract | `Promise<{ total, roll, message }>` | Initiative roll for player-crewed ships. |
 | `rollShipInitiativeFromAttribute(value, label, opts)` | abstract | `Promise<{ total, roll, message }>` | Initiative roll for NPC ships (single numeric attribute). |
 | `toCombatantInitiative(rawTotal, shipActor)` | overridable | `number` | Translate the engine's raw total to Foundry's `combatant.initiative`. Default: identity. |
+| `getOverclockDC(heat, heatMax)` | overridable | `number \| null` | Reactor overclock DC for the current heat level. Return `null` to use the default modifier-based tier system. Default: `null`. |
+| `isOverclockSuccess(result, options)` | overridable | `boolean` | Determine whether an overclock roll succeeded. Default: `result.SL >= 0`; DC-based systems compare the raw roll total with `options.dc`. |
+| `getRollDiceIcon()` | overridable | `string` | Font Awesome icon class used by generic skill-check buttons. Default: `"fa-dice"`; d20 systems commonly return `"fa-dice-d20"`. |
 | `buildSkillRollFlavor(baseFlavor, roll, sl)` | overridable | `string` | Enrich a skill roll chat card flavor (e.g. append SL threshold table). Default: returns `baseFlavor` unchanged. |
 | `parseRollResultFromMessage(message)` | overridable | `{ SL, roll }` | Extract SL and roll from a chat message produced by `rollSkillTest`. Called when reroll hooks (fortune, etc.) mutate the message. Default reads warhammer-lib `message.system.result` shape. |
 
@@ -184,9 +206,12 @@ non-salvo (single-fire) actions, core calls `resolveHitRoll()` instead.
 | `getHitBonusStep()` | overridable | `getModifierStepSize()` | Magnitude of a single fixed bonus step: lock-tier 4 accuracy, BDA adjust-bearing, ranging-fire correction, Priority Target, and the captain's Inspired Targeting action. Override when the system applies these fixed bonuses at a different scale than `getModifierStepSize()`. SF2e example: `getModifierStepSize()` returns `1` (d20 per-SL step) but `getHitBonusStep()` returns `2` (fixed bonuses always grant +2, regardless of SL scale). |
 | `getAccuracyAllocationStep()` | overridable | `getModifierStepSize() / 2` | Accuracy gained per Gunner allocation point. D20 adapters override with `1` so allocation never produces fractional modifiers. |
 | `getFireModeHitModifier(legacyValue)` | overridable | `(legacyValue / 10) × getHitBonusStep()` | Converts canonical macro-tier values (`−10/0/+10/+20`) to the active system's hit scale. |
+| `getSensorDisruptionPenalty(sensorRating)` | overridable | `getModifierStepSize()` | Positive penalty magnitude applied by Sensor Disruption. D20 adapters may derive it from the disrupting ship's sensor rating. |
+| `getMaxDecayBands(sensorRating)` | overridable | `floor(sensorRating / getModifierStepSize())` | Maximum range-decay bands beyond effective range. Override for systems with a fixed cap. |
 | `computeSuccessLevel(roll, target)` | overridable | `floor((target − total) / 10)` | SL from a roll result. Default is d100-style; override for d20 or custom systems. |
 | `formatModifier(value)` | overridable | signed number | UI display for a modifier (e.g. `"+10%"` for IM). |
 | `formatTargetNumber(target)` | overridable | bare number | UI display for a target number. |
+| `formatBdaBadge(sl)` | overridable | allocation label and value | BDA result shown on the sensor-tab badge. Default uses `formatAllocationUnit()`, followed by the SL value. |
 | `formatAccuracyDisplay(accuracy, targetAC)` | overridable | `"${accuracy}%"` | Targeting popup accuracy label. d20 adapters override to show a signed modifier. |
 | `formatChatAccuracyDisplay(accuracy, targetAC)` | overridable | `accuracy` | "vs X" reference in the chat card salvo summary. d20 adapters show the target AC. |
 | `formatChatHitMod(accuracy)` | overridable | `null` (hidden) | Attack modifier label in chat card. d20 adapters show the modifier string. |
@@ -214,6 +239,8 @@ non-salvo (single-fire) actions, core calls `resolveHitRoll()` instead.
 | `getWeaponDamageFormula(weapon)` | overridable | `string` | Roll formula for a weapon item. Default reads `weapon.system.damage` as a free-text formula string. Override for structured damage fields. |
 | `getWeaponDamageType(weapon)` | overridable | `string \| null` | Localised damage type label for display. Default: `null`. |
 | `getRamDamageType()` | overridable | `string \| null` | Damage type label for ram collisions. Default: `null`. |
+| `get addsFlatBonusToDice` | overridable | `boolean` | Whether ordnance damage includes its flat bonus when dice are configured. Default: `true`; SF2e returns `false`. |
+| `getRamDamageTypeKey()` | overridable | `string \| null` | Damage type key used to apply IWR to ram damage. Default: `null`, which leaves ram damage untyped. |
 | `modifyDamageForType(hullDamage, damageType, targetActor)` | overridable | `{ finalDamage, immune, note }` | Apply resistance/weakness/immunity to one hit's post-armour hull damage. Default: pass-through. |
 
 ### IWR (immunities, weaknesses, resistances)
@@ -246,6 +273,7 @@ If you declare extension fields, also register a partial override for
 | Method | Kind | Returns | Notes |
 | --- | --- | --- | --- |
 | `radarPalette()` | overridable | `object` | Partial colour palette for the sensor-radar canvas overlay. Missing keys fall back to the green defaults defined in `SensorRadar.js`. Default: `{}`. |
+| `targetMarkerPalette()` | overridable | `{ recommended, priority }` | Semantic colours for recommended and priority target markers in shared popups. Defaults to mint and pink marker colours. |
 
 ---
 
@@ -264,7 +292,7 @@ attributes as the defaults, otherwise event wiring breaks.
 | --- | --- |
 | **Sheet headers** | `ship-header`, `npc-ship-header`, `station-header` |
 | **Shared UI** | `complete-turn`, `core-status-banner`, `payload-status-badge`, `command-deck-bar` |
-| **Vessel (torpedo / strike craft)** | `vessel-resource-bar`, `vessel-movement-controls`, `vessel-weapon-traits`, `vessel-turn-complete`, `vessel-trait-summary` |
+| **Vessel (torpedo / strike craft)** | `vessel-resource-bar`, `vessel-movement-controls`, `vessel-weapon-traits`, `vessel-turn-complete`, `vessel-trait-summary`, `payload-damage-component` |
 | **Captain** | `captain-claim-prompt`, `captain-status-bar`, `captain-leadership`, `captain-voidshields`, `captain-conditions`, `captain-core-actions`, `captain-hand`, `captain-active-orders`, `combined-core-actions`, `combined-leadership`, `deployed-strike-craft`, `deployed-torpedoes` |
 | **Ordnance Master** | `ordnance-claim-prompt`, `ordnance-captain-boost`, `ordnance-status-bar`, `ordnance-requisition`, `ordnance-main-actions`, `ordnance-payload`, `ordnance-core-actions`, `ordnance-deployed` |
 | **Engineer** | `engineer-claim-prompt`, `engineer-captain-boost`, `engineer-status-bar`, `engineer-core-distribution`, `engineer-heat-management`, `engineer-fire-suppression`, `engineer-hull-repair` |
@@ -344,7 +372,7 @@ marked with ★ call an adapter method and may interact with companion code.
 | `init` | Registers actor/item types, sheets, settings, Handlebars helpers; aborts if `configure()` was not called. | ★ Companion may call `registerPartialOverride()` and `registerPopupOverride()`. |
 | `setup` | Compiles all partials (defaults + overrides) with Handlebars. | No companion action needed. |
 | `socketlib.ready` | Registers socket actions. | — |
-| `ready` (×3) | Registers animations; purges orphaned embedded-edit actors; runs one-shot data migrations. | — |
+| `ready` (×2) | Registers optional animations and purges orphaned embedded-edit actors. | — |
 | `preCreateActor` | Sets `disposition`, `lockRotation`, `actorLink`, and `prototypeToken.texture.src` defaults on new ship and ordnance actors. | — |
 | `preCreateItem` | Sets `icons/svg/levels.svg` as the fallback icon on new `${MODULE_ID}.component` items. | — |
 | `preUpdateActor` | When `system.payloadCount` changes on an ordnance actor, syncs `hull.max` to the new count and resets `hull.value` according to `hullDisplayMode`. | ★ `hullDisplayMode` read from adapter. |
@@ -353,10 +381,15 @@ marked with ★ call an adapter method and may interact with companion code.
 | `refreshToken` | Redraws per-token shield/weapon arcs; re-applies visibility overrides. | — |
 | `updateToken` | Refreshes arcs and visibility when a ship token moves. | — |
 | `deleteToken` | Destroys token overlays; auto-deletes world actors spawned by ordnance launch. | — |
+| `createToken` | Re-renders an open parent ship sheet when launched ordnance appears. | — |
+| `createItem` | Notifies clients that derived ship component values may require reopening the sheet. | — |
+| `updateItem` | Notifies clients that derived ship component values may require reopening the sheet. | — |
+| `deleteItem` | Notifies clients that derived ship component values may require reopening the sheet. | — |
 | `updateChatMessage` | When a piloting roll message is mutated (reroll/fortune), reads the new SL and updates pilot allocation state. | ★ Calls `parseRollResultFromMessage()`. |
 | `updateCombat` | Advances helm state at turn/round boundaries (auto-move, reset allocations, apply internal fire). | — |
 | `canvasTearDown` | Hides helm preview and destroys all arc/shield overlays. | — |
 | `renderChatMessageHTML` | Wires BDA-pending chat card buttons. | — |
+| `aa.getRequiredData` | Clears nameless synthetic items from custom ship-combat chat messages to prevent AutoAnimations lookup errors. | — |
 
 ---
 
