@@ -170,9 +170,15 @@ async function _handleAction(action, payload = {}) {
       await ShipCombatState.resetHelmState();
       break;
 
-    case "fullReset":
-      await ShipCombatState.fullReset();
+    case "fullReset": {
+      const shipActor = payload.shipActorId ? game.actors.get(payload.shipActorId) : null;
+      if (payload.shipActorId && shipActor?.type !== `${SystemAdapter.current.moduleId}.ship`) {
+        ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoShip"));
+        return;
+      }
+      await ShipCombatState.fullReset(shipActor);
       break;
+    }
 
     case "emergencyVent":
       await ShipCombatState.emergencyVent();

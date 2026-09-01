@@ -153,9 +153,10 @@ export class ShipCombatState {
   // ── Actions ───────────────────────────────────────────────────────────────
 
   /** Run a Power Core state mutation after all earlier mutations for this ship. */
-  static async withPowerCoreTransaction(operation) {
+  static async withPowerCoreTransaction(operation, shipActor = null) {
     if (typeof operation !== "function") throw new TypeError("Power Core transaction requires a function.");
-    const shipKey = this.ship?.uuid ?? this.ship?.id ?? "active-ship";
+    const ship = shipActor ?? this.ship;
+    const shipKey = ship?.uuid ?? ship?.id ?? "active-ship";
     const previous = this._powerCoreQueues.get(shipKey) ?? Promise.resolve();
     const transaction = previous.catch(() => {}).then(operation);
 
@@ -959,16 +960,21 @@ export class ShipCombatState {
     });
   }
 
-  static async fullReset() {
-    const data = this.getData();
+  static async fullReset(shipActor = null) {
+    const ship = shipActor ?? this.ship;
+    if (!ship) {
+      ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoShip"));
+      return;
+    }
+    const data = SystemAdapter.current.getShipData(ship) ?? foundry.utils.deepClone(DEFAULT_COMBAT_STATE);
     await applyPlayerShipInitiativeBonus({
-      shipActor: this.ship,
+      shipActor: ship,
       previousBonus: data.resources?.captain?.prevTurnInitiativeBonus ?? 0,
     });
     const prevResetId = data.resources?.pilot?.helmResetId ?? 0;
-    const shieldCfg   = this.getShieldStats();
-    const reactor     = this.getReactorStats();
-    const ordnance    = this.getOrdnanceBayStats();
+    const shieldCfg   = this.getShieldStats(ship);
+    const reactor     = this.getReactorStats(ship);
+    const ordnance    = this.getOrdnanceBayStats(ship);
     const updates = {
       "resources.pilot.fuelBurned":        0,
       "resources.pilot.driftBurned":       0,
@@ -979,21 +985,21 @@ export class ShipCombatState {
       "resources.pilot.pilotingMessageId": "",
       "resources.pilot.helmResetId":        prevResetId + 1,
       "resources.pilot.bearing":            0,
-      "resources.pilot.prevTurnMove":       SystemAdapter.current.getShipData(this.ship)?.movement?.speed ?? 0,
+      "resources.pilot.prevTurnMove":       SystemAdapter.current.getShipData(ship)?.movement?.speed ?? 0,
       "resources.pilot.bearingUsed":        0,
       "resources.pilot.momentumUsed":       0,
       "resources.pilot.velocityX":          (() => {
-        const token = this.ship?.getActiveTokens?.()?.[0];
+        const token = ship.getActiveTokens?.()?.[0];
         const rot   = token?.document?.rotation ?? 0;
         const h0    = (rot - 90) * (Math.PI / 180);
-        const spd   = SystemAdapter.current.getShipData(this.ship)?.movement?.speed ?? 6;
+        const spd   = SystemAdapter.current.getShipData(ship)?.movement?.speed ?? 6;
         return Math.cos(h0) * (spd / 2);
       })(),
       "resources.pilot.velocityY":          (() => {
-        const token = this.ship?.getActiveTokens?.()?.[0];
+        const token = ship.getActiveTokens?.()?.[0];
         const rot   = token?.document?.rotation ?? 0;
         const h0    = (rot - 90) * (Math.PI / 180);
-        const spd   = SystemAdapter.current.getShipData(this.ship)?.movement?.speed ?? 6;
+        const spd   = SystemAdapter.current.getShipData(ship)?.movement?.speed ?? 6;
         return Math.sin(h0) * (spd / 2);
       })(),
       "resources.engineer.actionChoices":  [],
@@ -1142,7 +1148,10 @@ export class ShipCombatState {
     updates["resources.ordnance.availablePayloads"] = 1;
     updates["resources.ordnance.autoArmTimer"] = 3;
     updates["resources.ordnance.autoLoadTimer"] = 2;
-    await this.withPowerCoreTransaction(() => this.update(updates));
+    const prefixedUpdates = Object.fromEntries(
+      Object.entries(updates).map(([key, value]) => [`system.${key}`, value]),
+    );
+    await this.withPowerCoreTransaction(() => ship.update(prefixedUpdates), ship);
     // ── Clear conditions on all NPC ships in the scene ──
     if (canvas?.scene) {
       const npcCondClear = { tier: null, lockedRole: null, blindedSectionId: null };
@@ -1602,6 +1611,7 @@ export class ShipCombatState {
     let strikeDiceBreakdown = null;
     const strikeDice = [];
     let strikeRawTotal = 0;
+    let damageHitCount = 0;
     if (!_iwrImmune) {
       for (let i = 0; i < totalHits; i++) {
         if (!damagePoolShields) {
@@ -1618,6 +1628,7 @@ export class ShipCombatState {
             continue;
           }
         }
+        damageHitCount++;
         let incomingDamage = rawDamage ?? 0;
         if (payloadDiceCount && payloadDiceSize) {
           const formula = `${payloadDiceCount}${payloadDiceSize}`;
@@ -1654,8 +1665,8 @@ export class ShipCombatState {
       hitsAbsorbed = totalHits;
     }
     if (strikeDice.length > 0) {
-      const diceFormula = `${totalHits * payloadDiceCount}${payloadDiceSize}`;
-      const flatBonus = SystemAdapter.current.addsFlatBonusToDice ? (rawDamage ?? 0) * totalHits : 0;
+      const diceFormula = `${damageHitCount * payloadDiceCount}${payloadDiceSize}`;
+      const flatBonus = SystemAdapter.current.addsFlatBonusToDice ? (rawDamage ?? 0) * damageHitCount : 0;
       strikeDiceBreakdown = {
         formula: flatBonus > 0 ? `${diceFormula} + ${flatBonus}` : diceFormula,
         dice: strikeDice,
@@ -1727,8 +1738,8 @@ export class ShipCombatState {
    * Apply torpedo detonation damage to a ship.
    * Called via socket from TorpedoSheet._onDetonate.
    */
-  static async torpedoDamage({ torpedoActorId, targetActorId, torName, torImg, damage, diceFormula, hitQuadrant, traits, payloadDamageType = null }) {
-    const target = game.actors.get(targetActorId);
+  static async torpedoDamage({ torpedoActorId, targetTokenId, targetActorId, torName, torImg, damage, diceFormula, hitQuadrant, traits, warheadCount = 1, damageMultiplier = 1, payloadDamageType = null }) {
+    const target = canvas.tokens.get(targetTokenId)?.document?.actor ?? game.actors.get(targetActorId);
     if (!target) return;
 
     const sys             = SystemAdapter.current.getShipData(target);
@@ -1737,38 +1748,6 @@ export class ShipCombatState {
     const parentShipActor = canvas.tokens.get(parentShipTokenId)?.document?.actor ?? null;
     const attackerSys     = SystemAdapter.current.getShipData(parentShipActor) ?? {};
     const isDevastation   = hasDevastationProtocol(attackerSys, sys);
-    // Roll damage dice if a formula was provided.  Systems that also carry a
-    // flat bonus (addsFlatBonusToDice) add it to the total; the bonus here is
-    // already scaled by warhead count and distance decay in the caller.
-    // SF2e overrides the flag to false (dice-only damage model).
-    // The flat-only path is unchanged.
-    let rawDamage;
-    let diceBreakdown = null;
-    if (diceFormula) {
-      const dmgRoll = await new Roll(diceFormula).evaluate();
-      if (game.dice3d) game.dice3d.showForRoll(dmgRoll, game.user, true);
-      const flatBonus = SystemAdapter.current.addsFlatBonusToDice ? (damage ?? 0) : 0;
-      rawDamage = dmgRoll.total + flatBonus;
-      const diceResults = dmgRoll.terms?.[0]?.results?.map(r => r.result) ?? [];
-      if (diceResults.length > 0) {
-        const breakdownFormula = flatBonus > 0 ? `${diceFormula} + ${flatBonus}` : diceFormula;
-        diceBreakdown = { formula: breakdownFormula, dice: diceResults, total: rawDamage };
-      }
-    } else {
-      rawDamage = damage ?? 1;
-    }
-
-    // ── Damage-type IWR ── applied to the pre-armour damage, mirroring
-    // gunner-state.  modifyDamageForType is a pass-through no-op on systems
-    // whose adapter doesn't implement IWR.  Immunity zeroes rawDamage before
-    // the shield block below, which also prevents shield absorption and
-    // shield burn (both key off rawDamage > 0).
-    let isDamageImmune = false;
-    if (payloadDamageType) {
-      const iwr = SystemAdapter.current.modifyDamageForType(rawDamage, payloadDamageType, target);
-      isDamageImmune = iwr.immune;
-      rawDamage = isDamageImmune ? 0 : iwr.finalDamage;
-    }
 
     const qLabel          = game.i18n.localize(
       "SHIPCOMBAT.Sector." + hitQuadrant.charAt(0).toUpperCase() + hitQuadrant.slice(1)
@@ -1779,40 +1758,83 @@ export class ShipCombatState {
     let targetShields    = sys.shields?.[hitQuadrant] ?? 0;
     let shieldsRemaining = targetShields;
     let hitsAbsorbed     = 0;
+    let hitsThroughShield = 0;
     let shieldCostTotal  = 0;
     let shieldDamageAbsorbed = 0;
     const damagePoolShields = usesDamagePoolShields();
     const shieldBypass   = attackBypassesShields(traits, sys);
     const shieldBurnVal  = traits?.shieldBurn ?? 0;
 
-    const shieldResult = isDamageImmune ? {
-      remaining: shieldsRemaining,
-      shieldDrain: 0,
-      damageAbsorbed: 0,
-      damageThrough: 0,
-      hitAbsorbed: true,
-    } : resolveShieldHit({
-      shields: shieldsRemaining,
-      incomingDamage: rawDamage,
-      shieldBurn: shieldBurnVal,
-      bypass: shieldBypass,
-      damagePool: damagePoolShields,
-    });
-    shieldsRemaining = shieldResult.remaining;
-    shieldCostTotal = shieldResult.shieldDrain;
-    shieldDamageAbsorbed = shieldResult.damageAbsorbed;
-    hitsAbsorbed = shieldResult.hitAbsorbed ? 1 : 0;
-    rawDamage = shieldResult.damageThrough;
-
-    if (shieldsRemaining !== targetShields) {
-      hullUpdates[`system.shields.${hitQuadrant}`] = shieldsRemaining;
-    }
-
     // Armour
     const sectorArmour    = sys.armour?.[hitQuadrant] ?? 0;
     const ap              = traits?.armourPenetration ?? 0;
     const effectiveArmour = Math.max(0, sectorArmour - ap);
-    const appliedDamage   = Math.max(0, rawDamage - effectiveArmour);
+    const rendVal         = traits?.rend ?? 0;
+    const effectiveWarheads = Math.max(1, Math.floor(Number(warheadCount) || 1));
+    const distanceMultiplier = Math.max(0, Number(damageMultiplier) || 0);
+    const diceResults = [];
+    let rolledDamageTotal = 0;
+    let damageThroughTotal = 0;
+    let appliedDamage = 0;
+    let rendTotal = 0;
+
+    for (let i = 0; i < effectiveWarheads; i++) {
+      let rawDamage = damage ?? 0;
+      if (diceFormula) {
+        const damageRoll = await new Roll(diceFormula).evaluate();
+        if (game.dice3d) game.dice3d.showForRoll(damageRoll, game.user, true);
+        diceResults.push(...(damageRoll.terms?.[0]?.results?.map(result => result.result) ?? []));
+        rawDamage = damageRoll.total
+          + (SystemAdapter.current.addsFlatBonusToDice ? (damage ?? 0) : 0);
+      }
+      rawDamage = Math.max(0, Math.round(rawDamage * distanceMultiplier));
+      rolledDamageTotal += rawDamage;
+
+      if (payloadDamageType) {
+        const iwr = SystemAdapter.current.modifyDamageForType(rawDamage, payloadDamageType, target);
+        if (iwr.immune) {
+          hitsAbsorbed++;
+          continue;
+        }
+        rawDamage = iwr.finalDamage;
+      }
+
+      const shieldResult = resolveShieldHit({
+        shields: shieldsRemaining,
+        incomingDamage: rawDamage,
+        shieldBurn: shieldBurnVal,
+        bypass: shieldBypass,
+        damagePool: damagePoolShields,
+      });
+      shieldsRemaining = shieldResult.remaining;
+      shieldCostTotal += shieldResult.shieldDrain;
+      shieldDamageAbsorbed += shieldResult.damageAbsorbed;
+      if (shieldResult.hitAbsorbed) hitsAbsorbed++;
+
+      const damageThrough = shieldResult.damageThrough;
+      if (damageThrough <= 0) continue;
+      hitsThroughShield++;
+      damageThroughTotal += damageThrough;
+      appliedDamage += Math.max(0, damageThrough - effectiveArmour);
+      if (rendVal > 0) rendTotal += rendVal;
+    }
+
+    const combinedDiceFormula = diceFormula
+      ? `${effectiveWarheads * Number.parseInt(diceFormula, 10)}${diceFormula.replace(/^\d+/, "")}`
+      : null;
+    const flatBonusTotal = SystemAdapter.current.addsFlatBonusToDice
+      ? (damage ?? 0) * effectiveWarheads
+      : 0;
+    const distanceSuffix = distanceMultiplier === 1 ? "" : ` x ${distanceMultiplier.toFixed(2)}`;
+    const diceBreakdown = diceResults.length > 0 ? {
+      formula: `${combinedDiceFormula}${flatBonusTotal > 0 ? ` + ${flatBonusTotal}` : ""}${distanceSuffix}`,
+      dice: diceResults,
+      total: rolledDamageTotal,
+    } : null;
+
+    if (shieldsRemaining !== targetShields) {
+      hullUpdates[`system.shields.${hitQuadrant}`] = shieldsRemaining;
+    }
 
     // Hull
     if (appliedDamage > 0) {
@@ -1825,14 +1847,13 @@ export class ShipCombatState {
     }
 
     // Rend  -  applies even if armour blocks all hull damage
-    const rendVal = traits?.rend ?? 0;
-    if (rendVal > 0 && rawDamage > 0) {
+    if (rendTotal > 0) {
       const currentRend = sys.armourRend?.[hitQuadrant] ?? 0;
-      hullUpdates[`system.armourRend.${hitQuadrant}`] = currentRend + rendVal;
+      hullUpdates[`system.armourRend.${hitQuadrant}`] = currentRend + rendTotal;
       // For NPC ships, armour is stored as a direct current value (not derived from rend)
       if (target.type === `${MODULE_ID}.npcShip`) {
         const currentArmour = sys.armour?.[hitQuadrant] ?? 0;
-        hullUpdates[`system.armour.${hitQuadrant}`] = Math.max(0, currentArmour - rendVal);
+        hullUpdates[`system.armour.${hitQuadrant}`] = Math.max(0, currentArmour - rendTotal);
       }
     }
 
@@ -1861,15 +1882,15 @@ export class ShipCombatState {
           damageAbsorbed:     shieldDamageAbsorbed,
           damagePool:         damagePoolShields,
           shieldCostTotal,
-          hitsThroughShield: rawDamage > 0 ? 1 : 0,
+          hitsThroughShield,
         },
-        hasDamageResults: hitsAbsorbed === 0,
+        hasDamageResults: hitsThroughShield > 0,
         damageResults: {
           totalDamage:     appliedDamage,
-          rawDamagePerHit: rawDamage,
+          rawDamagePerHit: hitsThroughShield > 0 ? Math.round(damageThroughTotal / hitsThroughShield) : 0,
           effectiveArmour,
           ap:              ap > 0 ? ap : null,
-          rendTotal:       rendVal > 0 && rawDamage > 0 ? rendVal : null,
+          rendTotal:       rendTotal > 0 ? rendTotal : null,
           diceBreakdown,
         },
         critResult: critResult ?? { hasCrit: false },

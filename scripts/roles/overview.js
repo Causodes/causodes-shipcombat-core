@@ -21,7 +21,7 @@ async function _onFullReset() {
     window:  { title: game.i18n.localize("SHIPCOMBAT.Dialog.FullReset") },
     content: `<p>${game.i18n.localize("SHIPCOMBAT.Dialog.FullResetBody")}</p>`,
   });
-  if (ok) emitToGM("fullReset", {});
+  if (ok) emitToGM("fullReset", { shipActorId: this.actor.id });
 }
 
 async function _onAdjustHull(event, target) {

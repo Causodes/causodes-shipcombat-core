@@ -196,11 +196,12 @@ async function _onOrdDetonate() {
       const outerRange = Math.max(1, radiusPx - innerRadius);
       decayMult = 1 - 0.75 * (outerDist / outerRange);
     }
-    const damage    = Math.max(1, Math.round(baseDmg * warheads * decayMult));
+    const warheadCount = warheads;
+    const damage    = Math.max(0, baseDmg ?? 0);
     const _dc = sys.payloadDiceCount;
     const _ds = sys.payloadDiceSize;
     const diceFormula = (_dc && _ds)
-      ? `${Math.max(1, Math.round(warheads * decayMult)) * _dc}${_ds}`
+      ? `${_dc}${_ds}`
       : null;
     const tw = t.document.width * gs;
     const th = t.document.height * gs;
@@ -223,6 +224,7 @@ async function _onOrdDetonate() {
     else                               hitQuadrant = "stern";
     emitToGM("torpedoDamage", {
       torpedoActorId: this.actor.id,
+      targetTokenId: t.document.id,
       targetActorId: t.document.actorId,
       torName: this.actor.name,
       torImg:  this.actor.img,
@@ -230,6 +232,8 @@ async function _onOrdDetonate() {
       diceFormula,
       hitQuadrant,
       traits: sys.traits,
+      warheadCount,
+      damageMultiplier: decayMult,
       payloadDamageType: sys.payloadDamageType ?? null,
     });
   }
@@ -243,7 +247,7 @@ async function _onOrdDetonate() {
       return {
         tokenId: t.document.id,
         actorId: t.document.actorId,
-        damage:  Math.max(1, Math.round(baseDmg * warheads * decay)),
+        damage:  Math.max(0, Math.round((baseDmg ?? 0) * warheads * decay)),
       };
     });
     emitToGM("blastOrdnance", {

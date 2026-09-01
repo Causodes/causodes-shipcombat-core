@@ -1,3 +1,11 @@
+## Unreleased
+### Bug Fixes
+- Apply torpedo damage and conditions to unlinked NPC ship tokens instead of their unchanged base actors
+- Resolve every surviving torpedo warhead separately against armour, applying blast-distance falloff to each hit and Rend/Shield Burn per warhead
+- Use configured flat ordnance damage without forcing zero-damage payloads to deal 1 damage
+- Resolve strike-craft damage and Rend per hit against armour, matching normal weapons
+- Reset the player ship whose sheet initiated Full Combat Reset when multiple player ships exist
+
 ## v2.3.3
 - Normalize malformed fractional stats while retaining integer schema validation
 
