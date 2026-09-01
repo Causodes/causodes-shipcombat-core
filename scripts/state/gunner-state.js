@@ -12,7 +12,8 @@ import { SystemAdapter } from "../systems/SystemAdapter.js";
 import { getSensorsOperatorUserId } from "../roles/crew-operators.js";
 import { getContactDisplayName } from "../targeting/contact-intelligence.js";
 import { hasDevastationProtocol } from "../stances.js";
-import { attackBypassesShields, resolveShieldHit, usesDamagePoolShields } from "./shield-resolution.js";
+import { attackBypassesShields, usesDamagePoolShields } from "./shield-resolution.js";
+import { buildDefenseUpdates, resolveHitsAgainstDefenses } from "./hit-damage-resolution.js";
 import { getDisabledWeaponSectionId, getWeaponSectionId } from "./weapon-section.js";
 
 /** Allocate an opaque BDA key without ever overwriting a live attack record. */
@@ -42,8 +43,7 @@ export async function fireWeapon({ weaponId, actorId, fireMode, targetToken, hit
   const weapon = firingActor.items.get(weaponId);
   if (!weapon) return;
 
-  // True when an NPC is attacking the player ship
-  const isNpcFire = firingActor.id !== ship.id;
+  const isNpcFire = firingActor.type === `${MODULE_ID}.npcShip`;
   // NPC fire reads from the NPC actor's own system; player fire reads from the player ship
   const sys = isNpcFire ? SystemAdapter.current.getShipData(firingActor) : SystemAdapter.current.getShipData(ship);
 
@@ -318,20 +318,10 @@ export async function fireWeapon({ weaponId, actorId, fireMode, targetToken, hit
     return;
   }
 
-  // ── 1b. Damage-type immunity: must be checked before shields so that immune
-  // attacks do not consume void shields at all.
   const _weaponDamageType = weapon.system.damageType || "";
-  const _isImmune = (_weaponDamageType && targetActor)
-    ? SystemAdapter.current.modifyDamageForType(0, _weaponDamageType, targetActor).immune
-    : false;
 
   // ── 2. Shields ── Read from TARGET actor
   const targetShields = targetSys.shields?.[hitQuadrant] ?? 0;
-  let shieldsRemaining = targetShields;
-  let hitsAbsorbed = 0;
-  let hitsThroughShield = 0;
-  let shieldCostTotal = 0;
-  let shieldDamageAbsorbed = 0;
   const damagePoolShields = usesDamagePoolShields();
   const shieldBurnVal = (traits.overcharge && isOvercharged)
     ? (traits.shieldBurn ?? 0) * 3
@@ -341,25 +331,6 @@ export async function fireWeapon({ weaponId, actorId, fireMode, targetToken, hit
   const battleClarityShieldBurn = (!isNpcFire && priorityTargetId && priorityTargetId === targetToken) ? 2 : 0;
   const effectiveShieldBurn = shieldBurnVal + scatterShieldBurn + battleClarityShieldBurn;
   const shieldBypass = attackBypassesShields(traits, targetSys);
-
-  // Hit-negation mode can resolve shields before rolling damage. Damage-pool
-  // mode resolves each hit below, after its incoming damage is known.
-  if (!_isImmune && !damagePoolShields) {
-    for (let i = 0; i < totalHits; i++) {
-      const result = resolveShieldHit({
-        shields: shieldsRemaining,
-        incomingDamage: 1,
-        shieldBurn: effectiveShieldBurn,
-        bypass: shieldBypass,
-      });
-      shieldsRemaining = result.remaining;
-      shieldCostTotal += result.shieldDrain;
-      if (result.hitAbsorbed) hitsAbsorbed++;
-      else hitsThroughShield++;
-    }
-  }
-
-  if (_isImmune) hitsAbsorbed = totalHits;
 
   // ── 3. Damage per surviving hit (with SL allocation bonuses) ──
   const sectorArmour = targetSys.armour?.[hitQuadrant] ?? 0;
@@ -396,86 +367,63 @@ export async function fireWeapon({ weaponId, actorId, fireMode, targetToken, hit
     : (traits.devastating ?? 0);
 
   const damageRollValues = [];
-  let totalDamage = 0;
-  const hitDetails = [];
-  const penetratingSalvoRolls = [];
-  let rendTotal = 0;
   let _sumRawDamage = 0;
+  let damageHitCount = 0;
   const successfulSalvoRolls = salvoRolls.filter(result => result.hit);
-  const hitsToResolve = damagePoolShields && !_isImmune ? totalHits : hitsThroughShield;
-
-  for (let i = 0; i < hitsToResolve; i++) {
-    const salvoResult = damagePoolShields
-      ? successfulSalvoRolls[i]
-      : successfulSalvoRolls[hitsAbsorbed + i];
-    const isCritHit = salvoResult?.isCrit ?? false;
-    let baseDamageThisHit = 0;
-    try {
-      const _dmgRoll = new Roll(_scaledFormula);
-      await _dmgRoll.evaluate();
-      baseDamageThisHit = _dmgRoll.total ?? 0;
-      if (game.dice3d && _hasDice) game.dice3d.showForRoll(_dmgRoll, game.user, true);
-    } catch {
-      baseDamageThisHit = parseFloat(_scaledFormula) || 0;
-    }
-    if (_hasDice) damageRollValues.push({ value: baseDamageThisHit, isCrit: isCritHit });
-
-    const rawDamageThisHit = Math.floor(baseDamageThisHit * lanceMult) + allocFirepower;
-    _sumRawDamage += rawDamageThisHit;
-    // Weaknesses/resistances applied to raw damage BEFORE armour subtraction.
-    // modifyDamageForType is a pass-through no-op on systems that don't support IWR.
-    const preArmorDamage = rawDamageThisHit + (isCritHit ? devastatingBonus : 0);
-    const { finalDamage: typeModDamage, immune, note } = (_weaponDamageType && targetActor)
-      ? SystemAdapter.current.modifyDamageForType(preArmorDamage, _weaponDamageType, targetActor)
-      : { finalDamage: preArmorDamage, immune: false, note: null };
-    let damageBeforeArmour = immune ? 0 : typeModDamage;
-    if (damagePoolShields && !immune) {
-      const shieldResult = resolveShieldHit({
-        shields: shieldsRemaining,
-        incomingDamage: damageBeforeArmour,
-        shieldBurn: effectiveShieldBurn,
-        bypass: shieldBypass,
-        damagePool: true,
-      });
-      shieldsRemaining = shieldResult.remaining;
-      shieldCostTotal += shieldResult.shieldDrain;
-      shieldDamageAbsorbed += shieldResult.damageAbsorbed;
-      damageBeforeArmour = shieldResult.damageThrough;
-      if (shieldResult.hitAbsorbed) hitsAbsorbed++;
-      if (shieldResult.damageThrough > 0) hitsThroughShield++;
-    }
-    const finalDamage = Math.max(0, damageBeforeArmour - effectiveArmour);
-    totalDamage += finalDamage;
-    hitDetails.push({ damage: finalDamage, isCrit: isCritHit, immune, note });
-
-    // ── 4. Rend  -  applies even if armour blocks all hull damage ──
-    const rendPerHit = (traits.overcharge && isOvercharged)
-      ? (traits.rend ?? 0) * 3
-      : (traits.rend ?? 0);
-    if (rendPerHit > 0 && damageBeforeArmour > 0) {
-      rendTotal += rendPerHit;
-    }
-    if (damageBeforeArmour > 0 && salvoResult) penetratingSalvoRolls.push(salvoResult);
-  }
-
-  const shieldResults = {
-    sectorShields: targetShields,
-    absorbed: hitsAbsorbed,
-    damageAbsorbed: shieldDamageAbsorbed,
+  const rendPerHit = (traits.overcharge && isOvercharged)
+    ? (traits.rend ?? 0) * 3
+    : (traits.rend ?? 0);
+  const resolution = await resolveHitsAgainstDefenses({
+    hits: successfulSalvoRolls.map(salvoResult => ({
+      isCrit: salvoResult.isCrit ?? false,
+      salvoResult,
+      async resolveDamage() {
+        damageHitCount++;
+        let baseDamageThisHit = 0;
+        try {
+          const damageRoll = new Roll(_scaledFormula);
+          await damageRoll.evaluate();
+          baseDamageThisHit = damageRoll.total ?? 0;
+          if (game.dice3d && _hasDice) game.dice3d.showForRoll(damageRoll, game.user, true);
+        } catch {
+          baseDamageThisHit = parseFloat(_scaledFormula) || 0;
+        }
+        if (_hasDice) damageRollValues.push({ value: baseDamageThisHit, isCrit: salvoResult.isCrit ?? false });
+        const rawDamage = Math.floor(baseDamageThisHit * lanceMult) + allocFirepower;
+        _sumRawDamage += rawDamage;
+        return { damage: rawDamage + ((salvoResult.isCrit ?? false) ? devastatingBonus : 0) };
+      },
+    })),
+    shields: targetShields,
+    shieldBurn: effectiveShieldBurn,
+    shieldBypass,
     damagePool: damagePoolShields,
-    shieldCostTotal,
-    remaining: shieldsRemaining,
-    bypassed: shieldBypass,
-    hitsThroughShield,
-  };
+    armour: sectorArmour,
+    armourPenetration: ap,
+    rendPerHit,
+    armourRend: targetSys.armourRend?.[hitQuadrant] ?? 0,
+    hullValue: targetSys.hull?.value ?? 0,
+    hullMax: targetSys.hull?.max ?? 50,
+    hullDisplayMode: SystemAdapter.current.hullDisplayMode,
+    isNpcTarget: targetActor?.type === `${MODULE_ID}.npcShip`,
+    modifyDamage: damage => (_weaponDamageType && targetActor)
+      ? SystemAdapter.current.modifyDamageForType(damage, _weaponDamageType, targetActor)
+      : { finalDamage: damage, immune: false, note: null },
+  });
+  const shieldResults = resolution.shieldResults;
+  const { totalDamage, rendTotal, hitsThroughShield } = resolution.damageResults;
+  const penetratingSalvoRolls = resolution.penetratingHits
+    .map(hit => successfulSalvoRolls[hit.sourceIndex])
+    .filter(Boolean);
 
   // rawDamagePerHit: average across hits for display; pre-computed if no hits went through
-  const rawDamagePerHit = hitsToResolve > 0
-    ? Math.round(_sumRawDamage / hitsToResolve)
+  const rawDamagePerHit = damageHitCount > 0
+    ? Math.round(_sumRawDamage / damageHitCount)
     : Math.floor((parseFloat(_scaledFormula) || 0) * lanceMult) + allocFirepower;
   const damagePerHit = Math.max(0, rawDamagePerHit - effectiveArmour);
 
   const damageResults = {
+    ...resolution.damageResults,
     sectorArmour,
     ap,
     effectiveArmour,
@@ -483,9 +431,6 @@ export async function fireWeapon({ weaponId, actorId, fireMode, targetToken, hit
     damagePerHit,
     devastatingBonus,
     hitsThroughShield,
-    hitDetails,
-    totalDamage,
-    rendTotal,
     lanceMult,
     damageRolls:    damageRollValues,
     damageDiceLabel: _hasDice ? _scaledFormula : null,
@@ -493,32 +438,11 @@ export async function fireWeapon({ weaponId, actorId, fireMode, targetToken, hit
     hasDamageRolls:  damageRollValues.length > 0,
     isSalvo:         hitsThroughShield > 1,
     damagePool:      damagePoolShields,
-    resolvedHits:    hitsToResolve,
+    resolvedHits:    damageHitCount,
   };
 
   // ── 5. Apply damage to TARGET actor ──
-  const currentHull = targetSys.hull?.value ?? 0;
-  const hullMax     = targetSys.hull?.max ?? 50;
-  const targetUpdates = {};
-
-  if (totalDamage > 0) {
-    const _isHP = SystemAdapter.current.hullDisplayMode === "hpRemaining";
-    targetUpdates["system.hull.value"] = _isHP
-      ? Math.max(0, currentHull - totalDamage)
-      : Math.min(hullMax, currentHull + totalDamage);
-  }
-  if (rendTotal > 0) {
-    const currentRend = targetSys.armourRend?.[hitQuadrant] ?? 0;
-    targetUpdates[`system.armourRend.${hitQuadrant}`] = currentRend + rendTotal;
-    // For NPC ships, armour is stored as a direct current value (not derived from rend)
-    if (targetActor?.type === `${MODULE_ID}.npcShip`) {
-      const currentArmour = targetSys.armour?.[hitQuadrant] ?? 0;
-      targetUpdates[`system.armour.${hitQuadrant}`] = Math.max(0, currentArmour - rendTotal);
-    }
-  }
-  if (shieldsRemaining !== targetShields) {
-    targetUpdates[`system.shields.${hitQuadrant}`] = shieldsRemaining;
-  }
+  const targetUpdates = buildDefenseUpdates(resolution, hitQuadrant);
 
   if (Object.keys(targetUpdates).length > 0) {
     if (targetActor) {

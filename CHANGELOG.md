@@ -1,5 +1,6 @@
 ## v2.3.4 (UNRELEASED)
 ### Bug Fixes
+- Fix invalid awaited pilot-bearing and Captain card-order callbacks that prevented Core from loading as an ES module
 - Apply torpedo damage and conditions to unlinked NPC ship tokens instead of their unchanged base actors
 - Resolve every surviving torpedo warhead separately against armour, applying blast-distance falloff to each hit and Rend/Shield Burn per warhead
 - Use configured flat ordnance damage without forcing zero-damage payloads to deal 1 damage
@@ -13,6 +14,8 @@
 - Let pilots commit optional thrust beyond the minimum ram approach and scale collision damage above 100% thrust
 - Carry ramming ships through the target at 20% of their impact velocity and retain that momentum in both movement modes
 - Anchor ram collision effects at the contact point while the ships continue through and away from the impact
+- Unify normal weapon, strike-craft, and torpedo defense resolution around per-hit shields, IWR, armour, Rend, and hull updates
+- Bind and validate NPC weapon-fire requests against the firing NPC so they use the shared damage flow without active-player-ship fallback
 - Play collision and ship-destruction explosions for ramming when Sequencer and JB2A are available
 - Complete delayed Ordnance actions on the ship that advanced its round and report action commitment failures instead of failing silently
 - Remove generated ordnance Actors together with detonated, recovered, expired, or reset Tokens

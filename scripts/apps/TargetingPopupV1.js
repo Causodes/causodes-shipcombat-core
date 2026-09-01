@@ -462,6 +462,7 @@ export class TargetingPopupV1 extends foundry.appv1.api.Application {
     const gunnerRes   = ship?.system?.resources?.gunner ?? {};
     const fmd         = this._getFireModeDetails(gunnerRes);
     const committed = await emitToGM("fireWeapon", {
+      shipActorId:    this.weapon.parent?.id,
       actorId:        this.weapon.parent?.id,
       weaponId:       this.weapon.id,
       fireMode:       this.fireMode,

@@ -114,6 +114,16 @@ async function _handleAction(action, payload = {}) {
     ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoShip"));
     return null;
   }
+  if (action === "fireWeapon") {
+    const allowedTypes = new Set([
+      `${SystemAdapter.current.moduleId}.ship`,
+      `${SystemAdapter.current.moduleId}.npcShip`,
+    ]);
+    if (!shipActor || !allowedTypes.has(shipActor.type) || payload.actorId !== shipActor.id) {
+      ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoShip"));
+      return false;
+    }
+  }
   const state = shipActor ? ShipCombatState.forShip(shipActor) : ShipCombatState;
 
   switch (action) {
@@ -423,7 +433,7 @@ async function _handleAction(action, payload = {}) {
       break;
 
     case "fireWeapon": {
-      const _fwResult = await ShipCombatState.fireWeapon(payload);
+      const _fwResult = await state.fireWeapon(payload);
       // Broadcast animation to all clients (including GM) via socket
       const _aActor  = payload.actorId  ? game.actors.get(payload.actorId)  : null;
       const _aWeapon = _aActor?.items.get(payload.weaponId) ?? null;

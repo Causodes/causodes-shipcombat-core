@@ -126,6 +126,7 @@ globalThis.ShipCombat = {
   /** Companion module API — access via globalThis.ShipCombat._api, never via ES imports. */
   _api: _compApi,
 };
+Hooks.callAll("shipCombatApiReady", globalThis.ShipCombat);
 
 // ── Lang token substitution ────────────────────────────────────────────────
 // Must be registered at module-eval time so the i18nInit hook (which fires

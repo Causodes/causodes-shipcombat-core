@@ -1088,7 +1088,7 @@ export class ShipController {
           card.classList.add("shipcombat-captain-card--drag-over");
         });
         card.addEventListener("dragleave", () => card.classList.remove("shipcombat-captain-card--drag-over"));
-        card.addEventListener("drop", ev => {
+        card.addEventListener("drop", async ev => {
           ev.preventDefault();
           if (!_dragCardId || card.dataset.cardInstanceId === _dragCardId) return;
           const hand = normalizeCaptainZone(SystemAdapter.current.getShipData(this.actor).resources?.captain?.hand, "hand");

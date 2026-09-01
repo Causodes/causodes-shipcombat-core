@@ -771,8 +771,8 @@ export function helmOnRender(sheet) {
       sheet._updateHelmPreview();
       // Persist bearing to system data for auto-move on turn end
       clearTimeout(sheet._bearingDebounce);
-      sheet._bearingDebounce = setTimeout(() => {
-        await emitToGM("updateResource", { roleId: "pilot", key: "bearing", value: val, shipActorId: this.actor.id });
+      sheet._bearingDebounce = setTimeout(async () => {
+        await emitToGM("updateResource", { roleId: "pilot", key: "bearing", value: val, shipActorId: sheet.actor.id });
       }, 300);
     });
   }

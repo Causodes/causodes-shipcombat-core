@@ -30,7 +30,8 @@ import { prepareCaptainHandForRound } from "../captain/card-instances.js";
 import { getContactDisplayName } from "../targeting/contact-intelligence.js";
 import { isAllocationResource, validateAllocationChange } from "./allocation-guard.js";
 import { getStanceMovementModifiers, hasDevastationProtocol } from "../stances.js";
-import { attackBypassesShields, resolveShieldHit, usesDamagePoolShields } from "./shield-resolution.js";
+import { attackBypassesShields, usesDamagePoolShields } from "./shield-resolution.js";
+import { buildDefenseUpdates, resolveHitsAgainstDefenses } from "./hit-damage-resolution.js";
 import { getNpcRoundConditionEffects } from "./npc-condition-effects.js";
 
 export class ShipCombatState {
@@ -1755,124 +1756,66 @@ export class ShipCombatState {
       return;
     }
 
-    // ── Shields ──
+    // ── Shared defensive resolution ──
     const rawDamage     = damage;
     const targetShields = sys.shields?.[hitQuadrant] ?? 0;
-    let shieldsRemaining = targetShields;
-    let hitsAbsorbed    = 0;
-    let hitsThroughShield = 0;
-    let shieldCostTotal = 0;
-    let shieldDamageAbsorbed = 0;
     const damagePoolShields = usesDamagePoolShields();
     const shieldBypass  = attackBypassesShields(traits, sys);
     const shieldBurnVal = traits?.shieldBurn ?? 0;
-
-    // ── Damage-type IWR ── immunity is checked before shields so immune
-    // attacks do not consume void shields at all (mirrors gunner-state);
-    // modifyDamageForType is a pass-through no-op on systems without IWR.
-    const _iwrImmune = payloadDamageType
-      ? SystemAdapter.current.modifyDamageForType(0, payloadDamageType, targetActor).immune
-      : false;
-    const _applyIwr = v => payloadDamageType
-      ? SystemAdapter.current.modifyDamageForType(v, payloadDamageType, targetActor).finalDamage
-      : v;
-
-    // ── Armour & damage ──
     const sectorArmour    = sys.armour?.[hitQuadrant] ?? 0;
     const ap              = traits?.armourPenetration ?? 0;
     const effectiveArmour = Math.max(0, sectorArmour - ap);
     const rendVal         = traits?.rend ?? 0;
-    let rendTotal = 0;
-
-    let totalDamage = 0;
     let strikeDiceBreakdown = null;
     const strikeDice = [];
-    let strikeRawTotal = 0;
     let damageHitCount = 0;
-    if (!_iwrImmune) {
-      for (let i = 0; i < totalHits; i++) {
-        if (!damagePoolShields) {
-          const shieldResult = resolveShieldHit({
-            shields: shieldsRemaining,
-            incomingDamage: 1,
-            shieldBurn: shieldBurnVal,
-            bypass: shieldBypass,
-          });
-          shieldsRemaining = shieldResult.remaining;
-          shieldCostTotal += shieldResult.shieldDrain;
-          if (shieldResult.hitAbsorbed) {
-            hitsAbsorbed++;
-            continue;
+    const resolution = await resolveHitsAgainstDefenses({
+      hits: salvoRolls.filter(result => result.hit).map(salvoResult => ({
+        isCrit: salvoResult.isCrit,
+        async resolveDamage() {
+          damageHitCount++;
+          let incomingDamage = rawDamage ?? 0;
+          if (payloadDiceCount && payloadDiceSize) {
+            const formula = `${payloadDiceCount}${payloadDiceSize}`;
+            const damageRoll = await new Roll(formula).evaluate();
+            if (game.dice3d) game.dice3d.showForRoll(damageRoll, game.user, true);
+            const dice = damageRoll.terms?.[0]?.results?.map(result => result.result) ?? [];
+            strikeDice.push(...dice);
+            incomingDamage = damageRoll.total + (SystemAdapter.current.addsFlatBonusToDice ? (rawDamage ?? 0) : 0);
           }
-        }
-        damageHitCount++;
-        let incomingDamage = rawDamage ?? 0;
-        if (payloadDiceCount && payloadDiceSize) {
-          const formula = `${payloadDiceCount}${payloadDiceSize}`;
-          const damageRoll = await new Roll(formula).evaluate();
-          if (game.dice3d) game.dice3d.showForRoll(damageRoll, game.user, true);
-          const dice = damageRoll.terms?.[0]?.results?.map(result => result.result) ?? [];
-          strikeDice.push(...dice);
-          incomingDamage = damageRoll.total + (SystemAdapter.current.addsFlatBonusToDice ? (rawDamage ?? 0) : 0);
-        }
-        incomingDamage = _applyIwr(incomingDamage);
-        strikeRawTotal += incomingDamage;
-        let damageThrough = incomingDamage;
-        if (damagePoolShields) {
-          const shieldResult = resolveShieldHit({
-            shields: shieldsRemaining,
-            incomingDamage,
-            shieldBurn: shieldBurnVal,
-            bypass: shieldBypass,
-            damagePool: true,
-          });
-          shieldsRemaining = shieldResult.remaining;
-          shieldCostTotal += shieldResult.shieldDrain;
-          shieldDamageAbsorbed += shieldResult.damageAbsorbed;
-          damageThrough = shieldResult.damageThrough;
-          if (shieldResult.hitAbsorbed) hitsAbsorbed++;
-        }
-        if (damageThrough > 0) {
-          hitsThroughShield++;
-          totalDamage += Math.max(0, damageThrough - effectiveArmour);
-          if (rendVal > 0) rendTotal += rendVal;
-        }
-      }
-    } else {
-      hitsAbsorbed = totalHits;
-    }
+          return { damage: incomingDamage };
+        },
+      })),
+      shields: targetShields,
+      shieldBurn: shieldBurnVal,
+      shieldBypass,
+      damagePool: damagePoolShields,
+      armour: sectorArmour,
+      armourPenetration: ap,
+      rendPerHit: rendVal,
+      armourRend: sys.armourRend?.[hitQuadrant] ?? 0,
+      hullValue: sys.hull?.value ?? 0,
+      hullMax: sys.hull?.max ?? 50,
+      hullDisplayMode: SystemAdapter.current.hullDisplayMode,
+      isNpcTarget: targetActor.type === `${MODULE_ID}.npcShip`,
+      modifyDamage: incomingDamage => payloadDamageType
+        ? SystemAdapter.current.modifyDamageForType(incomingDamage, payloadDamageType, targetActor)
+        : { finalDamage: incomingDamage, immune: false, note: null },
+    });
+    const { shieldResults, damageResults } = resolution;
+    const { totalDamage, rendTotal, hitsThroughShield } = damageResults;
     if (strikeDice.length > 0) {
       const diceFormula = `${damageHitCount * payloadDiceCount}${payloadDiceSize}`;
       const flatBonus = SystemAdapter.current.addsFlatBonusToDice ? (rawDamage ?? 0) * damageHitCount : 0;
       strikeDiceBreakdown = {
         formula: flatBonus > 0 ? `${diceFormula} + ${flatBonus}` : diceFormula,
         dice: strikeDice,
-        total: strikeRawTotal,
+        total: damageResults.typeModifiedDamageTotal,
       };
     }
 
     // ── Apply to target ──
-    const targetUpdates = {};
-    if (shieldsRemaining !== targetShields) {
-      targetUpdates[`system.shields.${hitQuadrant}`] = shieldsRemaining;
-    }
-    if (totalDamage > 0) {
-      const currentHull = sys.hull?.value ?? 0;
-      const hullMax     = sys.hull?.max ?? 50;
-      const _isHP       = SystemAdapter.current.hullDisplayMode === "hpRemaining";
-      targetUpdates["system.hull.value"] = _isHP
-        ? Math.max(0, currentHull - totalDamage)
-        : Math.min(hullMax, currentHull + totalDamage);
-    }
-    if (rendTotal > 0) {
-      const currentRend = sys.armourRend?.[hitQuadrant] ?? 0;
-      targetUpdates[`system.armourRend.${hitQuadrant}`] = currentRend + rendTotal;
-      // For NPC ships, armour is stored as a direct current value (not derived from rend)
-      if (targetActor.type === `${MODULE_ID}.npcShip`) {
-        const currentArmour = sys.armour?.[hitQuadrant] ?? 0;
-        targetUpdates[`system.armour.${hitQuadrant}`] = Math.max(0, currentArmour - rendTotal);
-      }
-    }
+    const targetUpdates = buildDefenseUpdates(resolution, hitQuadrant);
     if (Object.keys(targetUpdates).length) await targetActor.update(targetUpdates);
 
     // ── Crit ──
@@ -1883,17 +1826,11 @@ export class ShipCombatState {
     // ── Chat ──
     const content = await renderTemplate(templatePath, {
       ..._baseData(),
-      hasShieldResults: targetShields > 0 && shieldCostTotal > 0,
-      shieldResults: {
-        bypassed:          shieldBypass,
-        absorbed:          hitsAbsorbed,
-        damageAbsorbed:     shieldDamageAbsorbed,
-        damagePool:         damagePoolShields,
-        shieldCostTotal,
-        hitsThroughShield,
-      },
+      hasShieldResults: targetShields > 0 && shieldResults.shieldCostTotal > 0,
+      shieldResults,
       hasDamageResults: hitsThroughShield > 0,
       damageResults: {
+        ...damageResults,
         totalDamage,
         rawDamagePerHit: rawDamage,
         effectiveArmour,
@@ -1929,15 +1866,7 @@ export class ShipCombatState {
     const qLabel          = game.i18n.localize(
       "SHIPCOMBAT.Sector." + hitQuadrant.charAt(0).toUpperCase() + hitQuadrant.slice(1)
     );
-    const hullUpdates = {};
-
-    // Shield handling (same as gunner-state)
-    let targetShields    = sys.shields?.[hitQuadrant] ?? 0;
-    let shieldsRemaining = targetShields;
-    let hitsAbsorbed     = 0;
-    let hitsThroughShield = 0;
-    let shieldCostTotal  = 0;
-    let shieldDamageAbsorbed = 0;
+    const targetShields = sys.shields?.[hitQuadrant] ?? 0;
     const damagePoolShields = usesDamagePoolShields();
     const shieldBypass   = attackBypassesShields(traits, sys);
     const shieldBurnVal  = traits?.shieldBurn ?? 0;
@@ -1951,9 +1880,7 @@ export class ShipCombatState {
     const distanceMultiplier = Math.max(0, Number(damageMultiplier) || 0);
     const diceResults = [];
     let rolledDamageTotal = 0;
-    let damageThroughTotal = 0;
-    let appliedDamage = 0;
-    let rendTotal = 0;
+    const warheadHits = [];
 
     for (let i = 0; i < effectiveWarheads; i++) {
       let rawDamage = damage ?? 0;
@@ -1966,35 +1893,31 @@ export class ShipCombatState {
       }
       rawDamage = Math.max(0, Math.round(rawDamage * distanceMultiplier));
       rolledDamageTotal += rawDamage;
-
-      if (payloadDamageType) {
-        const iwr = SystemAdapter.current.modifyDamageForType(rawDamage, payloadDamageType, target);
-        if (iwr.immune) {
-          hitsAbsorbed++;
-          continue;
-        }
-        rawDamage = iwr.finalDamage;
-      }
-
-      const shieldResult = resolveShieldHit({
-        shields: shieldsRemaining,
-        incomingDamage: rawDamage,
-        shieldBurn: shieldBurnVal,
-        bypass: shieldBypass,
-        damagePool: damagePoolShields,
-      });
-      shieldsRemaining = shieldResult.remaining;
-      shieldCostTotal += shieldResult.shieldDrain;
-      shieldDamageAbsorbed += shieldResult.damageAbsorbed;
-      if (shieldResult.hitAbsorbed) hitsAbsorbed++;
-
-      const damageThrough = shieldResult.damageThrough;
-      if (damageThrough <= 0) continue;
-      hitsThroughShield++;
-      damageThroughTotal += damageThrough;
-      appliedDamage += Math.max(0, damageThrough - effectiveArmour);
-      if (rendVal > 0) rendTotal += rendVal;
+      warheadHits.push({ rawDamage, warheadIndex: i });
     }
+
+    const resolution = await resolveHitsAgainstDefenses({
+      hits: warheadHits,
+      shields: targetShields,
+      shieldBurn: shieldBurnVal,
+      shieldBypass,
+      damagePool: damagePoolShields,
+      armour: sectorArmour,
+      armourPenetration: ap,
+      rendPerHit: rendVal,
+      armourRend: sys.armourRend?.[hitQuadrant] ?? 0,
+      hullValue: sys.hull?.value ?? 0,
+      hullMax: sys.hull?.max ?? 50,
+      hullDisplayMode: SystemAdapter.current.hullDisplayMode,
+      isNpcTarget: target.type === `${MODULE_ID}.npcShip`,
+      modifyDamage: incomingDamage => payloadDamageType
+        ? SystemAdapter.current.modifyDamageForType(incomingDamage, payloadDamageType, target)
+        : { finalDamage: incomingDamage, immune: false, note: null },
+    });
+    const { shieldResults, damageResults } = resolution;
+    const appliedDamage = damageResults.totalDamage;
+    const rendTotal = damageResults.rendTotal;
+    const hitsThroughShield = damageResults.hitsThroughShield;
 
     const combinedDiceFormula = diceFormula
       ? `${effectiveWarheads * Number.parseInt(diceFormula, 10)}${diceFormula.replace(/^\d+/, "")}`
@@ -2009,31 +1932,7 @@ export class ShipCombatState {
       total: rolledDamageTotal,
     } : null;
 
-    if (shieldsRemaining !== targetShields) {
-      hullUpdates[`system.shields.${hitQuadrant}`] = shieldsRemaining;
-    }
-
-    // Hull
-    if (appliedDamage > 0) {
-      const currentHull = sys.hull?.value ?? 0;
-      const hullMax     = sys.hull?.max ?? 50;
-      const _isHP       = SystemAdapter.current.hullDisplayMode === "hpRemaining";
-      hullUpdates["system.hull.value"] = _isHP
-        ? Math.max(0, currentHull - appliedDamage)
-        : Math.min(hullMax, currentHull + appliedDamage);
-    }
-
-    // Rend  -  applies even if armour blocks all hull damage
-    if (rendTotal > 0) {
-      const currentRend = sys.armourRend?.[hitQuadrant] ?? 0;
-      hullUpdates[`system.armourRend.${hitQuadrant}`] = currentRend + rendTotal;
-      // For NPC ships, armour is stored as a direct current value (not derived from rend)
-      if (target.type === `${MODULE_ID}.npcShip`) {
-        const currentArmour = sys.armour?.[hitQuadrant] ?? 0;
-        hullUpdates[`system.armour.${hitQuadrant}`] = Math.max(0, currentArmour - rendTotal);
-      }
-    }
-
+    const hullUpdates = buildDefenseUpdates(resolution, hitQuadrant);
     if (Object.keys(hullUpdates).length) {
       await target.update(hullUpdates);
     }
@@ -2053,18 +1952,12 @@ export class ShipCombatState {
         targetName:       target.name,
         hitQuadrantLabel: qLabel,
         hasShieldResults: targetShields > 0,
-        shieldResults: {
-          bypassed:          shieldBypass,
-          absorbed:          hitsAbsorbed,
-          damageAbsorbed:     shieldDamageAbsorbed,
-          damagePool:         damagePoolShields,
-          shieldCostTotal,
-          hitsThroughShield,
-        },
+        shieldResults,
         hasDamageResults: hitsThroughShield > 0,
         damageResults: {
+          ...damageResults,
           totalDamage:     appliedDamage,
-          rawDamagePerHit: hitsThroughShield > 0 ? Math.round(damageThroughTotal / hitsThroughShield) : 0,
+          rawDamagePerHit: hitsThroughShield > 0 ? Math.round(damageResults.damageThroughTotal / hitsThroughShield) : 0,
           effectiveArmour,
           ap:              ap > 0 ? ap : null,
           rendTotal:       rendTotal > 0 ? rendTotal : null,
