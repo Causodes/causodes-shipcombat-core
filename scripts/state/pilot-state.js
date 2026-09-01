@@ -7,6 +7,7 @@
 
 import { MODULE_ID } from "../constants.js";
 import { getHitQuadrant } from "../apps/TargetingPopup.js";
+import { calculateRawRamDamage } from "./ram-damage.js";
 import { rollCrit } from "./crit-state.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
 import { getStanceMovementModifiers, hasDevastationProtocol } from "../stances.js";
@@ -202,17 +203,18 @@ export async function confirmMovement({ fuelUsed, driftUsed = 0, speed, newX, ne
  * Ram manoeuvre: arc the ship along a computed heading to impact a target.
  * Movement is committed identically to a normal helm confirmation, then damage
  * is applied to both ships (bypassing shields and armour), lockouts are set,
- * the rammed ship is displaced half a tile, and the ramming ship rotates ±20°.
+ * the rammed ship is displaced one tile, and the ramming ship carries through
+ * the impact at 20% of its velocity.
  *
  * Damage formula:
- *   thrustFraction  = fuelUsed / powerMax  (capped at 1.0)
+ *   thrustMultiplier = fuelUsed / 100
  *   angleModifier   = 0.5 + 0.5 × |sin(θ)|  where θ is impact angle from rammed ship's heading
  *                     → 1.0 at broadside, 0.5 at bow/stern
  *
  *   To rammed ship   = (max(1, ramming.armour.bow) + 0.1 × ramming.hull.max)
- *                      × thrustFraction × angleModifier × COEFF
+ *                      × thrustMultiplier × angleModifier × COEFF
  *   To ramming ship  = (max(1, rammed.armour[hitSector]) + 0.1 × rammed.hull.max)
- *                      × thrustFraction × 1.0 × COEFF
+ *                      × thrustMultiplier × 1.0 × COEFF
  *
  * Both sides bypass shields AND armour (direct hull damage).
  *
@@ -234,6 +236,7 @@ export async function pilotRam(
   rammingActorId = null, maxBearingDeg = 30,
 ) {
   const RAM_COEFF = 2; // Tunable damage coefficient
+  const RAM_VELOCITY_RETENTION = 0.20;
 
   // ── Resolve the ramming actor ──────────────────────────────────────────────
   // If rammingActorId points to an NPC actor, operate on it directly.
@@ -244,10 +247,23 @@ export async function pilotRam(
     : this.ship;
   if (!rammingActor) return;
 
+  const currentData = SystemAdapter.current.getShipData(rammingActor) ?? {};
+  const pilotData = currentData.resources?.pilot ?? {};
+  const currentFuelBurned = Math.max(0, Number(pilotData.fuelBurned) || 0);
+  const availablePowerMax = (pilotData.overdrive ? 200 : 100)
+    + Math.max(0, Number(pilotData.apThrustBonus) || 0);
+  fuelUsed = Math.max(currentFuelBurned, Math.min(availablePowerMax, Number(fuelUsed) || 0));
+  const effectiveSpeed = Math.max(0, Number(speed) || 0);
+  const initialVelocityX = Number(pilotData.velocityX) || 0;
+  const initialVelocityY = Number(pilotData.velocityY) || 0;
+  const addedThrust = ((fuelUsed - currentFuelBurned) / 100) * effectiveSpeed;
+  const thrustDirection = ((Number(newRotation) || 0) + 90) * (Math.PI / 180);
+  const impactVelocityX = initialVelocityX + Math.cos(thrustDirection) * addedThrust;
+  const impactVelocityY = initialVelocityY + Math.sin(thrustDirection) * addedThrust;
+
   // ── 1. Commit movement ─────────────────────────────────────────────────────
   if (isNpcRam) {
     // NPC path: update actor + token directly
-    const effectiveSpeed = rammingActor.system?.resources?.pilot?.speed ?? speed;
     const prevTurnMove   = (fuelUsed / 100) * effectiveSpeed;
     await rammingActor.update({
       [SystemAdapter.current.systemPath("resources.pilot.fuelBurned")]:   fuelUsed,
@@ -256,7 +272,7 @@ export async function pilotRam(
       [SystemAdapter.current.systemPath("resources.pilot.ramAllocLocked")]: true,
     });
     const npcToken = rammingActor.getActiveTokens?.()?.[0];
-    if (npcToken) {
+    if (npcToken && !waypoints?.length) {
       await npcToken.document.update({ x: newX, y: newY, rotation: newRotation }, { animate: true });
     }
   } else {
@@ -286,9 +302,10 @@ export async function pilotRam(
   }
   const rammedSys = rammedActor.system;
 
-  // ── 4. Compute thrust fraction ────────────────────────────────────────────
-  const safeMax         = powerMax > 0 ? powerMax : 100;
-  const thrustFraction  = Math.min(1, fuelUsed / safeMax);
+  // ── 4. Compute thrust multiplier ──────────────────────────────────────────
+  // Every 100% committed thrust contributes one full unit of impact energy.
+  // Overdrive and Auxiliary Power can therefore raise ram damage above 100%.
+  const thrustPct = Math.max(0, Number(fuelUsed) || 0);
 
   // ── 5. Angle modifier for rammed ship (from rammed ship's heading) ─────────
   // attackAngle: vector FROM ramming ship TO rammed ship (atan2)
@@ -308,14 +325,22 @@ export async function pilotRam(
   const rammingBowArmour = Math.max(1, rammingSys?.armour?.bow ?? 0);
   const rammingHullMax   = rammingSys?.hull?.max ?? 50;
   const rammingBase      = rammingBowArmour + 0.25 * rammingHullMax;
-  const preIwrDamageToRammed = Math.max(1, Math.round(rammingBase * thrustFraction * angleModRammed * RAM_COEFF));
 
   // ── 8. Damage TO ramming ship (uses RAMMED ship's stats; bow armour soaks) ──
   const rammingTakesArmour  = Math.max(1, rammedSys?.armour?.[hitSectorRammed] ?? 0);
   const rammingTakesHullMax = rammedSys?.hull?.max ?? 50;
   const rammingBase2        = rammingTakesArmour + 0.25 * rammingTakesHullMax;
-  const rawDamageToRamming  = Math.round(rammingBase2 * thrustFraction * 1.0 * RAM_COEFF);
-  const preIwrDamageToRamming = Math.max(0, rawDamageToRamming - rammingBowArmour);
+  const {
+    damageToRammed: preIwrDamageToRammed,
+    damageToRamming: preIwrDamageToRamming,
+  } = calculateRawRamDamage({
+    rammingBase,
+    targetBase: rammingBase2,
+    rammingBowArmour,
+    angleModifier: angleModRammed,
+    thrustPct,
+    coefficient: RAM_COEFF,
+  });
 
   // ── 8b. Damage-type IWR ── each ship's immunities/weaknesses/resistances
   // apply to the collision damage it receives.  getRamDamageTypeKey() returns
@@ -334,19 +359,21 @@ export async function pilotRam(
   const isHpRemaining = SystemAdapter.current.hullDisplayMode === "hpRemaining";
   const rammedHullCur = rammedSys?.hull?.value ?? 0;
   const rammedHullMax = rammedSys?.hull?.max ?? 50;
+  const nextRammedHull = isHpRemaining
+    ? Math.max(0, rammedHullCur - damageToRammed)
+    : Math.min(rammedHullMax, rammedHullCur + damageToRammed);
   await rammedActor.update({
-    [SystemAdapter.current.systemPath("hull.value")]: isHpRemaining
-      ? Math.max(0, rammedHullCur - damageToRammed)
-      : Math.min(rammedHullMax, rammedHullCur + damageToRammed),
-  });
+    [SystemAdapter.current.systemPath("hull.value")]: nextRammedHull,
+  }, { shipCombatSkipDestructionAnimation: true });
 
   // ── 10. Apply hull damage to ramming ship ─────────────────────────────────
   const rammingHullCur = rammingSys?.hull?.value ?? 0;
+  const nextRammingHull = isHpRemaining
+    ? Math.max(0, rammingHullCur - damageToRamming)
+    : Math.min(rammingHullMax, rammingHullCur + damageToRamming);
   await rammingActor.update({
-    [SystemAdapter.current.systemPath("hull.value")]: isHpRemaining
-      ? Math.max(0, rammingHullCur - damageToRamming)
-      : Math.min(rammingHullMax, rammingHullCur + damageToRamming),
-  });
+    [SystemAdapter.current.systemPath("hull.value")]: nextRammingHull,
+  }, { shipCombatSkipDestructionAnimation: true });
 
   // ── 11. Crit rolls for both ships ─────────────────────────────────────────
   const isDevastation = hasDevastationProtocol(rammingSys, rammedSys);
@@ -355,29 +382,25 @@ export async function pilotRam(
 
   // ── 12. Displace rammed ship + velocity transfer ──────────────────────────
   const isRealistic = game.settings.get(MODULE_ID, "movementMode") === "realistic";
-  let rammingToken;
+  let rammingToken = rammingActor?.getActiveTokens?.()?.[0];
+  let retainedVelocityX;
+  let retainedVelocityY;
+  let finalRotation = Number(newRotation) || 0;
 
   if (isRealistic) {
-    // Normal-projection 50/50 velocity split
-    const nx = Math.cos(attackAngle);
-    const ny = Math.sin(attackAngle);
-    // Ramming ship velocity (post-thrust, stored by confirmMovement)
-    const rvx = rammingActor.system?.resources?.pilot?.velocityX ?? 0;
-    const rvy = rammingActor.system?.resources?.pilot?.velocityY ?? 0;
-    const dot = rvx * nx + rvy * ny;
-    const icx = dot * nx;  // impact component x
-    const icy = dot * ny;  // impact component y
+    // Retain 20% of the post-thrust velocity and transfer 50% to the target.
     // Ramming ship retains 20% of its total velocity (the rest is lost to the impact)
-    const newRvx = rvx * 0.20;
-    const newRvy = rvy * 0.20;
+    retainedVelocityX = impactVelocityX * RAM_VELOCITY_RETENTION;
+    retainedVelocityY = impactVelocityY * RAM_VELOCITY_RETENTION;
     // Rammed ship gains 50% of the ramming ship's velocity vector
     const tvx = rammedActor.system?.resources?.pilot?.velocityX ?? 0;
     const tvy = rammedActor.system?.resources?.pilot?.velocityY ?? 0;
-    const newTvx = tvx + rvx * 0.50;
-    const newTvy = tvy + rvy * 0.50;
+    const newTvx = tvx + impactVelocityX * 0.50;
+    const newTvy = tvy + impactVelocityY * 0.50;
     await rammingActor.update({
-      [SystemAdapter.current.systemPath("resources.pilot.velocityX")]: newRvx,
-      [SystemAdapter.current.systemPath("resources.pilot.velocityY")]: newRvy,
+      [SystemAdapter.current.systemPath("resources.pilot.velocityX")]: retainedVelocityX,
+      [SystemAdapter.current.systemPath("resources.pilot.velocityY")]: retainedVelocityY,
+      [SystemAdapter.current.systemPath("resources.pilot.prevTurnMove")]: Math.round(Math.hypot(retainedVelocityX, retainedVelocityY)),
     });
     await rammedActor.update({
       [SystemAdapter.current.systemPath("resources.pilot.velocityX")]: newTvx,
@@ -391,7 +414,6 @@ export async function pilotRam(
       await rammedToken.document.update({ x: displaceX, y: displaceY }, { animate: true });
     }
     // ── 13. Final rotation: orthogonal to impact angle, clamped to bearing arc ──
-    rammingToken = rammingActor?.getActiveTokens?.()?.[0];
     if (rammingToken && canvas?.ready) {
       const h0deg      = rammingToken.document.rotation ?? 0;
       const rammingData = SystemAdapter.current.getShipData(rammingActor) ?? {};
@@ -401,17 +423,23 @@ export async function pilotRam(
       // Cap at 20° – a meaningful orientation nudge toward orthogonal, not a full re-aim
       const maxBearing = Math.min(20, Math.max(0, mano + allocMano + stanceMano) * 15);
       const { HelmPreview } = await import("../canvas/HelmPreview.js").catch(() => ({ HelmPreview: null }));
-      let newRot;
       if (HelmPreview) {
-        newRot = HelmPreview.computeRamRotationRealistic(h0deg, attackAngle, maxBearing);
+        finalRotation = HelmPreview.computeRamRotationRealistic(h0deg, attackAngle, maxBearing);
       } else {
         // Fallback: ±20° jitter
         const jitter = Math.random() * 40 - 20;
-        newRot = ((h0deg + jitter) + 360) % 360;
+        finalRotation = ((h0deg + jitter) + 360) % 360;
       }
-      await rammingToken.document.update({ rotation: newRot }, { animate: false });
     }
   } else {
+    const retainedSpeed = ((fuelUsed / 100) * effectiveSpeed + Math.max(0, Number(driftUsed) || 0))
+      * RAM_VELOCITY_RETENTION;
+    retainedVelocityX = Math.cos(attackAngle) * retainedSpeed;
+    retainedVelocityY = Math.sin(attackAngle) * retainedSpeed;
+    await rammingActor.update({
+      [SystemAdapter.current.systemPath("resources.pilot.prevTurnMove")]: Math.round(retainedSpeed),
+    });
+
     // ── 12. Simplified: displace rammed ship one full tile in the impact direction ──
     if (rammedToken && canvas?.ready) {
       const gridSize   = canvas.grid.size;
@@ -421,11 +449,20 @@ export async function pilotRam(
     }
 
     // ── 13. Rotate ramming ship ±20° randomly ─────────────────────────────────
-    rammingToken = rammingActor?.getActiveTokens?.()?.[0];
     if (rammingToken && canvas?.ready) {
       const jitter    = Math.random() * 40 - 20; // −20° to +20°
-      const newRot    = ((rammingToken.document.rotation ?? 0) + jitter + 360) % 360;
-      await rammingToken.document.update({ rotation: newRot }, { animate: false });
+      finalRotation = ((rammingToken.document.rotation ?? 0) + jitter + 360) % 360;
+    }
+  }
+
+  // Carry the attacker through the contact point using its retained velocity.
+  let finalX = Number(newX) || 0;
+  let finalY = Number(newY) || 0;
+  if (rammingToken && canvas?.ready) {
+    finalX += retainedVelocityX * canvas.grid.size;
+    finalY += retainedVelocityY * canvas.grid.size;
+    if (!waypoints?.length) {
+      await rammingToken.document.update({ x: finalX, y: finalY, rotation: finalRotation }, { animate: true });
     }
   }
 
@@ -434,7 +471,7 @@ export async function pilotRam(
   if (HP) HP.hide();
 
   // ── 15. Chat message ───────────────────────────────────────────────────────
-  const thrustPct = Math.round(thrustFraction * 100);
+  const thrustPctDisplay = Math.round(thrustPct);
   const attackAngleDeg = Math.round(Math.abs(incoming) * (180 / Math.PI));
   const rammingName = rammingActor.name ?? "Unknown";
   const quadLabel   = hitSectorRammed.charAt(0).toUpperCase() + hitSectorRammed.slice(1);
@@ -450,7 +487,7 @@ export async function pilotRam(
         attacker: rammingName,
         target:   rammedActor.name ?? "Unknown",
         sector:   game.i18n.localize(`SHIPCOMBAT.Sector.${quadLabel}`),
-        thrust:   thrustPct,
+        thrust:   thrustPctDisplay,
       })}</p>
       <p style="font-size:0.85em;color:#e8a87c"><i class="fa-solid fa-ban"></i> ${game.i18n.localize("SHIPCOMBAT.Ram.ChatLockouts")}</p>
       <hr style="border-color:#444;margin:0.4em 0">
@@ -459,11 +496,21 @@ export async function pilotRam(
         <tr><td>${rammingName}</td><td style="color:#ff6b6b">${damageToRamming}${dmgTypeSuffix} hull damage</td></tr>
         <tr><td>${rammedActor.name}</td><td style="color:#ff6b6b">${damageToRammed}${dmgTypeSuffix} hull damage</td></tr>
       </table>
-      <p style="font-size:0.85em;color:#888">${game.i18n.format("SHIPCOMBAT.Ram.ChatDamageNote", { thrust: thrustPct, angle: attackAngleDeg, sector: game.i18n.localize(`SHIPCOMBAT.Sector.${quadLabel}`) })}</p>
+      <p style="font-size:0.85em;color:#888">${game.i18n.format("SHIPCOMBAT.Ram.ChatDamageNote", { thrust: thrustPctDisplay, angle: attackAngleDeg, sector: game.i18n.localize(`SHIPCOMBAT.Sector.${quadLabel}`) })}</p>
     </div>`;
 
   await ChatMessage.create({
     content: chatContent,
     speaker: { alias: rammingName },
   });
+
+  return {
+    rammedTokenId: rammedToken?.id ?? rammedToken?.document?.id ?? targetTokenId,
+    rammingTokenId: rammingActor.getActiveTokens?.()?.[0]?.id ?? null,
+    finalX,
+    finalY,
+    finalRotation,
+    rammedDestroyed: isHpRemaining ? nextRammedHull <= 0 : nextRammedHull >= rammedHullMax,
+    rammingDestroyed: isHpRemaining ? nextRammingHull <= 0 : nextRammingHull >= rammingHullMax,
+  };
 }

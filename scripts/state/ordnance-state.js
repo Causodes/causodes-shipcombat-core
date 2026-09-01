@@ -159,6 +159,33 @@ export async function spawnOrdnance({ type, parentShipTokenId, x, y, rotation, t
   }
 }
 
+export async function deleteOrdnanceTokens(tokenIds = []) {
+  if (!game.user.isGM || !canvas?.scene) return { tokensDeleted: 0, actorsDeleted: 0 };
+
+  const tokenDocs = [...new Set(tokenIds)]
+    .map(tokenId => canvas.scene.tokens.get(tokenId))
+    .filter(Boolean);
+  const generatedActorIds = new Set(tokenDocs
+    .map(tokenDoc => tokenDoc.actorId)
+    .filter(actorId => game.actors.get(actorId)?.getFlag(MODULE_ID, "fromOrdnanceMaster")));
+
+  if (tokenDocs.length > 0) {
+    await canvas.scene.deleteEmbeddedDocuments("Token", tokenDocs.map(tokenDoc => tokenDoc.id));
+  }
+
+  let actorsDeleted = 0;
+  for (const actorId of generatedActorIds) {
+    const stillDeployed = canvas.scene.tokens.some(tokenDoc => tokenDoc.actorId === actorId);
+    const actor = game.actors.get(actorId);
+    if (!stillDeployed && actor) {
+      await actor.delete();
+      actorsDeleted += 1;
+    }
+  }
+
+  return { tokensDeleted: tokenDocs.length, actorsDeleted };
+}
+
 /**
  * Set the RTB flag on a deployed ordnance token.
  */
@@ -213,10 +240,9 @@ export async function blastOrdnance({ torpedoTokenIds, craftDamages, torName } =
   // Destroy torpedoes caught in the blast
   const torpsToDelete = (torpedoTokenIds ?? []).filter(id => canvas.scene.tokens.get(id));
   if (torpsToDelete.length > 0) {
-    await canvas.scene.deleteEmbeddedDocuments("Token", torpsToDelete);
+    await deleteOrdnanceTokens(torpsToDelete);
     await ChatMessage.create({
       content: `<b>${torName ?? "Torpedo"}</b> detonation destroyed ${torpsToDelete.length} torpedo(es) in the blast radius.`,
-      type: CONST.CHAT_MESSAGE_TYPES?.OTHER ?? 0,
     });
   }
 
@@ -235,10 +261,9 @@ export async function blastOrdnance({ torpedoTokenIds, craftDamages, torName } =
     if (isDestroyed) craftDestroyed.push(tokenId);
   }
   if (craftDestroyed.length > 0) {
-    await canvas.scene.deleteEmbeddedDocuments("Token", craftDestroyed);
+    await deleteOrdnanceTokens(craftDestroyed);
     await ChatMessage.create({
       content: `<b>${torName ?? "Torpedo"}</b> detonation destroyed ${craftDestroyed.length} strike craft flight(s).`,
-      type: CONST.CHAT_MESSAGE_TYPES?.OTHER ?? 0,
     });
   }
 }

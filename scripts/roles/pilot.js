@@ -48,11 +48,11 @@ async function _onAllocBonus(event, target) {
   if (newAllocSpeed + newAllocMano + newAllocEvasion > pilotingSL) return;
 
   if (stat === "speed") {
-    emitToGM("updateResource", { roleId: "pilot", key: "allocSpeed",   value: newAllocSpeed });
+    await emitToGM("updateResource", { roleId: "pilot", key: "allocSpeed", value: newAllocSpeed, shipActorId: this.actor.id });
   } else if (stat === "mano") {
-    emitToGM("updateResource", { roleId: "pilot", key: "allocMano",    value: newAllocMano });
+    await emitToGM("updateResource", { roleId: "pilot", key: "allocMano", value: newAllocMano, shipActorId: this.actor.id });
   } else if (stat === "evasion") {
-    emitToGM("updateResource", { roleId: "pilot", key: "allocEvasion", value: newAllocEvasion });
+    await emitToGM("updateResource", { roleId: "pilot", key: "allocEvasion", value: newAllocEvasion, shipActorId: this.actor.id });
   }
 }
 
@@ -76,19 +76,22 @@ async function _onRollPiloting() {
   if (!result) return;
 
   const sl = Math.max(0, result.SL);
-  emitToGM("updateResource", { roleId: "pilot", key: "pilotingSL",   value: sl });
-  emitToGM("updateResource", { roleId: "pilot", key: "allocSpeed",   value: 0  });
-  emitToGM("updateResource", { roleId: "pilot", key: "allocMano",    value: 0  });
-  emitToGM("updateResource", { roleId: "pilot", key: "allocEvasion", value: 0  });
+  const updates = [
+    { roleId: "pilot", key: "pilotingSL", value: sl },
+    { roleId: "pilot", key: "allocSpeed", value: 0 },
+    { roleId: "pilot", key: "allocMano", value: 0 },
+    { roleId: "pilot", key: "allocEvasion", value: 0 },
+  ];
 
   const msgId = result.messageId ?? "";
   if (msgId) {
-    emitToGM("updateResource", { roleId: "pilot", key: "pilotingMessageId", value: msgId });
+    updates.push({ roleId: "pilot", key: "pilotingMessageId", value: msgId });
   }
+  await emitToGM("updateResources", { shipActorId: this.actor.id, updates });
 }
 
 async function _onResetHelm() {
-  emitToGM("resetHelmState", {});
+  emitToGM("resetHelmState", { shipActorId: this.actor.id });
 }
 
 async function _onConfirmHelm() {
@@ -135,6 +138,7 @@ async function _onConfirmHelm() {
     // Keep the highest carryPct across piecemeal commits so turn-end auto-drift is correct.
     const momentumUsedSoFar = sys.resources?.pilot?.momentumUsed ?? 0;
     const committed = await emitToGM("confirmMovement", {
+      shipActorId:   this.actor.id,
       fuelUsed:     fuelSlider,
       driftUsed:    0,
       speed,
@@ -171,6 +175,7 @@ async function _onConfirmHelm() {
 
   const waypoints = HelmPreview.projectWaypoints(token, bearing, thrustPct, speed, driftUnits);
   const committed = await emitToGM("confirmMovement", {
+    shipActorId:     this.actor.id,
     fuelUsed:       fuelSlider,
     driftUsed:      0,
     speed:          speed + driftUnits,
@@ -212,6 +217,7 @@ async function _onPilotRetrograde() {
   const waypoints = backDist > 0 ? HelmPreview.projectRetrogradeWaypoints(token, backDist) : [];
 
   emitToGM("pilotRetrograde", {
+    shipActorId: this.actor.id,
     userId:      game.user.id,
     retroValue,
     newX:        projected?.x ?? token.document.x,
@@ -229,7 +235,7 @@ async function _onPilotOverdrive() {
     content: `<p>${game.i18n.localize("SHIPCOMBAT.Dialog.OverdriveBody")}</p>`,
   });
   if (!confirmed) return;
-  emitToGM("pilotOverdrive", { userId: game.user.id });
+  emitToGM("pilotOverdrive", { userId: game.user.id, shipActorId: this.actor.id });
 }
 
 async function _onApToThrust() {
@@ -239,7 +245,7 @@ async function _onApToThrust() {
     ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoAuxiliaryPower"));
     return;
   }
-  emitToGM("apToThrust", { userId: game.user.id });
+  emitToGM("apToThrust", { userId: game.user.id, shipActorId: this.actor.id });
 }
 
 async function _onPilotStrafe() {
@@ -268,6 +274,7 @@ async function _onPilotStrafe() {
     : game.i18n.localize("SHIPCOMBAT.Helm.StrafePort");
 
   emitToGM("pilotStrafe", {
+    shipActorId: this.actor.id,
     userId:      game.user.id,
     newX:        projected.x,
     newY:        projected.y,
@@ -317,6 +324,7 @@ async function _onPilotFlipAndBurn() {
   HelmPreview.hide();
 
   await emitToGM("pilotFlipAndBurn", {
+    shipActorId:    this.actor.id,
     userId:         game.user.id,
     halfSpeedUnits,
     newX:           projected.x,
@@ -764,7 +772,7 @@ export function helmOnRender(sheet) {
       // Persist bearing to system data for auto-move on turn end
       clearTimeout(sheet._bearingDebounce);
       sheet._bearingDebounce = setTimeout(() => {
-        emitToGM("updateResource", { roleId: "pilot", key: "bearing", value: val });
+        await emitToGM("updateResource", { roleId: "pilot", key: "bearing", value: val, shipActorId: this.actor.id });
       }, 300);
     });
   }

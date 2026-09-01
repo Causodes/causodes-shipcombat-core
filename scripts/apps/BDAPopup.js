@@ -129,6 +129,7 @@ export async function launchBDAFromChat(ship, message, attackId = null) {
 
   // The GM resolves state and updates the matching chat card authoritatively.
   await emitToGM("resolveBDA", {
+    shipActorId: ship.id,
     attackId,
     sl: rawSL,
     messageId: message?.id ?? null,
@@ -228,12 +229,15 @@ export class BDAPopup extends foundry.appv1.api.Application {
       // Grant 20% of max AP and drop the lock on the target to Lock 0
       const reactor = this.ship?.items?.find(i => i.type === `${MODULE_ID}.component` && i.system?.slot === "reactor");
       const maxAP = reactor?.system?.bankCapacity ?? 0;
-      const currentAP = SystemAdapter.current.getShipData(this.ship)?.resources?.engineer?.auxiliaryPower ?? 0;
       const grant = Math.floor(maxAP * 0.2);
-      emitToGM("updateResource", { roleId: "engineer", key: "auxiliaryPower", value: Math.min(maxAP, currentAP + grant) });
-      if (targetTokenId) emitToGM("removeLock", { targetTokenId });
+      await emitToGM("adjustResources", {
+        shipActorId: this.ship.id,
+        adjustments: [{ roleId: "engineer", key: "auxiliaryPower", delta: grant, max: maxAP }],
+      });
+      if (targetTokenId) emitToGM("removeLock", { targetTokenId, shipActorId: this.ship.id });
     } else {
       emitToGM("setFireCorrection", {
+        shipActorId: this.ship.id,
         type:          correctionId,
         targetTokenId: targetTokenId ?? null,
         weaponId:      null,
@@ -271,6 +275,7 @@ export class BDAPopup extends foundry.appv1.api.Application {
     }
 
     await emitToGM("completeBDA", {
+      shipActorId: this.ship.id,
       attackId: this.attackId,
       messageId,
       messageContent,

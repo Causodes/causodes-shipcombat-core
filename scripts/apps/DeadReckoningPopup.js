@@ -18,11 +18,12 @@ const CARD_ICONS = {
 
 export class DeadReckoningPopup extends foundry.appv1.api.Application {
 
-  constructor({ cards = [], reservationId = null, tailCount = 0 } = {}) {
+  constructor({ cards = [], reservationId = null, tailCount = 0, shipActorId = null } = {}) {
     super({});
     this._cards = [...cards]; // mutable working copy (top N cards)
     this._reservationId = reservationId;
     this._tailCount = tailCount;
+    this._shipActorId = shipActorId;
     this._settled = false;
   }
 
@@ -71,6 +72,7 @@ export class DeadReckoningPopup extends foundry.appv1.api.Application {
       this._settled = true;
       const orderedInstanceIds = this._getCurrentOrder().map(card => card.instanceId);
       const result = await emitToGM("completeDeadReckoning", {
+        shipActorId: this._shipActorId,
         reservationId: this._reservationId,
         orderedInstanceIds,
       });
@@ -156,7 +158,7 @@ export class DeadReckoningPopup extends foundry.appv1.api.Application {
   async close(options) {
     if (!this._settled && this._reservationId) {
       this._settled = true;
-      await emitToGM("cancelDeadReckoning", { reservationId: this._reservationId });
+      await emitToGM("cancelDeadReckoning", { reservationId: this._reservationId, shipActorId: this._shipActorId });
     }
     return super.close(options);
   }

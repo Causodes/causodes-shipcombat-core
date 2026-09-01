@@ -69,13 +69,21 @@ const UTILITY_ACTIONS = [
  * Spend AP from the Engineer's auxiliary power pool.
  * Returns true on success.
  */
-function _spendAP(sys, cost) {
+async function _spendAP(shipActor, sys, cost) {
   const ap = sys.resources?.engineer?.auxiliaryPower ?? 0;
   if (ap < cost) {
     ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.InsufficientAP"));
     return false;
   }
-  emitToGM("updateResource", { roleId: "engineer", key: "auxiliaryPower", value: ap - cost });
+  const result = await emitToGM("adjustResources", {
+    shipActorId: shipActor.id,
+    requirements: [{ roleId: "engineer", key: "auxiliaryPower", min: cost }],
+    adjustments: [{ roleId: "engineer", key: "auxiliaryPower", delta: -cost, min: 0 }],
+  });
+  if (!result?.ok) {
+    ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.InsufficientAP"));
+    return false;
+  }
   return true;
 }
 
@@ -126,11 +134,11 @@ async function _onSensorAction(event, target) {
   const lockEntry = LOCK_ACTIONS.find(a => a.id === actionId);
   if (lockEntry) {
     const effectiveCost = _lockActionApCost(sys, lockEntry, apCostMultiplier);
-    if (!_spendAP(sys, effectiveCost)) return;
+    if (!(await _spendAP(this.actor, sys, effectiveCost))) return;
     const targetTokenId = target.dataset.targetTokenId;
     if (!targetTokenId) return;
-    emitToGM("updateResource", { roleId: "sensors", key: "actionUsed", value: true });
-    emitToGM("upgradeLock", { targetTokenId, tier: lockEntry.setsTier });
+    await emitToGM("updateResource", { roleId: "sensors", key: "actionUsed", value: true, shipActorId: this.actor.id });
+    emitToGM("upgradeLock", { targetTokenId, tier: lockEntry.setsTier, shipActorId: this.actor.id });
     return;
   }
 
@@ -148,8 +156,8 @@ async function _onSensorAction(event, target) {
       const td = canvas?.scene?.tokens.get(tokenId);
       if (!td?.actor) return;
       const isAllied = ownTokenId && SystemAdapter.current.getShipData(td.actor)?.parentShipTokenId === ownTokenId;
-      if (!_spendAP(sys, _buoyDiscount(sys, Math.ceil(utilEntry.cost * apCostMultiplier)))) return;
-      emitToGM("updateResource", { roleId: "sensors", key: "actionUsed", value: true });
+      if (!(await _spendAP(this.actor, sys, _buoyDiscount(sys, Math.ceil(utilEntry.cost * apCostMultiplier))))) return;
+      await emitToGM("updateResource", { roleId: "sensors", key: "actionUsed", value: true, shipActorId: this.actor.id });
       if (isAllied) {
         emitToGM("torpedoPowerBoost", { tokenId });
       } else {
@@ -158,13 +166,13 @@ async function _onSensorAction(event, target) {
       return;
     }
 
-    if (!_spendAP(sys, _buoyDiscount(sys, Math.ceil(utilEntry.cost * apCostMultiplier)))) return;
-    emitToGM("updateResource", { roleId: "sensors", key: "actionUsed", value: true });
+    if (!(await _spendAP(this.actor, sys, _buoyDiscount(sys, Math.ceil(utilEntry.cost * apCostMultiplier))))) return;
+    await emitToGM("updateResource", { roleId: "sensors", key: "actionUsed", value: true, shipActorId: this.actor.id });
     const targetTokenId = target.dataset.targetTokenId;
     if (targetTokenId && utilEntry.targeted) {
-      emitToGM("addSensorEffect", { actionId: utilEntry.id, targetTokenId, roundsRemaining: utilEntry.duration });
+      emitToGM("addSensorEffect", { actionId: utilEntry.id, targetTokenId, roundsRemaining: utilEntry.duration, shipActorId: this.actor.id });
     } else if (!utilEntry.targeted) {
-      emitToGM("addSensorEffect", { actionId: utilEntry.id, targetTokenId: "__self__", roundsRemaining: utilEntry.duration });
+      emitToGM("addSensorEffect", { actionId: utilEntry.id, targetTokenId: "__self__", roundsRemaining: utilEntry.duration, shipActorId: this.actor.id });
     }
     return;
   }
@@ -194,30 +202,30 @@ async function _onSensorCoreAction(event, target) {
     ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.InsufficientAP"));
     return;
   }
-  const consumed = await emitToGM("consumePowerCore", { roleId: "sensors", actionId });
+  const consumed = await emitToGM("consumePowerCore", { roleId: "sensors", actionId, shipActorId: this.actor.id });
   if (!consumed) {
     ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NeedsPowerCore"));
     return;
   }
-  _spendAP(sys, apCost);
+  if (!(await _spendAP(this.actor, sys, apCost))) return;
 
   // Combat Telemetry: upgrade ALL currently locked targets to tier 4
   if (actionId === "combatTelemetry") {
     // Apply every lock upgrade in one GM-side actor update. Emitting one
     // upgradeLock request per target lets concurrent requests read the same
     // stale lock array and overwrite one another.
-    emitToGM("upgradeAllLocks", { tier: 4 });
+    emitToGM("upgradeAllLocks", { tier: 4, shipActorId: this.actor.id });
   }
 
   // Store targeted effect for radar visualisation
   const targetTokenId = target.dataset.targetTokenId;
   if (targetTokenId) {
-    emitToGM("addSensorEffect", { actionId: entry.id, targetTokenId, roundsRemaining: entry.duration ?? 1 });
+    emitToGM("addSensorEffect", { actionId: entry.id, targetTokenId, roundsRemaining: entry.duration ?? 1, shipActorId: this.actor.id });
   }
 
   // Signal Inversion: strip all shields from the target's closest quadrant
   if (actionId === "signalInversion" && targetTokenId) {
-    emitToGM("stripQuadrantShields", { targetTokenId });
+    emitToGM("stripQuadrantShields", { targetTokenId, shipActorId: this.actor.id });
   }
 }
 
@@ -225,7 +233,7 @@ async function _onSensorCoreAction(event, target) {
 async function _onRecommendTarget(event, target) {
   const targetTokenId = target.dataset.targetTokenId;
   if (!targetTokenId) return;
-  await emitToGM("setRecommendedTarget", { targetTokenId });
+  await emitToGM("setRecommendedTarget", { targetTokenId, shipActorId: this.actor.id });
 }
 
 /**

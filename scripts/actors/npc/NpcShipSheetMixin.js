@@ -464,6 +464,7 @@ export const NpcShipSheetMixin = (BaseClass) => {
         uuid: actor.uuid,
         name: actor.name,
         img: actor.img,
+        tokenImg: actor.prototypeToken?.texture?.src ?? null,
         actorData,
       };
       const existing = SystemAdapter.current.getShipData(this.actor).ordnanceActors?.[slotType] ?? [];
@@ -1401,6 +1402,9 @@ async function _onNpcOpenOrdTemplate(event, target) {
   foundry.utils.setProperty(editData, `flags.${MODULE_ID}.fromOrdnanceMaster`, true);
   const editActor = await Actor.create(editData);
   if (!editActor) return;
+  if (ref.tokenImg && editActor.prototypeToken?.texture?.src !== ref.tokenImg) {
+    await editActor.update({ "prototypeToken.texture.src": ref.tokenImg });
+  }
   const sheet = editActor.sheet;
   sheet.render(true);
   const shipActor = this.actor;
@@ -1414,7 +1418,7 @@ async function _onNpcOpenOrdTemplate(event, target) {
     const currentTemplates = shipActor.system.ordnanceActors?.[slotType] ?? [];
     const newTemplates = currentTemplates.map(e =>
       e.id === templateId
-        ? { ...e, actorData: updatedData, name: updatedData.name, img: updatedData.img }
+        ? { ...e, actorData: updatedData, name: updatedData.name, img: updatedData.img, tokenImg: updatedData.prototypeToken?.texture?.src ?? null }
         : e,
     );
     await shipActor.update({ [SystemAdapter.current.systemPath(`ordnanceActors.${slotType}`)]: newTemplates });

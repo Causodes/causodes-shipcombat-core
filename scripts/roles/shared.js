@@ -72,12 +72,12 @@ async function _onReleaseRole(event, target) {
 async function _onPerformStandard(event, target) {
   // Captain/crew generic "perform standard"  -  just marks the role's turn done
   const roleId = target.dataset.roleId;
-  if (roleId) emitToGM("toggleTurnDone", { roleId });
+  if (roleId) emitToGM("toggleTurnDone", { roleId, shipActorId: this.actor.id });
 }
 
 async function _onPerformOvercharged(event, target) {
   const roleId = target.dataset.roleId;
-  if (roleId) await emitToGM("consumePowerCore", { roleId });
+  if (roleId) await emitToGM("consumePowerCore", { roleId, shipActorId: this.actor.id });
 }
 
 // ── Engineer ───────────────────────────────────────────────────────────────
@@ -104,7 +104,7 @@ async function _onAdjustSector(event, target) {
   // When increasing, cannot exceed available pool; when decreasing, cannot go below 0
   if (d > 0 && pool <= 0) return;
   const next = Math.max(0, current + d);
-  emitToGM("adjustShieldZone", { sector, value: next });
+  emitToGM("adjustShieldZone", { sector, value: next, shipActorId: this.actor.id });
 }
 
 
@@ -112,24 +112,24 @@ async function _onAdjustSector(event, target) {
 
 async function _onIncrementResource(event, target) {
   const { roleId, key, max } = target.dataset;
-  const sys     = SystemAdapter.current.getShipData(this.actor);
-  const current = sys.resources?.[roleId]?.[key] ?? 0;
-  const next    = Math.min(Number(max ?? Infinity), current + 1);
-  emitToGM("updateResource", { roleId, key, value: next });
+  await emitToGM("adjustResources", {
+    shipActorId: this.actor.id,
+    adjustments: [{ roleId, key, delta: 1, max: Number(max ?? Infinity) }],
+  });
 }
 
 async function _onDecrementResource(event, target) {
   const { roleId, key } = target.dataset;
-  const sys     = SystemAdapter.current.getShipData(this.actor);
-  const current = sys.resources?.[roleId]?.[key] ?? 0;
-  const next    = Math.max(0, current - 1);
-  emitToGM("updateResource", { roleId, key, value: next });
+  await emitToGM("adjustResources", {
+    shipActorId: this.actor.id,
+    adjustments: [{ roleId, key, delta: -1, min: 0 }],
+  });
 }
 
 async function _onMarkDone(event, target) {
   const roleId = target.dataset.roleId;
   if (!roleId) return;
-  emitToGM("toggleTurnDone", { roleId });
+  emitToGM("toggleTurnDone", { roleId, shipActorId: this.actor.id });
 }
 
 // ── Exported helpers ─────────────────────────────────────────────────────────
@@ -144,7 +144,7 @@ export function adjustShieldSectorDelta(sheet, sector, delta) {
   const pool    = sys.shieldPool?.current ?? 0;
   if (delta > 0 && pool <= 0) return;
   const next = Math.max(0, current + delta);
-  emitToGM("adjustShieldZone", { sector, value: next });
+  emitToGM("adjustShieldZone", { sector, value: next, shipActorId: this.actor.id });
 }
 
 // ── Exported action map ─────────────────────────────────────────────────────

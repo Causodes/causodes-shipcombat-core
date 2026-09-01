@@ -99,9 +99,29 @@ export async function emergencyVent() {
   });
 }
 
-export async function reduceInternalFire(amount) {
-  const current = SystemAdapter.current.getShipData(this.ship)?.internalFire ?? 0;
-  await this.update({ internalFire: Math.max(0, current - amount) });
+export async function reduceInternalFire(amount, auxiliaryPowerSpent = 0) {
+  const data = SystemAdapter.current.getShipData(this.ship) ?? {};
+  const current = data.internalFire ?? 0;
+  const auxiliaryPower = data.resources?.engineer?.auxiliaryPower ?? 0;
+  const spent = Math.min(Math.max(0, auxiliaryPowerSpent), auxiliaryPower);
+  await this.update({
+    internalFire: Math.max(0, current - Math.max(0, amount - auxiliaryPowerSpent + spent)),
+    "resources.engineer.auxiliaryPower": auxiliaryPower - spent,
+  });
+}
+
+export async function manageHeat(auxiliaryPowerSpent, sl) {
+  const data = SystemAdapter.current.getShipData(this.ship) ?? {};
+  const auxiliaryPower = data.resources?.engineer?.auxiliaryPower ?? 0;
+  const spent = Math.min(Math.max(0, auxiliaryPowerSpent), auxiliaryPower);
+  if (spent <= 0) return false;
+  const heat = data.resources?.engineer?.heat ?? 0;
+  await this.update({
+    "resources.engineer.auxiliaryPower": auxiliaryPower - spent,
+    "resources.engineer.heat": Math.max(0, heat - Math.max(1, spent + Math.max(0, sl))),
+    "resources.engineer.heatCoresStaged": 1,
+  });
+  return true;
 }
 
 export async function setInternalFire(value) {
@@ -206,11 +226,14 @@ export async function repairHull(auxiliaryPowerSpent, sl) {
   }
 
   const heat = sys.resources?.engineer?.heat ?? 0;
+  const auxiliaryPower = sys.resources?.engineer?.auxiliaryPower ?? 0;
+  const spent = Math.min(Math.max(0, auxiliaryPowerSpent), auxiliaryPower);
+  if (spent <= 0) return false;
   const reactor    = this.getReactorStats();
   const heatMax    = reactor.heatCapacity;
   const heatRoom   = Math.max(0, heatMax - heat);
   // Repair is capped to available heat budget (1 heat per HP) and remaining damage headroom.
-  const repairAttempted = Math.max(0, auxiliaryPowerSpent + sl);
+  const repairAttempted = Math.max(0, spent + sl);
   const hullCurrent = sys.hull?.value ?? 0;
   const hullMax     = sys.hull?.max ?? 50;
   const isHPMode    = SystemAdapter.current.hullDisplayMode === "hpRemaining";
@@ -227,10 +250,11 @@ export async function repairHull(auxiliaryPowerSpent, sl) {
     : Math.max(0, hullCurrent - repairAmount);
 
   await this.update({
+    "resources.engineer.auxiliaryPower": auxiliaryPower - spent,
     "resources.engineer.heat": heat + heatCost,
     "hull.value": newHull,
   });
-
+  return true;
 }
 
 // ── Flux → Auxiliary Power ───────────────────────────────────────────────

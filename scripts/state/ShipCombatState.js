@@ -67,6 +67,14 @@ export class ShipCombatState {
     return null;
   }
 
+  /** Bind delegated state-module methods to one explicit ship for a socket request. */
+  static forShip(shipActor) {
+    if (!shipActor) return null;
+    const scopedState = Object.create(this);
+    Object.defineProperty(scopedState, "ship", { value: shipActor });
+    return scopedState;
+  }
+
   /** @deprecated kept for backward-compat while HUDs are migrated */
   static get combat() {
     return game.combat ?? null;
@@ -74,8 +82,8 @@ export class ShipCombatState {
 
   // ── Read ──────────────────────────────────────────────────────────────────
 
-  static getData() {
-    return SystemAdapter.current.getShipData(this.ship) ?? foundry.utils.deepClone(DEFAULT_COMBAT_STATE);
+  static getData(shipActor = null) {
+    return SystemAdapter.current.getShipData(shipActor ?? this.ship) ?? foundry.utils.deepClone(DEFAULT_COMBAT_STATE);
   }
 
   // ── Write (GM only) ───────────────────────────────────────────────────────
@@ -93,8 +101,9 @@ export class ShipCombatState {
    * Partial update using dotted-path notation relative to `system`.
    * e.g. update({ "roles.abc123": "pilot", "active": true })
    */
-  static async update(changes) {
-    if (!this.ship) {
+  static async update(changes, shipActor = null) {
+    const ship = shipActor ?? this.ship;
+    if (!ship) {
       ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoShip"));
       return;
     }
@@ -102,7 +111,7 @@ export class ShipCombatState {
     for (const [k, v] of Object.entries(changes)) {
       prefixed[`system.${k}`] = v;
     }
-    return this.ship.update(prefixed);
+    return ship.update(prefixed);
   }
 
   // ── Roles ─────────────────────────────────────────────────────────────────
@@ -171,9 +180,10 @@ export class ShipCombatState {
   }
 
   /** Prevent simultaneous allocation changes from validating against the same stale pool. */
-  static async withAllocationTransaction(operation) {
+  static async withAllocationTransaction(operation, shipActor = null) {
     if (typeof operation !== "function") throw new TypeError("Allocation transaction requires a function.");
-    const shipKey = this.ship?.uuid ?? this.ship?.id ?? "active-ship";
+    const ship = shipActor ?? this.ship;
+    const shipKey = ship?.uuid ?? ship?.id ?? "active-ship";
     const previous = this._allocationQueues.get(shipKey) ?? Promise.resolve();
     const transaction = previous.catch(() => {}).then(operation);
 
@@ -194,10 +204,12 @@ export class ShipCombatState {
    * committed in the same update.
    * @returns {Promise<boolean>} true only when a core was consumed
    */
-  static async consumePowerCore(roleId, actionId = null) {
+  static async consumePowerCore(roleId, actionId = null, shipActor = null) {
     if (!POWER_CORE_STATION_ROLES.includes(roleId)) return false;
+    const ship = shipActor ?? this.ship;
+    if (!ship) return false;
     return this.withPowerCoreTransaction(async () => {
-      const data = this.getData();
+      const data = this.getData(ship);
       const currentPoolRole = getPowerCorePoolRole(data, roleId);
       const coreCount = getPowerCoreCount(data, roleId);
       if (coreCount <= 0) return false;
@@ -211,9 +223,9 @@ export class ShipCombatState {
           actionId,
         ];
       }
-      await this.update(updates);
+      await this.update(updates, ship);
       return true;
-    });
+    }, ship);
   }
 
   static async toggleTurnDone(roleId) {
@@ -221,12 +233,13 @@ export class ShipCombatState {
     return this.update({ [`turnDone.${roleId}`]: !current });
   }
 
-  static async resetActions() {
-    const data = this.getData();
+  static async resetActions(shipActor = null) {
+    const ship = shipActor ?? this.ship;
+    const data = this.getData(ship);
     const wasVentPending = data.ventPending ?? false;
 
-    const reactor   = this.getReactorStats();
-    const shieldCfg = this.getShieldStats();
+    const reactor   = this.getReactorStats(ship);
+    const shieldCfg = this.getShieldStats(ship);
 
     const max = reactor.coreOutput;
 
@@ -273,7 +286,7 @@ export class ShipCombatState {
     // Apply dispatched auxiliary cores at the start of the new round.
     const committedAuxCores = data.resources?.engineer?.committedAuxCores ?? 0;
     if (committedAuxCores > 0) {
-      const reactorStats = this.getReactorStats();
+      const reactorStats = this.getReactorStats(ship);
       const reserveMult = reactorStats.reserveMultiplier;
       const auxCap      = reactorStats.auxPowerCapacity;
       const currentAux = data.resources?.engineer?.auxiliaryPower ?? 0;
@@ -335,7 +348,6 @@ export class ShipCombatState {
     }
 
     // ── Ordnance Master: reset action flags ──
-    updates["resources.ordnance.actionUsed"]     = false;
     updates["resources.ordnance.coreActionUsed"] = false;
 
     // ── Payloads: expire after one round ──
@@ -374,7 +386,7 @@ export class ShipCombatState {
     const previousInitiativeBonus = data.resources?.captain?.prevTurnInitiativeBonus ?? 0;
     const allocatedInitiativeBonus = data.resources?.captain?.allocInitiative ?? 0;
     const nextInitiative = await applyPlayerShipInitiativeBonus({
-      shipActor: this.ship,
+      shipActor: ship,
       previousBonus: previousInitiativeBonus,
       bonus: allocatedInitiativeBonus,
     });
@@ -407,7 +419,7 @@ export class ShipCombatState {
     const prevCommitments = data.resources?.ordnance?.commitments ?? [];
     const storedManpowerMax = data.resources?.ordnance?.manpowerMax ?? 0;
     // Initialize manpowerMax from component if not yet set
-    const componentManpower = this.getOrdnanceBayStats().manpower;
+    const componentManpower = this.getOrdnanceBayStats(ship).manpower;
     const manpowerMax = storedManpowerMax > 0 ? storedManpowerMax : componentManpower;
     if (storedManpowerMax === 0 && componentManpower > 0) {
       updates["resources.ordnance.manpowerMax"] = componentManpower;
@@ -438,7 +450,7 @@ export class ShipCombatState {
         }
       }
       if (actionId === "hullRepairParty") {
-        const hullSys     = SystemAdapter.current.getShipData(this.ship)?.hull;
+        const hullSys     = SystemAdapter.current.getShipData(ship)?.hull;
         const hullCurrent = hullSys?.value ?? 0;
         const hullMax     = hullSys?.max   ?? 0;
         const isHPMode    = SystemAdapter.current.hullDisplayMode === "hpRemaining";
@@ -453,7 +465,7 @@ export class ShipCombatState {
       }
       if (actionId === "loadAmmo") {
         const gunAmmo = data.resources?.gunner?.ammo ?? 0;
-        const ammoCap = this.getOrdnanceBayStats().ammoCapacity ?? 0;
+        const ammoCap = this.getOrdnanceBayStats(ship).ammoCapacity ?? 0;
         const reloadAmt = Math.ceil(ammoCap * 0.2);
         updates["resources.gunner.ammo"] = Math.min(ammoCap, (updates["resources.gunner.ammo"] ?? gunAmmo) + reloadAmt);
       }
@@ -470,7 +482,7 @@ export class ShipCombatState {
         updates["resources.ordnance.availablePayloads"] = (updates["resources.ordnance.availablePayloads"] ?? avail) + 1;
       }
       if (actionId === "generatePower") {
-        const reactorStats = this.getReactorStats();
+        const reactorStats = this.getReactorStats(ship);
         const auxCap       = reactorStats.auxPowerCapacity;
         const currentAux   = data.resources?.engineer?.auxiliaryPower ?? 0;
         // AP Shutdown (Core Systems High): AP cannot increase
@@ -578,12 +590,12 @@ export class ShipCombatState {
       }
     }
 
-    await this.withPowerCoreTransaction(() => this.update(updates));
+    await this.withPowerCoreTransaction(() => this.update(updates, ship), ship);
 
     if (nextCards.discardedOverflowCount > 0) {
       await ChatMessage.create({
         content: `<p>${game.i18n.format("SHIPCOMBAT.Captain.InspireDiscard", { count: nextCards.discardedOverflowCount })}</p>`,
-        speaker: { alias: SystemAdapter.current.getShipData(this.ship)?.roleTitles?.captain || game.i18n.localize("SHIPCOMBAT.Role.Captain") },
+        speaker: { alias: SystemAdapter.current.getShipData(ship)?.roleTitles?.captain || game.i18n.localize("SHIPCOMBAT.Role.Captain") },
         whisper: ChatMessage.getWhisperRecipients("GM"),
       });
     }
@@ -626,19 +638,24 @@ export class ShipCombatState {
     if (updates.length) return ship.updateEmbeddedDocuments("Item", updates);
   }
 
-  static async updateResource(roleId, key, value) {
+  static async updateResource(roleId, key, value, shipActor = null) {
+    const ship = shipActor ?? this.ship;
+    if (!ship) return;
+    const updateShip = updates => ship.update(
+      Object.fromEntries(Object.entries(updates).map(([path, entryValue]) => [`system.${path}`, entryValue]))
+    );
     if (roleId === "hull") {
-      return this.update({ [`hull.${key}`]: value });
+      return updateShip({ [`hull.${key}`]: value });
     }
     if (roleId.includes(".")) {
-      return this.update({ [`${roleId}.${key}`]: value });
+      return updateShip({ [`${roleId}.${key}`]: value });
     }
     // Initiative totals are tracker state, not a persistent ship resource.
     if (roleId === "captain" && key === "initiativeTotal") {
-      return recordPlayerShipInitiative({ shipActor: this.ship, rawTotal: value });
+      return recordPlayerShipInitiative({ shipActor: ship, rawTotal: value });
     }
     if (roleId === "engineer" && key === "auxiliaryPower") {
-      const data = this.getData();
+      const data = SystemAdapter.current.getShipData(ship) ?? {};
       const current = data.resources?.engineer?.auxiliaryPower ?? 0;
       if (data.conditions?.coreSystems?.tier === "high" && Number(value) > current) {
         ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.APShutdown"));
@@ -647,27 +664,85 @@ export class ShipCombatState {
     }
     if (isAllocationResource(roleId, key)) {
       return this.withAllocationTransaction(async () => {
-        const data = this.getData();
+        const data = SystemAdapter.current.getShipData(ship) ?? {};
         if (roleId === "captain" && key === "allocInitiative"
-          && !hasPlayerShipInitiative({ shipActor: this.ship })) return;
+          && !hasPlayerShipInitiative({ shipActor: ship })) return;
         const validated = validateAllocationChange(data, roleId, key, value);
         if (!validated) return;
-        return this.update({ [`resources.${roleId}.${key}`]: validated.value });
-      });
+        return updateShip({ [`resources.${roleId}.${key}`]: validated.value });
+      }, ship);
     }
-    return this.update({ [`resources.${roleId}.${key}`]: value });
+    return updateShip({ [`resources.${roleId}.${key}`]: value });
+  }
+
+  static resourcePath(roleId, key) {
+    if (roleId === "hull") return `hull.${key}`;
+    if (roleId === "internalFire" && !key) return "internalFire";
+    if (roleId.includes(".")) return `${roleId}.${key}`;
+    return `resources.${roleId}.${key}`;
+  }
+
+  /** Apply related resource values in one Actor update. */
+  static async updateResources(updates, shipActor = null) {
+    const ship = shipActor ?? this.ship;
+    if (!ship || !Array.isArray(updates) || updates.length === 0) return null;
+
+    return this.withAllocationTransaction(async () => {
+      const changes = {};
+      for (const { roleId, key, value } of updates) {
+        if (typeof roleId !== "string" || typeof key !== "string") return null;
+        changes[`system.${this.resourcePath(roleId, key)}`] = value;
+      }
+      return ship.update(changes);
+    }, ship);
+  }
+
+  /** Apply resource deltas against current GM state, optionally as an all-or-nothing conditional transfer. */
+  static async adjustResources(adjustments, requirements = [], shipActor = null) {
+    const ship = shipActor ?? this.ship;
+    if (!ship || !Array.isArray(adjustments) || adjustments.length === 0) return null;
+
+    return this.withAllocationTransaction(async () => {
+      const data = SystemAdapter.current.getShipData(ship) ?? {};
+      for (const requirement of requirements) {
+        const current = foundry.utils.getProperty(data, this.resourcePath(requirement.roleId, requirement.key));
+        if (Object.hasOwn(requirement, "equals") && current !== requirement.equals) {
+          return { ok: false, reason: "requirementFailed" };
+        }
+        if (Object.hasOwn(requirement, "min") && Number(current ?? 0) < requirement.min) {
+          return { ok: false, reason: "requirementFailed" };
+        }
+        if (Object.hasOwn(requirement, "max") && Number(current ?? 0) > requirement.max) {
+          return { ok: false, reason: "requirementFailed" };
+        }
+      }
+
+      const changes = {};
+      for (const adjustment of adjustments) {
+        const path = this.resourcePath(adjustment.roleId, adjustment.key);
+        const current = foundry.utils.getProperty(data, path);
+        let value = Object.hasOwn(adjustment, "value")
+          ? adjustment.value
+          : Number(current ?? 0) + Number(adjustment.delta ?? 0);
+        if (typeof value === "number" && Number.isFinite(adjustment.min)) value = Math.max(adjustment.min, value);
+        if (typeof value === "number" && Number.isFinite(adjustment.max)) value = Math.min(adjustment.max, value);
+        changes[`system.${path}`] = value;
+      }
+      await ship.update(changes);
+      return { ok: true };
+    }, ship);
   }
 
   /** Atomically lock Ordnance allocation and commit its manpower/turn costs. */
-  static async commitOrdnanceAction(actionId) {
+  static async commitOrdnanceAction(actionId, shipActor = null) {
     const entry = ORDNANCE_MASTER_ACTIONS[actionId];
     if (!entry) return null;
+    const ship = shipActor ?? this.ship;
+    if (!ship) return null;
 
     return this.withAllocationTransaction(async () => {
-      const data = this.getData();
+      const data = SystemAdapter.current.getShipData(ship) ?? {};
       const ordnance = data.resources?.ordnance ?? {};
-      if (ordnance.actionUsed) return null;
-
       const override = (data.crewSize ?? 6) <= 4 ? ORDNANCE_4MAN_COSTS[actionId] : null;
       const baseCrew = override?.crew ?? entry.crew;
       const baseDuration = override?.duration ?? entry.duration;
@@ -675,20 +750,114 @@ export class ShipCombatState {
       const duration = Math.max(1, baseDuration - Math.max(0, ordnance.allocExpedience ?? 0));
       const manpower = ordnance.manpower ?? 0;
       if (manpower < crewCost) return { ok: false, reason: "insufficientCrew", need: crewCost, have: manpower };
+      if (["launchTorpedo", "torpedoSalvo"].includes(actionId) && (ordnance.armedTorpedoes ?? 0) < 1) {
+        return { ok: false, reason: "noArmedTorpedoes" };
+      }
+      if (actionId === "launchCraft" && (ordnance.armedCraft ?? 0) < 1) {
+        return { ok: false, reason: "noArmedCraft" };
+      }
 
       const commitments = [...(ordnance.commitments ?? []), {
+        id: foundry.utils.randomID(),
         action: actionId,
         crewCount: crewCost,
         turnsRemaining: duration,
         addedRound: data.round ?? 0,
       }];
-      await this.update({
-        "resources.ordnance.manpower": manpower - crewCost,
-        "resources.ordnance.actionUsed": true,
-        "resources.ordnance.commitments": commitments,
-      });
+      const updates = {
+        "system.resources.ordnance.manpower": manpower - crewCost,
+        "system.resources.ordnance.commitments": commitments,
+      };
+      if (["launchTorpedo", "torpedoSalvo"].includes(actionId)) {
+        updates["system.resources.ordnance.armedTorpedoes"] = ordnance.armedTorpedoes - 1;
+      }
+      if (actionId === "launchCraft") {
+        updates["system.resources.ordnance.armedCraft"] = ordnance.armedCraft - 1;
+      }
+      await ship.update(updates);
       return { ok: true, crewCost, duration };
-    });
+    }, ship);
+  }
+
+  /** Atomically cancel a new Ordnance commitment and refund its reserved crew. */
+  static async cancelOrdnanceCommitment({ commitmentId = null, index = -1 } = {}, shipActor = null) {
+    const ship = shipActor ?? this.ship;
+    if (!ship) return null;
+
+    return this.withAllocationTransaction(async () => {
+      const data = SystemAdapter.current.getShipData(ship) ?? {};
+      const ordnance = data.resources?.ordnance ?? {};
+      const commitments = [...(ordnance.commitments ?? [])];
+      const commitmentIndex = commitmentId
+        ? commitments.findIndex(commitment => commitment.id === commitmentId)
+        : Number(index);
+      if (commitmentIndex < 0 || commitmentIndex >= commitments.length) {
+        return { ok: false, reason: "notFound" };
+      }
+
+      const commitment = commitments[commitmentIndex];
+      if (commitment.addedRound !== (data.round ?? 0)) {
+        return { ok: false, reason: "oldCommitment" };
+      }
+      if (ORDNANCE_MASTER_ACTIONS[commitment.action]?.noCancel) {
+        return { ok: false, reason: "immediateAction" };
+      }
+
+      commitments.splice(commitmentIndex, 1);
+      const manpower = (ordnance.manpower ?? 0) + (commitment.crewCount ?? 0);
+      await ship.update({
+        "system.resources.ordnance.commitments": commitments,
+        "system.resources.ordnance.manpower": manpower,
+      });
+      return { ok: true };
+    }, ship);
+  }
+
+  /** Complete one Ordnance commitment immediately and apply its result atomically. */
+  static async completeOrdnanceCommitment({ commitmentId = null, index = -1 } = {}, shipActor = null) {
+    const ship = shipActor ?? this.ship;
+    if (!ship) return null;
+
+    return this.withAllocationTransaction(async () => {
+      const data = SystemAdapter.current.getShipData(ship) ?? {};
+      const ordnance = data.resources?.ordnance ?? {};
+      const commitments = [...(ordnance.commitments ?? [])];
+      const commitmentIndex = commitmentId
+        ? commitments.findIndex(commitment => commitment.id === commitmentId)
+        : Number(index);
+      if (commitmentIndex < 0 || commitmentIndex >= commitments.length) {
+        return { ok: false, reason: "notFound" };
+      }
+
+      const [commitment] = commitments.splice(commitmentIndex, 1);
+      const manpowerMax = ordnance.manpowerMax ?? this.getOrdnanceBayStats(ship).manpower;
+      const updates = {
+        "system.resources.ordnance.commitments": commitments,
+        "system.resources.ordnance.manpower": Math.min(manpowerMax, (ordnance.manpower ?? 0) + (commitment.crewCount ?? 0)),
+      };
+      const actionId = commitment.action;
+      if (actionId === "damageControl" && (data.internalFire ?? 0) > 0) {
+        updates["system.internalFire"] = Math.max(0, data.internalFire - 1);
+      } else if (actionId === "hullRepairParty") {
+        const hullCurrent = data.hull?.value ?? 0;
+        const hullMax = data.hull?.max ?? 0;
+        updates["system.hull.value"] = SystemAdapter.current.hullDisplayMode === "hpRemaining"
+          ? Math.min(hullMax, hullCurrent + 2)
+          : Math.max(0, hullCurrent - 2);
+      } else if (actionId === "loadAmmo") {
+        const ammoCap = this.getOrdnanceBayStats(ship).ammoCapacity ?? 0;
+        updates["system.resources.gunner.ammo"] = Math.min(ammoCap, (data.resources?.gunner?.ammo ?? 0) + Math.ceil(ammoCap * 0.2));
+      } else if (actionId === "armTorpedo") {
+        updates["system.resources.ordnance.armedTorpedoes"] = (ordnance.armedTorpedoes ?? 0) + 1;
+      } else if (actionId === "armCraft") {
+        updates["system.resources.ordnance.armedCraft"] = (ordnance.armedCraft ?? 0) + 1;
+      } else if (actionId === "loadPayload") {
+        updates["system.resources.ordnance.availablePayloads"] = (ordnance.availablePayloads ?? 0) + 1;
+      }
+
+      await ship.update(updates);
+      return { ok: true };
+    }, ship);
   }
 
   // ── Round management ──────────────────────────────────────────────────────
@@ -701,12 +870,16 @@ export class ShipCombatState {
    * Called at the END of the parent ship's turn so ordnance moves at the same
    * time as the ship's own turn-end auto-drift — not at the start of the next turn.
    */
-  static async processOrdnanceLifecycle() {
+  static async processOrdnanceLifecycle(shipActor = null) {
     if (!canvas?.scene) return;
+    const parentTokenIds = shipActor
+      ? new Set(shipActor.getActiveTokens?.().map(token => token.id).filter(Boolean) ?? [])
+      : null;
     const isRealistic = game.settings?.get(MODULE_ID, "movementMode") === "realistic";
     const tokensToDelete = [];
     for (const td of canvas.scene.tokens) {
       if (!isOrdnance(td.actor)) continue;
+      if (parentTokenIds && !parentTokenIds.has(SystemAdapter.current.getShipData(td.actor)?.parentShipTokenId)) continue;
 
       // Capture turnComplete before resetting (needed for launch-turn detection)
       const wasTurnComplete = SystemAdapter.current.getShipData(td.actor)?.turnComplete ?? false;
@@ -920,12 +1093,13 @@ export class ShipCombatState {
 
     // Auto-detonate fuel-exhausted torpedoes (delete tokens → triggers deleteToken hook)
     if (tokensToDelete.length > 0) {
-      await canvas.scene.deleteEmbeddedDocuments("Token", tokensToDelete);
+      await this.deleteOrdnanceTokens(tokensToDelete);
     }
   }
 
-  static async resetHelmState() {
-    const data        = this.getData();
+  static async resetHelmState(shipActor = null) {
+    const ship        = shipActor ?? this.ship;
+    const data        = this.getData(ship);
     const prevResetId = data.resources?.pilot?.helmResetId ?? 0;
 
     // Compute prevTurnMove from the fuel and drift consumed this turn so it
@@ -938,9 +1112,11 @@ export class ShipCombatState {
     const baseSpeed   = data.movement?.speed ?? 0;
     const stanceSpeed = getStanceMovementModifiers(data).speed;
     const effSpeed    = baseSpeed + allocSpeed + stanceSpeed;
-    const prevTurnMove = fuelBurned > 0
-      ? (fuelBurned / 100) * effSpeed + driftBurned
-      : (data.resources?.pilot?.prevTurnMove ?? 0);
+    const prevTurnMove = data.resources?.pilot?.ramAllocLocked
+      ? (data.resources?.pilot?.prevTurnMove ?? 0)
+      : fuelBurned > 0
+        ? (fuelBurned / 100) * effSpeed + driftBurned
+        : (data.resources?.pilot?.prevTurnMove ?? 0);
 
     return this.update({
       "resources.pilot.fuelBurned":        0,
@@ -957,7 +1133,7 @@ export class ShipCombatState {
       "resources.pilot.bearingUsed":        0,
       "resources.pilot.momentumUsed":       0,
       "resources.pilot.prevTurnMove":       prevTurnMove,
-    });
+    }, ship);
   }
 
   static async fullReset(shipActor = null) {
@@ -1018,7 +1194,6 @@ export class ShipCombatState {
       "resources.ordnance.availablePayloads": 0,
       "resources.ordnance.stagedPayloads": {},
       "resources.ordnance.commitments": [],
-      "resources.ordnance.actionUsed": false,
       "resources.ordnance.coreActionUsed": false,
       "resources.ordnance.bosunSL": 0,
       "resources.ordnance.bosunRolled": false,
@@ -1179,7 +1354,7 @@ export class ShipCombatState {
       if (ordnanceTokenIds.length > 0) {
         ShipCombatState._suppressDestroyTracking = true;
         try {
-          await canvas.scene.deleteEmbeddedDocuments("Token", ordnanceTokenIds);
+          await this.deleteOrdnanceTokens(ordnanceTokenIds);
         } finally {
           ShipCombatState._suppressDestroyTracking = false;
         }
@@ -1187,13 +1362,15 @@ export class ShipCombatState {
     }
   }
 
-  static async advanceRound() {
-    const data = this.getData();
+  static async advanceRound(shipActor = null) {
+    const ship = shipActor ?? this.ship;
+    if (!ship) return;
+    const data = this.getData(ship);
 
     await this.update({
       round: (data.round ?? 0) + 1,
       "resources.pilot.bearing": 0,
-    });
+    }, ship);
 
     // ── Per-round condition effects (player ship) ─────────────────────────────
     const conditions  = data.conditions ?? {};
@@ -1223,23 +1400,23 @@ export class ShipCombatState {
     }
 
     if (Object.keys(condUpdates).length > 0) {
-      await this.update(condUpdates);
+      await this.update(condUpdates, ship);
     }
 
     const holdTheLineActive = data.resources?.captain?.holdTheLineActive ?? false;
     if (fireBefore > 0 && !holdTheLineActive) {
-      const hull    = SystemAdapter.current.getShipData(this.ship)?.hull ?? {};
+      const hull    = SystemAdapter.current.getShipData(ship)?.hull ?? {};
       const hullMax = hull.max ?? 50;
       const hullVal = hull.value ?? 0;
       const newHull = SystemAdapter.current.hullDisplayMode === "hpRemaining"
         ? Math.max(0, hullVal - fireBefore)
         : Math.min(hullMax, hullVal + fireBefore);
-      await this.update({ "hull.value": newHull });
+      await this.update({ "hull.value": newHull }, ship);
     }
 
-    await this.processOrdnanceLifecycle();
-    await this.resetHelmState();
-    await this.resetActions();
+    await this.processOrdnanceLifecycle(ship);
+    await this.resetHelmState(ship);
+    await this.resetActions(ship);
 
     // ── NPC per-round resource replenishment (25% of max, rounded down) ────────
     if (canvas?.scene) {
@@ -1932,6 +2109,7 @@ ShipCombatState.dispatchStagedCores = EngineerState.dispatchStagedCores;
 ShipCombatState.hasPowerCore        = EngineerState.hasPowerCore;
 ShipCombatState.emergencyVent       = EngineerState.emergencyVent;
 ShipCombatState.reduceInternalFire  = EngineerState.reduceInternalFire;
+ShipCombatState.manageHeat          = EngineerState.manageHeat;
 ShipCombatState.setInternalFire     = EngineerState.setInternalFire;
 ShipCombatState.spendBankedCores    = EngineerState.spendBankedCores;
 ShipCombatState.commitShieldCores   = EngineerState.commitShieldCores;
@@ -1963,6 +2141,7 @@ ShipCombatState.spendAP              = SensorsState.spendAP;
 
 // Ordnance
 ShipCombatState.spawnOrdnance             = OrdnanceState.spawnOrdnance;
+ShipCombatState.deleteOrdnanceTokens      = OrdnanceState.deleteOrdnanceTokens;
 ShipCombatState.setOrdnanceRtb            = OrdnanceState.setOrdnanceRtb;
 ShipCombatState.setOrdnanceTurnDone       = OrdnanceState.setOrdnanceTurnDone;
 ShipCombatState.designateHostileTorpedo   = OrdnanceState.designateHostileTorpedo;

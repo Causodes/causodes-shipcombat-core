@@ -3,9 +3,10 @@ import { emitToGM } from "../socket.js";
 
 /** Full-effect discard browser for Emergency Salvage. */
 export class EmergencySalvagePopup extends foundry.appv1.api.Application {
-  constructor({ cards = [] } = {}) {
+  constructor({ cards = [], shipActorId = null } = {}) {
     super({});
     this.cards = cards;
+    this.shipActorId = shipActorId;
   }
 
   static get defaultOptions() {
@@ -32,7 +33,7 @@ export class EmergencySalvagePopup extends foundry.appv1.api.Application {
         event.preventDefault();
         const cardInstanceId = button.dataset.cardInstanceId;
         if (!cardInstanceId) return;
-        emitToGM("captainCoreAction", { actionId: "emergencySalvage", cardInstanceId });
+        emitToGM("captainCoreAction", { actionId: "emergencySalvage", cardInstanceId, shipActorId: this.shipActorId });
         this.close();
       });
     });

@@ -42,12 +42,19 @@
                     </span>
                     <span class="shipcombat-tp-detail">
                         <i class="fa-solid fa-bolt-lightning"></i>
-                        {{this.thrustPctDisplay}}%
+                        {{this.minThrustPct}}% {{localize "SHIPCOMBAT.Ram.Minimum"}}
                     </span>
                 </div>
+                <label class="shipcombat-ram-thrust-control">
+                    <span>{{localize "SHIPCOMBAT.Ram.ImpactThrust"}} <output data-ram-thrust-value>{{this.selectedThrustPct}}%</output></span>
+                    <input type="range" data-ram-thrust min="{{this.minThrustPct}}" max="{{this.maxThrustPct}}" value="{{this.selectedThrustPct}}" step="0.1">
+                </label>
                 <div class="shipcombat-ram-dmg-preview">
                     <span class="shipcombat-ram-dmg-in" data-tooltip="Estimated hull damage your ship will take">
-                        <i class="fa-solid fa-arrow-left"></i> ~{{this.damageIn}} hull incoming
+                        <i class="fa-solid fa-arrow-left"></i> <span data-ram-damage-in>~{{this.damageIn}}</span> {{localize "SHIPCOMBAT.Ram.Incoming"}}
+                    </span>
+                    <span class="shipcombat-ram-dmg-out" data-tooltip="Estimated hull damage dealt to the target">
+                        <i class="fa-solid fa-arrow-right"></i> <span data-ram-damage-out>~{{this.damageOut}}</span> {{localize "SHIPCOMBAT.Ram.Outgoing"}}
                     </span>
                 </div>
             </div>

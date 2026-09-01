@@ -69,7 +69,7 @@ async function _onSelectAction(event, target) {
   const current = sys.resources?.engineer?.actionChoices ?? [];
   if (current.includes(actionType)) return; // already selected
   const updated = [...current, actionType];
-  emitToGM("updateResource", { roleId: "engineer", key: "actionChoices", value: updated });
+  await emitToGM("updateResource", { roleId: "engineer", key: "actionChoices", value: updated, shipActorId: this.actor.id });
 }
 
 /**
@@ -112,37 +112,40 @@ async function _onOverclock() {
   }
 
   // Heat always increases regardless of result
-  emitToGM("updateResource", { roleId: "engineer", key: "heat", value: heat + 1 });
-
+  const adjustments = [{ roleId: "engineer", key: "heat", delta: 1, max: heatMax }];
   if (succeeded) {
-    const available = sys.resources?.engineer?.powerCores ?? 0;
-    emitToGM("updateResource", { roleId: "engineer", key: "powerCores", value: available + 1 });
+    adjustments.push({ roleId: "engineer", key: "powerCores", delta: 1 });
   }
+  await emitToGM("adjustResources", {
+    shipActorId: this.actor.id,
+    requirements: [{ roleId: "engineer", key: "heat", max: heatMax - 1 }],
+    adjustments,
+  });
 }
 
 /** Dispatch staged cores into receiving-operator pools and record the Engineer ledger. */
 async function _onDispatchCores() {
-  emitToGM("dispatchStagedCores", {});
+  emitToGM("dispatchStagedCores", { shipActorId: this.actor.id });
 }
 
 /** Commit one core to shields. */
 async function _onCommitShieldCore() {
-  emitToGM("commitShieldCores", { count: 1 });
+  emitToGM("commitShieldCores", { count: 1, shipActorId: this.actor.id });
 }
 
 /** Remove one committed shield core back to available pool. */
 async function _onUncommitShieldCore() {
-  emitToGM("uncommitShieldCore", {});
+  emitToGM("uncommitShieldCore", { shipActorId: this.actor.id });
 }
 
 /** Commit one core to auxiliary power. */
 async function _onCommitAuxCore() {
-  emitToGM("commitAuxCore", {});
+  emitToGM("commitAuxCore", { shipActorId: this.actor.id });
 }
 
 /** Remove one staged auxiliary power core. */
 async function _onUncommitAuxCore() {
-  emitToGM("uncommitAuxCore", {});
+  emitToGM("uncommitAuxCore", { shipActorId: this.actor.id });
 }
 
 /**
@@ -162,20 +165,11 @@ async function _onManageHeat() {
     return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoEngineer"));
   }
 
-  // Spend banked cores
-  emitToGM("spendBankedCores", { count: coresStaged });
-
   const test2 = await SystemAdapter.current.rollSkillTest(crewActor, sys.roleSkillOverrides?.engineer ?? "engineering");
   if (!test2) return;
 
   const sl = Math.max(0, test2.SL);
-  const reduction = Math.max(1, coresStaged + sl);
-  const heat = sys.resources?.engineer?.heat ?? 0;
-  const newHeat = Math.max(0, heat - reduction);
-
-  emitToGM("updateResource", { roleId: "engineer", key: "heat", value: newHeat });
-  // Reset staged value
-  emitToGM("updateResource", { roleId: "engineer", key: "heatCoresStaged", value: 1 });
+  await emitToGM("manageHeat", { auxiliaryPowerSpent: coresStaged, sl, shipActorId: this.actor.id });
 }
 
 /**
@@ -193,7 +187,7 @@ async function _onEmergencyVent() {
   });
   if (!ok) return;
 
-  emitToGM("emergencyVent", {});
+  emitToGM("emergencyVent", { shipActorId: this.actor.id });
 }
 
 /**
@@ -221,9 +215,6 @@ async function _onSuppressFire() {
   const maxSpend = Math.min(bank, fire);
   const coresSpent = Math.max(1, Math.min(sys.resources?.engineer?.fireCoresStaged ?? 1, maxSpend));
 
-  // Spend banked cores
-  emitToGM("spendBankedCores", { count: coresSpent });
-
   // Engineering test
   const test3 = await SystemAdapter.current.rollSkillTest(crewActor, sys.roleSkillOverrides?.engineer ?? "engineering");
   if (!test3) return;
@@ -231,9 +222,9 @@ async function _onSuppressFire() {
   const sl = Math.max(0, test3.SL);
   const totalReduction = coresSpent + sl;
 
-  emitToGM("reduceInternalFire", { amount: totalReduction });
+  await emitToGM("reduceInternalFire", { amount: totalReduction, auxiliaryPowerSpent: coresSpent, shipActorId: this.actor.id });
   // Reset staged value
-  emitToGM("updateResource", { roleId: "engineer", key: "fireCoresStaged", value: 1 });
+  await emitToGM("updateResource", { roleId: "engineer", key: "fireCoresStaged", value: 1, shipActorId: this.actor.id });
 }
 
 /** Adjust heatCoresStaged by delta, clamped to available Auxiliary Power. */
@@ -243,7 +234,7 @@ async function _onAdjustHeatCores(event, target) {
   const bank = sys.resources?.engineer?.auxiliaryPower ?? 0;
   const current = sys.resources?.engineer?.heatCoresStaged ?? 1;
   const next = Math.max(1, Math.min(bank, current + delta));
-  emitToGM("updateResource", { roleId: "engineer", key: "heatCoresStaged", value: next });
+  await emitToGM("updateResource", { roleId: "engineer", key: "heatCoresStaged", value: next, shipActorId: this.actor.id });
 }
 
 /** Adjust fireCoresStaged by delta, clamped to Auxiliary Power and internal fire. */
@@ -255,7 +246,7 @@ async function _onAdjustFireCores(event, target) {
   const maxSpend = Math.min(bank, fire);
   const current = sys.resources?.engineer?.fireCoresStaged ?? 1;
   const next = Math.max(1, Math.min(maxSpend, current + delta));
-  emitToGM("updateResource", { roleId: "engineer", key: "fireCoresStaged", value: next });
+  await emitToGM("updateResource", { roleId: "engineer", key: "fireCoresStaged", value: next, shipActorId: this.actor.id });
 }
 
 /** Adjust repairAuxPowerStaged by delta, clamped to available Auxiliary Power. */
@@ -265,7 +256,7 @@ async function _onAdjustRepairAuxPower(event, target) {
   const bank = sys.resources?.engineer?.auxiliaryPower ?? 0;
   const current = sys.resources?.engineer?.repairAuxPowerStaged ?? 1;
   const next = Math.max(1, Math.min(bank, current + delta));
-  emitToGM("updateResource", { roleId: "engineer", key: "repairAuxPowerStaged", value: next });
+  await emitToGM("updateResource", { roleId: "engineer", key: "repairAuxPowerStaged", value: next, shipActorId: this.actor.id });
 }
 
 /**
@@ -302,24 +293,22 @@ async function _onRepairHull() {
 
   const auxiliaryPowerSpent = Math.max(1, Math.min(bank, sys.resources?.engineer?.repairAuxPowerStaged ?? 1));
 
-  emitToGM("spendBankedCores", { count: auxiliaryPowerSpent });
-
   // Engineering test
   const result = await SystemAdapter.current.rollSkillTest(crewActor, sys.roleSkillOverrides?.engineer ?? "engineering");
   if (!result) return;
 
   const sl = Math.max(0, result.SL);
-  emitToGM("repairHull", { auxiliaryPowerSpent, sl });
+  await emitToGM("repairHull", { auxiliaryPowerSpent, sl, shipActorId: this.actor.id });
 
   // Reset staged value
-  emitToGM("updateResource", { roleId: "engineer", key: "repairAuxPowerStaged", value: 1 });
+  await emitToGM("updateResource", { roleId: "engineer", key: "repairAuxPowerStaged", value: 1, shipActorId: this.actor.id });
 }
 
 /** Convert 1 voidshield flux into 1 Auxiliary Power. */
 async function _onFluxToCharge() {
   const pool = SystemAdapter.current.getShipData(this.actor).shieldPool?.current ?? 0;
   if (pool <= 0) return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.NpcShip.NoFluxRemaining"));
-  emitToGM("fluxToCharge", {});
+  emitToGM("fluxToCharge", { shipActorId: this.actor.id });
 }
 
 // ── Exported action map ────────────────────────────────────────────────────

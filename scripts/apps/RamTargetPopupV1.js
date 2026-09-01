@@ -20,6 +20,8 @@ import { getContactDisplayName, isTargetableContactToken }
   from "../targeting/contact-intelligence.js";
 import { SystemAdapter }
   from "../systems/SystemAdapter.js";
+import { calculateRawRamDamage }
+  from "../state/ram-damage.js";
 
 // ── RamTargetPopupV1 ─────────────────────────────────────────────────────────
 
@@ -138,7 +140,10 @@ export class RamTargetPopupV1 extends foundry.appv1.api.Application {
 
       const attackAngle    = Math.atan2(ty - cy, tx - cx);
       const hitSector      = getHitQuadrant(candidate.document.rotation ?? 0, attackAngle);
-      const thrustFraction = Math.min(1, this.powerRemaining / (this.powerMax || 100));
+      const minThrustPct = Math.min(this.powerRemaining, Math.ceil(reach.thrustPct * 10) / 10);
+      const maxThrustPct = this.powerRemaining;
+      const selectedThrustPct = minThrustPct;
+      const totalThrustPct = this.fuelBurned + selectedThrustPct;
 
       // Damage preview (mirrors pilotRam formulas exactly)
       const tgtHeadingRad = ((candidate.document.rotation ?? 0) + 90) * (Math.PI / 180);
@@ -147,12 +152,18 @@ export class RamTargetPopupV1 extends foundry.appv1.api.Application {
       if (impactAngle > Math.PI) impactAngle -= 2 * Math.PI;
       const angleModRammed = 0.5 + 0.5 * Math.abs(Math.sin(impactAngle));
 
-      const damageOut            = Math.max(1, Math.round(rammingDmgBase * thrustFraction * angleModRammed * RAM_COEFF));
       const targetSys            = candidate.document.actor?.system;
       const targetArmourInSector = Math.max(1, targetSys?.armour?.[hitSector] ?? 0);
       const targetHullMax        = targetSys?.hull?.max ?? 50;
       const targetDmgBase        = targetArmourInSector + 0.25 * targetHullMax;
-      const damageIn             = Math.round(Math.max(0, Math.round(targetDmgBase * thrustFraction * RAM_COEFF) - rammingBowArmour) / 5) * 5;
+      const rawDamage = calculateRawRamDamage({
+        rammingBase: rammingDmgBase,
+        targetBase: targetDmgBase,
+        rammingBowArmour,
+        angleModifier: angleModRammed,
+        thrustPct: totalThrustPct,
+        coefficient: RAM_COEFF,
+      });
 
       targets.push({
         tokenId:          candidate.id,
@@ -165,16 +176,21 @@ export class RamTargetPopupV1 extends foundry.appv1.api.Application {
         distance:         Math.round(distSquares * 10) / 10,
         bearingDeg:       reach.bearingDeg,
         thrustPct:        reach.thrustPct,
-        thrustFraction,
-        thrustPctDisplay: Math.round(this.powerRemaining),
+        minThrustPct,
+        maxThrustPct,
+        selectedThrustPct,
         hitSector,
         hitSectorLabel:   game.i18n.localize(`SHIPCOMBAT.Sector.${hitSector.charAt(0).toUpperCase() + hitSector.slice(1)}`),
         lockTier,
         targetX:     tx,
         targetY:     ty,
         attackAngle,
-        damageOut,
-        damageIn,
+        damageOut: rawDamage.damageToRammed,
+        damageIn: rawDamage.damageToRamming,
+        rammingDmgBase,
+        targetDmgBase,
+        rammingBowArmour,
+        angleModRammed,
       });
     }
 
@@ -212,6 +228,25 @@ export class RamTargetPopupV1 extends foundry.appv1.api.Application {
       btn.addEventListener("click", ev => {
         ev.preventDefault();
         this._onConfirmRam(btn.dataset.tokenId);
+      });
+    });
+
+    html.querySelectorAll("[data-ram-thrust]").forEach(input => {
+      input.addEventListener("input", event => {
+        const row = input.closest(".shipcombat-ram-target-row");
+        const target = this.targets.find(entry => entry.tokenId === row?.dataset.tokenId);
+        if (!target) return;
+        target.selectedThrustPct = Math.max(target.minThrustPct, Math.min(target.maxThrustPct, Number(event.target.value)));
+        const damage = calculateRawRamDamage({
+          rammingBase: target.rammingDmgBase,
+          targetBase: target.targetDmgBase,
+          rammingBowArmour: target.rammingBowArmour,
+          angleModifier: target.angleModRammed,
+          thrustPct: this.fuelBurned + target.selectedThrustPct,
+        });
+        row.querySelector("[data-ram-thrust-value]").textContent = `${Math.round(target.selectedThrustPct * 10) / 10}%`;
+        row.querySelector("[data-ram-damage-out]").textContent = `~${damage.damageToRammed}`;
+        row.querySelector("[data-ram-damage-in]").textContent = `~${damage.damageToRamming}`;
       });
     });
 
@@ -294,7 +329,7 @@ export class RamTargetPopupV1 extends foundry.appv1.api.Application {
       title:   game.i18n.localize("SHIPCOMBAT.Dialog.RamTitle"),
       content: `<p>${game.i18n.format("SHIPCOMBAT.Dialog.RamConfirmBody", {
         name:   target.name,
-        pct:    Math.round(this.powerRemaining),
+        pct:    Math.round(target.selectedThrustPct),
         sector: target.hitSectorLabel,
       })}</p>`,
     });
@@ -329,7 +364,7 @@ export class RamTargetPopupV1 extends foundry.appv1.api.Application {
     const committed = await emitToGM("pilotRam", {
       userId:         game.user.id,
       targetTokenId:  tokenId,
-      fuelUsed:       this.powerMax,
+      fuelUsed:       this.fuelBurned + target.selectedThrustPct,
       driftUsed:      this.isRealistic ? 0 : this.minMoveGridUnits,
       speed:          this.effSpeed,
       newX:           projected.x,

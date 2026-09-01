@@ -602,6 +602,21 @@
 }
 .shipcombat-ram-dmg-preview i { margin-right: 0.15rem; }
 .shipcombat-ram-dmg-in  { color: #ff6b6b; }
+.shipcombat-ram-dmg-out { color: #8ce0b3; }
+.shipcombat-ram-thrust-control {
+  display: grid;
+  gap: 0.15rem;
+  margin-top: 0.25rem;
+  font-size: 0.65rem;
+}
+.shipcombat-ram-thrust-control span {
+  display: flex;
+  justify-content: space-between;
+}
+.shipcombat-ram-thrust-control input {
+  width: 100%;
+  margin: 0;
+}
 
 /* ── Ram target popup: warning footer ───────────────────────────────────── */
 .shipcombat-ram-warning {

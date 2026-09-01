@@ -4,9 +4,9 @@
 import { emitToGM } from "../socket.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
 
-async function _onEndShipTurn() { emitToGM("endShipTurn", {}); }
+async function _onEndShipTurn() { emitToGM("endShipTurn", { shipActorId: this.actor.id }); }
 
-async function _onAdvanceRound() { emitToGM("advanceRound", {}); }
+async function _onAdvanceRound() { emitToGM("advanceRound", { shipActorId: this.actor.id }); }
 
 async function _onEndCombat() {
   const ok = await foundry.applications.api.DialogV2.confirm({
@@ -30,7 +30,7 @@ async function _onAdjustHull(event, target) {
   const current = sys.hull?.value ?? 0;
   const max     = sys.hull?.max   ?? 0;
   const next    = Math.max(0, Math.min(max, current + delta));
-  emitToGM("updateResource", { roleId: "hull", key: "value", value: next });
+  await emitToGM("updateResource", { roleId: "hull", key: "value", value: next, shipActorId: this.actor.id });
 }
 
 export const OVERVIEW_ACTIONS = {

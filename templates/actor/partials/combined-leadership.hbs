@@ -29,7 +29,7 @@
                     <button type="button" class="shipcombat-alloc-btn" data-action="allocLeadershipSL" data-stat="resolve" data-delta="-1"
                             {{#unless captainCtx.leadershipRolled}}disabled{{/unless}}
                             {{#if captainCtx.allocationLocked}}disabled{{/if}}
-                            {{#if ordnanceCtx.actionUsed}}disabled{{/if}}
+                            {{#if ordnanceCtx.allocationLocked}}disabled{{/if}}
                             {{#unless captainCtx.allocResolve}}disabled{{/unless}}>
                         &minus;
                     </button>
@@ -37,7 +37,7 @@
                     <button type="button" class="shipcombat-alloc-btn" data-action="allocLeadershipSL" data-stat="resolve" data-delta="1"
                             {{#unless captainCtx.leadershipRolled}}disabled{{/unless}}
                             {{#if captainCtx.allocationLocked}}disabled{{/if}}
-                            {{#if ordnanceCtx.actionUsed}}disabled{{/if}}
+                            {{#if ordnanceCtx.allocationLocked}}disabled{{/if}}
                             {{#if (gte (add (add captainCtx.allocResolve ordnanceCtx.allocEfficiency) ordnanceCtx.allocExpedience) captainCtx.leadershipSL)}}disabled{{/if}}>
                         +
                     </button>
@@ -51,7 +51,7 @@
                     <button type="button" class="shipcombat-alloc-btn" data-action="allocOrdnanceSL" data-stat="efficiency" data-delta="-1"
                             {{#unless captainCtx.leadershipRolled}}disabled{{/unless}}
                             {{#if captainCtx.allocationLocked}}disabled{{/if}}
-                            {{#if ordnanceCtx.actionUsed}}disabled{{/if}}
+                            {{#if ordnanceCtx.allocationLocked}}disabled{{/if}}
                             {{#unless ordnanceCtx.allocEfficiency}}disabled{{/unless}}>
                         &minus;
                     </button>
@@ -59,7 +59,7 @@
                     <button type="button" class="shipcombat-alloc-btn" data-action="allocOrdnanceSL" data-stat="efficiency" data-delta="1"
                             {{#unless captainCtx.leadershipRolled}}disabled{{/unless}}
                             {{#if captainCtx.allocationLocked}}disabled{{/if}}
-                            {{#if ordnanceCtx.actionUsed}}disabled{{/if}}
+                            {{#if ordnanceCtx.allocationLocked}}disabled{{/if}}
                             {{#if (gte (add (add captainCtx.allocResolve ordnanceCtx.allocEfficiency) ordnanceCtx.allocExpedience) captainCtx.leadershipSL)}}disabled{{/if}}>
                         +
                     </button>
@@ -73,7 +73,7 @@
                     <button type="button" class="shipcombat-alloc-btn" data-action="allocOrdnanceSL" data-stat="expedience" data-delta="-1"
                             {{#unless captainCtx.leadershipRolled}}disabled{{/unless}}
                             {{#if captainCtx.allocationLocked}}disabled{{/if}}
-                            {{#if ordnanceCtx.actionUsed}}disabled{{/if}}
+                            {{#if ordnanceCtx.allocationLocked}}disabled{{/if}}
                             {{#unless ordnanceCtx.allocExpedience}}disabled{{/unless}}>
                         &minus;
                     </button>
@@ -81,7 +81,7 @@
                     <button type="button" class="shipcombat-alloc-btn" data-action="allocOrdnanceSL" data-stat="expedience" data-delta="1"
                             {{#unless captainCtx.leadershipRolled}}disabled{{/unless}}
                             {{#if captainCtx.allocationLocked}}disabled{{/if}}
-                            {{#if ordnanceCtx.actionUsed}}disabled{{/if}}
+                            {{#if ordnanceCtx.allocationLocked}}disabled{{/if}}
                             {{#if (gte (add (add captainCtx.allocResolve ordnanceCtx.allocEfficiency) ordnanceCtx.allocExpedience) captainCtx.leadershipSL)}}disabled{{/if}}>
                         +
                     </button>

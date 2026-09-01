@@ -344,7 +344,7 @@ function _paint(el, sheet) {
   });
   if (missingIds.length > 0) {
     for (const tokenId of missingIds) _pendingContactIds.add(tokenId);
-    emitToGM("registerSensorContacts", { targetTokenIds: missingIds });
+    emitToGM("registerSensorContacts", { targetTokenIds: missingIds, shipActorId: ship.id });
     setTimeout(() => {
       for (const tokenId of missingIds) _pendingContactIds.delete(tokenId);
     }, 3000);

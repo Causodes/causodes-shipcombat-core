@@ -271,7 +271,7 @@ async function _onOrdDetonate() {
   });
   if (token._animation) await CanvasAnimation.terminateAnimation(token._animation);
   await new Promise(r => setTimeout(r, 2000));
-  await canvas.scene.deleteEmbeddedDocuments("Token", [tokenDoc.id]);
+  await emitToGM("deleteOrdnanceTokens", { tokenIds: [tokenDoc.id] });
 }
 
 export const OrdnanceSheetMixin = (BaseClass) => {

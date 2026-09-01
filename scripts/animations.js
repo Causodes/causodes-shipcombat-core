@@ -1,4 +1,5 @@
 import { MODULE_ID, WEAPON_FIRED_HOOK } from "./constants.js";
+import { SystemAdapter } from "./systems/SystemAdapter.js";
 
 /**
  * animations.js — Optional Sequencer + JB2A Patreon animation layer for ship combat.
@@ -67,6 +68,12 @@ const CATEGORY_ASSETS = {
   torpedo_detonation: {
     impact: "jb2a.explosion.08.1200.orange",
   },
+  ram_collision: {
+    impact: "jb2a.explosion.04.orange",
+  },
+  ship_destruction: {
+    impact: "jb2a.explosion.08.1200.orange",
+  },
 };
 
 // Scale multiplier applied to all effects for a given category
@@ -80,6 +87,8 @@ const SCALE = {
   plasma:         0.9,
   missile:        1.0,
   torpedo_detonation: 2.5,
+  ram_collision: 1.5,
+  ship_destruction: 2.5,
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -92,6 +101,38 @@ const SCALE = {
 function actorToken(actor) {
   if (!actor) return null;
   return actor.getActiveTokens()?.[0] ?? null;
+}
+
+const destroyedActorUuids = new Set();
+
+function handleShipDestruction(actor, changes, options) {
+  const shipTypes = [`${SystemAdapter.current.moduleId}.ship`, `${SystemAdapter.current.moduleId}.npcShip`];
+  if (!shipTypes.includes(actor?.type)) return;
+
+  const hullPath = SystemAdapter.current.systemPath("hull.value");
+  if (foundry.utils.getProperty(changes, hullPath) === undefined && changes[hullPath] === undefined) return;
+
+  const hull = SystemAdapter.current.getShipData(actor)?.hull ?? {};
+  const destroyed = SystemAdapter.current.hullDisplayMode === "hpRemaining"
+    ? (hull.value ?? 0) <= 0
+    : (hull.value ?? 0) >= (hull.max ?? Infinity);
+  const actorKey = actor.uuid ?? actor.id;
+  if (options?.shipCombatSkipDestructionAnimation) {
+    if (destroyed) destroyedActorUuids.add(actorKey);
+    else destroyedActorUuids.delete(actorKey);
+    return;
+  }
+  if (!destroyed) {
+    destroyedActorUuids.delete(actorKey);
+    return;
+  }
+  if (destroyedActorUuids.has(actorKey)) return;
+  destroyedActorUuids.add(actorKey);
+
+  const targetToken = actorToken(actor);
+  if (targetToken) {
+    playWeaponAnimation({ weaponCategory: "ship_destruction", targetToken, totalHits: 1 });
+  }
 }
 
 // ── Main animation dispatcher ─────────────────────────────────────────────
@@ -107,14 +148,15 @@ const CATEGORY_STAGGER = {
   plasma:      550,
 };
 
-async function playWeaponAnimation({ weaponCategory, firingActor, targetToken, totalHits, totalSalvo, blastRadius }) {
+async function playWeaponAnimation({ weaponCategory, firingActor, targetToken, totalHits, totalSalvo, blastRadius, startDelay = 0, impactLocation = null }) {
   if (!weaponCategory) return;
   const assets = CATEGORY_ASSETS[weaponCategory];
   if (!assets) return;
 
   const sourceToken = actorToken(firingActor);
+  const impactAnchor = impactLocation ?? targetToken;
   // Need at least one anchor point
-  if (!sourceToken && !targetToken) return;
+  if (!sourceToken && !impactAnchor) return;
 
   const scale = SCALE[weaponCategory] ?? 1.0;
 
@@ -169,11 +211,12 @@ async function playWeaponAnimation({ weaponCategory, firingActor, targetToken, t
 
     // ── Single impact at target after the last hitting shot ──
     // No delay needed — waitUntilFinished on the last projectile handles timing.
-    if (assets.impact && targetToken && hitCount > 0) {
+    if (assets.impact && impactAnchor && hitCount > 0) {
       seq.effect()
         .file(assets.impact)
-        .atLocation(targetToken)
-        .scale(effectiveScale);
+        .atLocation(impactAnchor)
+        .scale(effectiveScale)
+        .delay(startDelay);
     }
 
     await seq.play();
@@ -193,4 +236,5 @@ export function registerAnimations() {
   Hooks.on(WEAPON_FIRED_HOOK, (data) => {
     playWeaponAnimation(data);
   });
+  Hooks.on("updateActor", handleShipDestruction);
 }

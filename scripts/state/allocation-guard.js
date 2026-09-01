@@ -9,7 +9,8 @@ const ALLOCATION_KEYS = {
 
 const ALLOCATION_POOLS = {
   captain: {
-    locked: data => data.resources?.captain?.allocationLocked,
+    locked: data => data.resources?.captain?.allocationLocked
+      || ((data.crewSize ?? 6) <= 5 && (data.resources?.ordnance?.commitments ?? []).length > 0),
     rolled: data => data.resources?.captain?.leadershipRolled,
     total: data => data.resources?.captain?.leadershipSL ?? 0,
     allocated: data => {
@@ -40,7 +41,7 @@ const ALLOCATION_POOLS = {
     },
   },
   ordnance: {
-    locked: data => data.resources?.ordnance?.actionUsed
+    locked: data => (data.resources?.ordnance?.commitments ?? []).length > 0
       || ((data.crewSize ?? 6) <= 5 && data.resources?.captain?.allocationLocked),
     rolled: data => (data.crewSize ?? 6) <= 5
       ? data.resources?.captain?.leadershipRolled
@@ -81,7 +82,8 @@ export function validateAllocationChange(data, roleId, key, value) {
 
   if (roleId === "captain") {
     const captain = data.resources?.captain ?? {};
-    if (captain.allocationLocked) return null;
+    if (captain.allocationLocked
+      || ((data.crewSize ?? 6) <= 5 && (data.resources?.ordnance?.commitments ?? []).length > 0)) return null;
     const proposed = {
       allocInspire: captain.allocInspire ?? 0,
       allocResolve: captain.allocResolve ?? 0,
@@ -120,7 +122,7 @@ export function validateAllocationChange(data, roleId, key, value) {
 
   if (roleId === "ordnance") {
     const ordnance = data.resources?.ordnance ?? {};
-    if (ordnance.actionUsed) return null;
+    if ((ordnance.commitments ?? []).length > 0) return null;
     const proposed = {
       allocEfficiency: ordnance.allocEfficiency ?? 0,
       allocExpedience: ordnance.allocExpedience ?? 0,

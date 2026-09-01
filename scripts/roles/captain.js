@@ -257,7 +257,7 @@ function _cardIcon(category) {
 async function _onTriage(event, target) {
   const locId = target.dataset.locId;
   if (!locId) return;
-  emitToGM("triageCondition", { locId });
+  emitToGM("triageCondition", { locId, shipActorId: this.actor.id });
 }
 
 async function _onPlayCard(event, target) {
@@ -286,11 +286,11 @@ async function _onPlayCard(event, target) {
       d.render(true);
     });
     if (!sector || sector === "cancel") return;
-    emitToGM("playCard", { cardId, cardInstanceId, sector });
+    emitToGM("playCard", { cardId, cardInstanceId, sector, shipActorId: this.actor.id });
     return;
   }
 
-  emitToGM("playCard", { cardId, cardInstanceId });
+  emitToGM("playCard", { cardId, cardInstanceId, shipActorId: this.actor.id });
 }
 
 async function _onDiscardCard(event, target) {
@@ -298,7 +298,7 @@ async function _onDiscardCard(event, target) {
   const cardId = card?.dataset?.cardId;
   const cardInstanceId = card?.dataset?.cardInstanceId;
   if (!cardId) return;
-  emitToGM("discardCard", { cardId, cardInstanceId });
+  emitToGM("discardCard", { cardId, cardInstanceId, shipActorId: this.actor.id });
 }
 
 async function _onMulligan(event, target) {
@@ -306,7 +306,7 @@ async function _onMulligan(event, target) {
   const cardId = card?.dataset?.cardId;
   const cardInstanceId = card?.dataset?.cardInstanceId;
   if (!cardId) return;
-  await emitToGM("mulligan", { cardId, cardInstanceId });
+  await emitToGM("mulligan", { cardId, cardInstanceId, shipActorId: this.actor.id });
 }
 
 /**
@@ -330,7 +330,7 @@ async function _onRollInitiative() {
     },
   );
 
-  emitToGM("updateResource", { roleId: "captain", key: "initiativeTotal", value: total });
+  await emitToGM("updateResource", { roleId: "captain", key: "initiativeTotal", value: total, shipActorId: this.actor.id });
 }
 
 /** Roll Presence (Leadership) to generate the SL pool for inspire/resolve/initiative allocation. */
@@ -351,18 +351,23 @@ async function _onRollLeadershipSL() {
   if (!result) return;
 
   const sl = Math.max(0, result.SL);
-  emitToGM("updateResource", { roleId: "captain", key: "leadershipSL",     value: sl   });
-  emitToGM("updateResource", { roleId: "captain", key: "leadershipRolled", value: true });
-  emitToGM("updateResource", { roleId: "captain", key: "allocInspire",     value: 0    });
-  emitToGM("updateResource", { roleId: "captain", key: "allocResolve",     value: 0    });
-  emitToGM("updateResource", { roleId: "captain", key: "allocInitiative",  value: 0    });
+  const updates = [
+    { roleId: "captain", key: "leadershipSL", value: sl },
+    { roleId: "captain", key: "leadershipRolled", value: true },
+    { roleId: "captain", key: "allocInspire", value: 0 },
+    { roleId: "captain", key: "allocResolve", value: 0 },
+    { roleId: "captain", key: "allocInitiative", value: 0 },
+  ];
   // In 5-man mode the Presence roll also seeds the ordnance SL pool (no separate Might roll).
   if ((sys.crewSize ?? 6) <= 5) {
-    emitToGM("updateResource", { roleId: "ordnance", key: "bosunSL",        value: sl   });
-    emitToGM("updateResource", { roleId: "ordnance", key: "bosunRolled",    value: true });
-    emitToGM("updateResource", { roleId: "ordnance", key: "allocEfficiency", value: 0   });
-    emitToGM("updateResource", { roleId: "ordnance", key: "allocExpedience", value: 0   });
+    updates.push(
+      { roleId: "ordnance", key: "bosunSL", value: sl },
+      { roleId: "ordnance", key: "bosunRolled", value: true },
+      { roleId: "ordnance", key: "allocEfficiency", value: 0 },
+      { roleId: "ordnance", key: "allocExpedience", value: 0 },
+    );
   }
+  await emitToGM("updateResources", { shipActorId: this.actor.id, updates });
 }
 
 /**
@@ -395,9 +400,9 @@ async function _onAllocLeadershipSL(event, target) {
 
   if (newInspire + newResolve + newInitiative > leadershipSL) return;
 
-  if (stat === "inspire")    emitToGM("updateResource", { roleId: "captain", key: "allocInspire",    value: newInspire    });
-  if (stat === "resolve")    emitToGM("updateResource", { roleId: "captain", key: "allocResolve",    value: newResolve    });
-  if (stat === "initiative") emitToGM("updateResource", { roleId: "captain", key: "allocInitiative", value: newInitiative });
+  if (stat === "inspire")    await emitToGM("updateResource", { roleId: "captain", key: "allocInspire",    value: newInspire,    shipActorId: this.actor.id });
+  if (stat === "resolve")    await emitToGM("updateResource", { roleId: "captain", key: "allocResolve",    value: newResolve,    shipActorId: this.actor.id });
+  if (stat === "initiative") await emitToGM("updateResource", { roleId: "captain", key: "allocInitiative", value: newInitiative, shipActorId: this.actor.id });
 }
 
 // ── Core Action Handlers ─────────────────────────────────────────────────────
@@ -421,7 +426,7 @@ async function _onCaptainCoreAction(event, target) {
       ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Captain.Core.EPNoConditions"));
       return;
     }
-    emitToGM("captainCoreAction", { actionId });
+    emitToGM("captainCoreAction", { actionId, shipActorId: this.actor.id });
     return;
   }
 
@@ -433,14 +438,14 @@ async function _onCaptainCoreAction(event, target) {
       ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Captain.Core.ICNoConditions"));
       return;
     }
-    emitToGM("captainCoreAction", { actionId });
+    emitToGM("captainCoreAction", { actionId, shipActorId: this.actor.id });
     return;
   }
 
   // ── Priority Target: open target-picker popup (Lock 1+ only) ──
   if (actionId === "battleClarity") {
     const BattleClarityPopupClass = ShipCombat._popupClass("battleClarity", BattleClarityPopup);
-    const popup = new BattleClarityPopupClass();
+    const popup = new BattleClarityPopupClass({ shipActor: this.actor });
     popup.render(true);
     return;
   }
@@ -452,7 +457,7 @@ async function _onCaptainCoreAction(event, target) {
       ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Captain.Core.ESEmptyDiscard"));
       return;
     }
-    new EmergencySalvagePopup({ cards: _resolvePileCards(discard, "discard") }).render(true);
+    new EmergencySalvagePopup({ cards: _resolvePileCards(discard, "discard"), shipActorId: this.actor.id }).render(true);
     return;
   }
 
@@ -462,7 +467,7 @@ async function _onCaptainCoreAction(event, target) {
       ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Captain.Core.CONoPending"));
       return;
     }
-    emitToGM("captainCoreAction", { actionId });
+    emitToGM("captainCoreAction", { actionId, shipActorId: this.actor.id });
     return;
   }
 
@@ -472,7 +477,7 @@ async function _onCaptainCoreAction(event, target) {
       ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Captain.Core.DREmptyPile"));
       return;
     }
-    const reservation = await emitToGM("beginDeadReckoning");
+    const reservation = await emitToGM("beginDeadReckoning", { shipActorId: this.actor.id });
     if (!reservation?.ok) {
       const warningKey = reservation?.reason === "emptyPile"
         ? "SHIPCOMBAT.Captain.Core.DREmptyPile"
@@ -484,6 +489,7 @@ async function _onCaptainCoreAction(event, target) {
       cards: _resolvePileCards(reservation.cards, "dead-reckoning"),
       reservationId: reservation.reservationId,
       tailCount: reservation.tailCount,
+      shipActorId: this.actor.id,
     });
     popup.render(true);
     return;
@@ -493,7 +499,7 @@ async function _onCaptainCoreAction(event, target) {
 // ── Exports ──────────────────────────────────────────────────────────────────
 
 async function _onFluxToCharge() {
-  emitToGM("fluxToCharge", {});
+  emitToGM("fluxToCharge", { shipActorId: this.actor.id });
 }
 
 async function _onCaptainReorderCard(event, target) {
@@ -514,7 +520,7 @@ async function _onCaptainReorderCard(event, target) {
     return; // already at edge
   }
 
-  emitToGM("updateResource", { roleId: "captain", key: "hand", value: hand });
+  await emitToGM("updateResource", { roleId: "captain", key: "hand", value: hand, shipActorId: this.actor.id });
 }
 
 export const CAPTAIN_ACTIONS = {

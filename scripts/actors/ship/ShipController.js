@@ -1099,7 +1099,7 @@ export class ShipController {
           hand.splice(toIdx, 0, movedCard);
           _dragCardId = null;
           card.classList.remove("shipcombat-captain-card--drag-over");
-          emitToGM("updateResource", { roleId: "captain", key: "hand", value: hand });
+          await emitToGM("updateResource", { roleId: "captain", key: "hand", value: hand, shipActorId: this.actor.id });
         });
       });
     }
@@ -1240,7 +1240,8 @@ export class ShipController {
     });
 
     const arcBroadcast = !!(SystemAdapter.current.getShipData(this.actor).resources?.gunner?.arcOverlayActive);
-    if (GUNNER_TABS.has(this.sheet.tabGroups?.primary) || arcBroadcast) WeaponArcOverlay.activate(this.actor);
+    const activeTab = this.sheet.tabGroups?.primary ?? this.sheet._tabs?.[0]?.active;
+    if (GUNNER_TABS.has(activeTab) || arcBroadcast) WeaponArcOverlay.activate(this.actor);
     else WeaponArcOverlay.deactivate();
   }
 }

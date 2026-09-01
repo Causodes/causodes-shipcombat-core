@@ -19,20 +19,25 @@ const TIER_COLOUR = {
   4: "#44ccff",
 };
 
-function _effectiveTier(token) {
-  const own = ShipCombatState.ship?.getActiveTokens?.()?.[0];
+function _effectiveTier(token, state) {
+  const own = state.ship?.getActiveTokens?.()?.[0];
   const gs = canvas?.grid?.size;
-  if (!own || !gs) return ShipCombatState.getLockTier(token.id);
+  if (!own || !gs) return state.getLockTier(token.id);
   const tx = token.x + (token.document.width * gs) / 2;
   const ty = token.y + (token.document.height * gs) / 2;
   const sx = own.x + (own.document.width * gs) / 2;
   const sy = own.y + (own.document.height * gs) / 2;
-  return ShipCombatState.getEffectiveLockTier(token.id, Math.hypot(tx - sx, ty - sy) / gs);
+  return state.getEffectiveLockTier(token.id, Math.hypot(tx - sx, ty - sy) / gs);
 }
 
 export class BattleClarityPopup extends foundry.applications.api.HandlebarsApplicationMixin(
   foundry.applications.api.ApplicationV2
 ) {
+
+  constructor({ shipActor = null } = {}, options = {}) {
+    super(options);
+    this.shipActor = shipActor;
+  }
 
   static DEFAULT_OPTIONS = {
     id: "shipcombat-battle-clarity-popup",
@@ -57,18 +62,19 @@ export class BattleClarityPopup extends foundry.applications.api.HandlebarsAppli
     const context = await super._prepareContext(options);
 
     // Sensor lock data from combat state
-    const data  = ShipCombatState.getData();
+    const state = ShipCombatState.forShip(this.shipActor);
+    const data  = state.getData();
 
     // Gather enemy / neutral tokens visible on the scene
     const candidates = canvas.tokens?.placeables?.filter(
-      token => isTargetableContactToken(token, ShipCombatState.ship),
+      token => isTargetableContactToken(token, this.shipActor),
     ) ?? [];
 
     const sortedContactIds = candidates.map(target => target.id).filter(Boolean).sort();
     const recommendedTargetId = data.resources?.sensors?.recommendedTargetId ?? null;
     const priorityTargetId = data.resources?.captain?.priorityTargetId ?? null;
     const targets = candidates.map(t => {
-      const lockTier     = _effectiveTier(t);
+      const lockTier     = _effectiveTier(t, state);
       if (lockTier < 1) return null;   // Lock 0 targets not shown
       return {
         tokenId:      t.id,
@@ -126,7 +132,7 @@ export class BattleClarityPopup extends foundry.applications.api.HandlebarsAppli
   static async _onConfirmDesignate(event, element) {
     const tokenId = element.dataset.tokenId;
     if (!tokenId) return;
-    emitToGM("captainCoreAction", { actionId: "battleClarity", tokenId });
+    emitToGM("captainCoreAction", { actionId: "battleClarity", tokenId, shipActorId: this.shipActor?.id });
     this.close();
   }
 }

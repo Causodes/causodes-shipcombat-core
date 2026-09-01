@@ -27,8 +27,8 @@ import { getDisabledWeaponSectionId } from "../state/weapon-section.js";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-async function _reserveGunnerCore(actionId) {
-  const consumed = await emitToGM("consumePowerCore", { roleId: "gunner", actionId });
+async function _reserveGunnerCore(shipActor, actionId) {
+  const consumed = await emitToGM("consumePowerCore", { roleId: "gunner", actionId, shipActorId: shipActor.id });
   if (!consumed) ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NeedsPowerCore"));
   return consumed;
 }
@@ -74,12 +74,17 @@ async function _onRollOrdnance() {
   if (!result) return;
 
   const sl = Math.max(0, result.SL);
-  emitToGM("updateResource", { roleId: "gunner", key: "ordnanceSL", value: sl });
-  emitToGM("updateResource", { roleId: "gunner", key: "ordnanceRolled", value: true });
-  emitToGM("updateResource", { roleId: "gunner", key: "allocAccuracy", value: 0 });
-  emitToGM("updateResource", { roleId: "gunner", key: "allocPenetration", value: 0 });
-  emitToGM("updateResource", { roleId: "gunner", key: "allocFirepower", value: 0 });
-  emitToGM("updateResource", { roleId: "gunner", key: "slLocked", value: false });
+  await emitToGM("updateResources", {
+    shipActorId: this.actor.id,
+    updates: [
+      { roleId: "gunner", key: "ordnanceSL", value: sl },
+      { roleId: "gunner", key: "ordnanceRolled", value: true },
+      { roleId: "gunner", key: "allocAccuracy", value: 0 },
+      { roleId: "gunner", key: "allocPenetration", value: 0 },
+      { roleId: "gunner", key: "allocFirepower", value: 0 },
+      { roleId: "gunner", key: "slLocked", value: false },
+    ],
+  });
 }
 
 /**
@@ -109,7 +114,7 @@ async function _onAllocGunnerSL(event, target) {
   // Total allocated cannot exceed pool
   if (newAcc + newPen + newFp > pool) return;
 
-  emitToGM("updateResource", { roleId: "gunner", key: `alloc${stat.charAt(0).toUpperCase() + stat.slice(1)}`, value: stat === "accuracy" ? newAcc : stat === "penetration" ? newPen : newFp });
+  await emitToGM("updateResource", { roleId: "gunner", key: `alloc${stat.charAt(0).toUpperCase() + stat.slice(1)}`, value: stat === "accuracy" ? newAcc : stat === "penetration" ? newPen : newFp, shipActorId: this.actor.id });
 }
 
 /**
@@ -127,8 +132,8 @@ async function _onGunnerCoreAction(event, target) {
   }
 
   if (action === "extendRange") {
-    if (!(await _reserveGunnerCore("extendRange"))) return;
-    emitToGM("updateResource", { roleId: "gunner", key: "sensorBandExpanded", value: true });
+    if (!(await _reserveGunnerCore(this.actor, "extendRange"))) return;
+    await emitToGM("updateResource", { roleId: "gunner", key: "sensorBandExpanded", value: true, shipActorId: this.actor.id });
   } else if (action === "chooseCritLoc") {
     // Gunner picks the location NOW (player-side dialog), stores choice for the next crit.
     const buttons = CRIT_LOCATIONS.map(l => ({
@@ -146,17 +151,22 @@ async function _onGunnerCoreAction(event, target) {
       }).render(true);
     });
     if (!locId) return; // cancelled  -  do NOT consume core
-    if (!(await _reserveGunnerCore("chooseCritLoc"))) return;
-    emitToGM("updateResource", { roleId: "gunner", key: "chooseCritLocation", value: true });
-    emitToGM("updateResource", { roleId: "gunner", key: "critLocationChoice",  value: locId });
+    if (!(await _reserveGunnerCore(this.actor, "chooseCritLoc"))) return;
+    await emitToGM("updateResources", {
+      shipActorId: this.actor.id,
+      updates: [
+        { roleId: "gunner", key: "chooseCritLocation", value: true },
+        { roleId: "gunner", key: "critLocationChoice", value: locId },
+      ],
+    });
   } else if (action === "emergencyResupply") {
     // Emergency Resupply: immediately replenish 25% ammo from reserves
     const caps    = _getOrdnanceBayCaps(this.actor);
     const current = sys.resources?.gunner?.ammo ?? 0;
     const gain    = Math.max(1, Math.ceil(caps.ammoMax * 0.25));
     const next    = Math.min(caps.ammoMax, current + gain);
-    if (!(await _reserveGunnerCore("emergencyResupply"))) return;
-    emitToGM("updateResource", { roleId: "gunner", key: "ammo", value: next });
+    if (!(await _reserveGunnerCore(this.actor, "emergencyResupply"))) return;
+    await emitToGM("updateResource", { roleId: "gunner", key: "ammo", value: next, shipActorId: this.actor.id });
   }
 }
 

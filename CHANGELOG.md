@@ -1,10 +1,25 @@
-## Unreleased
+## v2.3.4 (UNRELEASED)
 ### Bug Fixes
 - Apply torpedo damage and conditions to unlinked NPC ship tokens instead of their unchanged base actors
 - Resolve every surviving torpedo warhead separately against armour, applying blast-distance falloff to each hit and Rend/Shield Burn per warhead
 - Use configured flat ordnance damage without forcing zero-damage payloads to deal 1 damage
 - Resolve strike-craft damage and Rend per hit against armour, matching normal weapons
 - Reset the player ship whose sheet initiated Full Combat Reset when multiple player ships exist
+- Keep reduced-crew Gunner/Ordnance aim cones visible on AppV1 ship sheets
+- Apply reduced-crew Ordnance actions and their resource changes to the ship that initiated them
+- Preserve prototype-token images when editing embedded ordnance actors from NPC ship sheets
+- Create ordnance blast messages without the obsolete numeric chat-message type rejected by Foundry 14
+- Add the missing bow-launch ram-lockout localization
+- Let pilots commit optional thrust beyond the minimum ram approach and scale collision damage above 100% thrust
+- Carry ramming ships through the target at 20% of their impact velocity and retain that momentum in both movement modes
+- Anchor ram collision effects at the contact point while the ships continue through and away from the impact
+- Play collision and ship-destruction explosions for ramming when Sequencer and JB2A are available
+- Complete delayed Ordnance actions on the ship that advanced its round and report action commitment failures instead of failing silently
+- Remove generated ordnance Actors together with detonated, recovered, expired, or reset Tokens
+- Play the ship-destruction explosion for hull destruction from any damage source when Sequencer and JB2A are available
+- Allow multiple parallel Ordnance main-action commitments while manpower remains, locking only allocation changes after the first commitment
+- Cancel new Ordnance crew commitments reliably from their right-click badges and return reserved manpower atomically
+- Require explicit ship identity for station socket mutations, bind delegated state handlers to that ship, and apply dependent resource transfers atomically on the GM
 
 ## v2.3.3
 - Normalize malformed fractional stats while retaining integer schema validation

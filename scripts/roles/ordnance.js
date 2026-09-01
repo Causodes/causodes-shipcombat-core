@@ -113,7 +113,6 @@ export function buildOrdnanceContext(sys, opts = {}) {
     : (game?.i18n?.localize("SHIPCOMBAT.Ordnance.OP") ?? "Manpower");
   const bosunSL      = sys.resources?.ordnance?.bosunSL     ?? 0;
   const bosunRolled  = sys.resources?.ordnance?.bosunRolled  ?? false;
-  const actionUsed   = sys.resources?.ordnance?.actionUsed   ?? false;
   const coreUsed     = sys.resources?.ordnance?.coreActionUsed ?? false;
   const coreCount = getPowerCoreCount(sys, "ordnance");
   const hasCoreAssigned     = coreCount > 0;
@@ -175,6 +174,8 @@ export function buildOrdnanceContext(sys, opts = {}) {
   const maxFlightsVal       = opts.ordnanceBayStats?.maxFlights ?? 2;
   const strikeCraftCapacity = opts.ordnanceBayStats?.strikeCraftCapacity ?? 6;
   const torpedoCapacity     = opts.ordnanceBayStats?.torpedoCapacity ?? 4;
+  const ammoCapacity        = opts.ordnanceBayStats?.ammoCapacity ?? 0;
+  const gunnerAmmo          = sys.resources?.gunner?.ammo ?? 0;
 
   // Ship state for action criteria
   const internalFire    = sys.internalFire ?? 0;
@@ -221,6 +222,8 @@ export function buildOrdnanceContext(sys, opts = {}) {
     if (a.id === "launchCraft"     && criteriaMet && armedCraft <= 0) { criteriaMet = false; disabledReason = game.i18n.localize("SHIPCOMBAT.Ordnance.NoArmedCraft"); }
     if (a.id === "launchCraft"     && criteriaMet && (deployedCraftCount >= maxFlightsVal || deployedCraftCount + craftDestroyed >= strikeCraftCapacity)) { criteriaMet = false; disabledReason = game.i18n.localize("SHIPCOMBAT.Ordnance.FlightCapacityReached"); }
     if (a.id === "recallCraft"     && deployedCraft.length === 0) { criteriaMet = false; disabledReason = game.i18n.localize("SHIPCOMBAT.Ordnance.NoCraftDeployed"); }
+    if (a.id === "loadAmmo"        && (ammoCapacity <= 0 || gunnerAmmo >= ammoCapacity)) { criteriaMet = false; disabledReason = game.i18n.localize("SHIPCOMBAT.Ordnance.AmmoFull"); }
+    if (a.id === "generatePower"   && ((opts.reactorStats?.auxPowerCapacity ?? 0) <= 0 || (opts.reactorStats?.reserveMultiplier ?? 0) <= 0 || auxPower >= auxPowerMax)) { criteriaMet = false; disabledReason = game.i18n.localize("SHIPCOMBAT.Ordnance.AuxPowerFull"); }
     // Bow ordnance locked after ramming
     if (prowGunLocked && ["armTorpedo", "launchTorpedo", "torpedoSalvo", "emergencyLaunch", "armCraft", "launchCraft"].includes(a.id)) { criteriaMet = false; disabledReason = game.i18n.localize("SHIPCOMBAT.Ordnance.BowLaunchLocked"); }
 
@@ -290,6 +293,7 @@ export function buildOrdnanceContext(sys, opts = {}) {
       coreActionLabel: c.action?.startsWith("core:") ? game.i18n.localize(ORDNANCE_MASTER_CORE_ACTIONS.find(a => a.id === c.action.slice(5))?.label ?? c.action.slice(5)) : null,
       coreActionIcon: c.action?.startsWith("core:") ? "fa-solid fa-bolt" : null,
       index: i,
+      id: c.id ?? "",
       actionLabel: c.action?.startsWith("core:")
         ? game.i18n.format("SHIPCOMBAT.Ordnance.CoreFatigueLabel", { action: game.i18n.localize(ORDNANCE_MASTER_CORE_ACTIONS.find(a => a.id === c.action.slice(5))?.label ?? c.action.slice(5)) })
         : game.i18n.localize(ORDNANCE_MASTER_ACTIONS[c.action]?.label ?? c.action),
@@ -425,8 +429,7 @@ export function buildOrdnanceContext(sys, opts = {}) {
     auxPowerPct,
     bosunSL,
     bosunRolled,
-    actionUsed,
-    allocationLocked: actionUsed,
+    allocationLocked: commitments.length > 0,
     coreUsed,
     coreCount,
     hasCoreAssigned,
@@ -551,8 +554,13 @@ async function _onRollOrdnanceMaster(event, target) {
   if (!result) return;
 
   const sl = Math.max(0, result.SL ?? 0);
-  emitToGM("updateResource", { roleId: "ordnance", key: "bosunSL", value: sl });
-  emitToGM("updateResource", { roleId: "ordnance", key: "bosunRolled", value: true });
+  await emitToGM("updateResources", {
+    shipActorId: this.actor.id,
+    updates: [
+      { roleId: "ordnance", key: "bosunSL", value: sl },
+      { roleId: "ordnance", key: "bosunRolled", value: true },
+    ],
+  });
 }
 
 /**
@@ -564,7 +572,7 @@ async function _onAllocOrdnanceSL(event, target) {
   const sys = SystemAdapter.current.getShipData(this.actor);
   const captain = sys.resources?.captain ?? {};
   const ordnance = sys.resources?.ordnance ?? {};
-  if (ordnance.actionUsed) return;
+  if ((ordnance.commitments ?? []).length > 0) return;
   if ((sys.crewSize ?? 6) <= 5 && captain.allocationLocked) return;
   const stat = target.dataset.stat;
   const delta = Number(target.dataset.delta);
@@ -592,9 +600,9 @@ async function _onAllocOrdnanceSL(event, target) {
   }
 
   if (stat === "efficiency") {
-    emitToGM("updateResource", { roleId: "ordnance", key: "allocEfficiency", value: newEfficiency });
+    await emitToGM("updateResource", { roleId: "ordnance", key: "allocEfficiency", value: newEfficiency, shipActorId: this.actor.id });
   } else {
-    emitToGM("updateResource", { roleId: "ordnance", key: "allocExpedience", value: newExpedience });
+    await emitToGM("updateResource", { roleId: "ordnance", key: "allocExpedience", value: newExpedience, shipActorId: this.actor.id });
   }
 }
 
@@ -608,166 +616,101 @@ async function _onOrdnanceMasterAction(event, target) {
   const entry    = ORDNANCE_MASTER_ACTIONS[actionId];
   if (!entry) return;
 
-  const committed = await emitToGM("commitOrdnanceAction", { actionId });
-  if (!committed?.ok) {
-    if (committed?.reason === "insufficientCrew") {
-      ui.notifications.warn(game.i18n.format("SHIPCOMBAT.Ordnance.InsufficientCrew", { need: committed.need, have: committed.have }));
-    }
-    return;
-  }
+  const shipToken = this.actor.getActiveTokens()?.[0];
+  let spawnRequests = [];
+  let recoveringTokenId = null;
 
-  // ── Side effects: some actions directly trigger ordnance spawning ──
-
-  if (actionId === "launchTorpedo") {
-    // Decrement armed torpedo counter
-    const armed = sys.resources?.ordnance?.armedTorpedoes ?? 0;
-    if (armed <= 0) {
-      ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Ordnance.NoArmedTorpedoes"));
-      return;
-    }
-
-    // Pick template if multiple loaded
-    const torpTemplates = _getActiveTemplates(sys).torpedoTemplates;
-    if (!torpTemplates.length) return;
-    const templateId = torpTemplates.length > 1
-      ? await _promptTemplate(torpTemplates, game.i18n.localize("SHIPCOMBAT.Label.TorpedoActors"))
-      : torpTemplates[0]?.id ?? null;
-    if (torpTemplates.length > 1 && !templateId) return; // cancelled
-
-    emitToGM("updateResource", { roleId: "ordnance", key: "armedTorpedoes", value: armed - 1 });
-
-    const side = await _promptSide(sys.ordnanceLaunchSides?.torpedo);
-    if (!side) return;
-    const shipToken = this.actor.getActiveTokens()?.[0];
-    const spawn = side === "bow" ? _computeBowSpawn(shipToken)
-      : side === "stern" ? _computeSternSpawn(shipToken)
-      : _computePerpendicularSpawn(shipToken, side);
-    emitToGM("spawnOrdnance", {
-      type: "torpedo",
-      templateId,
-      parentShipTokenId: shipToken?.id ?? "",
-      ...spawn,
-    });
-  }
-
-  if (actionId === "torpedoSalvo") {
-    // Consumes 1 armed torpedo, spawns 2 tokens each at full salvo-size hull
-    const armed = sys.resources?.ordnance?.armedTorpedoes ?? 0;
-    if (armed <= 0) {
-      ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Ordnance.NoArmedTorpedoes"));
-      return;
-    }
-    const torpTemplates = _getActiveTemplates(sys).torpedoTemplates;
-    if (!torpTemplates.length) return;
-    const templateId = torpTemplates.length > 1
-      ? await _promptTemplate(torpTemplates, game.i18n.localize("SHIPCOMBAT.Label.TorpedoActors"))
-      : torpTemplates[0]?.id ?? null;
-    if (torpTemplates.length > 1 && !templateId) return;
-
-    emitToGM("updateResource", { roleId: "ordnance", key: "armedTorpedoes", value: armed - 1 });
-
-    const side = await _promptSide(sys.ordnanceLaunchSides?.torpedo);
-    if (!side) return;
-    const shipToken = this.actor.getActiveTokens()?.[0];
-    const spawn1 = side === "bow" ? _computeBowSpawn(shipToken)
-      : side === "stern" ? _computeSternSpawn(shipToken)
-      : _computePerpendicularSpawn(shipToken, side);
-    // Offset the second token slightly so they don't overlap
-    const spawn2 = { ...spawn1, x: (spawn1.x ?? 0) + (canvas.grid?.size ?? 100) };
-    emitToGM("spawnOrdnance", { type: "torpedo", templateId, parentShipTokenId: shipToken?.id ?? "", ...spawn1 });
-    emitToGM("spawnOrdnance", { type: "torpedo", templateId, parentShipTokenId: shipToken?.id ?? "", ...spawn2 });
-  }
-
-  if (actionId === "emergencyLaunch") {
-    // Spawns 1 torpedo with hull=1 (single warhead), bypasses armed status
+  if (["launchTorpedo", "torpedoSalvo", "emergencyLaunch"].includes(actionId)) {
     const torpTemplates = _getActiveTemplates(sys).torpedoTemplates;
     if (!torpTemplates.length) {
       ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Ordnance.NoTorpedoConfig"));
       return;
     }
+    if (!shipToken) return;
     const templateId = torpTemplates.length > 1
       ? await _promptTemplate(torpTemplates, game.i18n.localize("SHIPCOMBAT.Label.TorpedoActors"))
       : torpTemplates[0]?.id ?? null;
-    if (torpTemplates.length > 1 && !templateId) return;
-
+    if (!templateId) return;
     const side = await _promptSide(sys.ordnanceLaunchSides?.torpedo);
     if (!side) return;
-    const shipToken = this.actor.getActiveTokens()?.[0];
     const spawn = side === "bow" ? _computeBowSpawn(shipToken)
       : side === "stern" ? _computeSternSpawn(shipToken)
       : _computePerpendicularSpawn(shipToken, side);
-    emitToGM("spawnOrdnance", {
-      type: "torpedo",
-      templateId,
-      parentShipTokenId: shipToken?.id ?? "",
-      forcedHull: 1,
-      ...spawn,
-    });
-  }
-
-  if (actionId === "launchCraft") {
-    // Pick template if multiple loaded
+    spawnRequests.push({ type: "torpedo", templateId, parentShipTokenId: shipToken.id, ...spawn });
+    if (actionId === "torpedoSalvo") {
+      spawnRequests.push({
+        type: "torpedo",
+        templateId,
+        parentShipTokenId: shipToken.id,
+        ...spawn,
+        x: (spawn.x ?? 0) + (canvas.grid?.size ?? 100),
+      });
+    } else if (actionId === "emergencyLaunch") {
+      spawnRequests[0].forcedHull = 1;
+    }
+  } else if (actionId === "launchCraft") {
     const craftTemplates = _getActiveTemplates(sys).craftTemplates;
-    if (!craftTemplates.length) return;
-    const armedCraftNow = sys.resources?.ordnance?.armedCraft ?? 0;
-    if (armedCraftNow <= 0) return ui.notifications.warn("No craft armed for launch.");
+    if (!craftTemplates.length || !shipToken) return;
     const templateId = craftTemplates.length > 1
       ? await _promptTemplate(craftTemplates, game.i18n.localize("SHIPCOMBAT.Label.StrikeCraftActors"))
       : craftTemplates[0]?.id ?? null;
-    if (craftTemplates.length > 1 && !templateId) return; // cancelled
-
-    const shipToken = this.actor.getActiveTokens()?.[0];
+    if (!templateId) return;
     const side = await _promptSide(sys.ordnanceLaunchSides?.strikeCraft);
     if (!side) return;
     const spawn = side === "bow" ? _computeBowSpawn(shipToken)
       : side === "stern" ? _computeSternSpawn(shipToken)
       : _computePerpendicularSpawn(shipToken, side);
-    emitToGM("spawnOrdnance", {
-      type: "strikeCraft",
-      templateId,
-      parentShipTokenId: shipToken?.id ?? "",
-      ...spawn,
-    });
-    emitToGM("updateResource", { roleId: "ordnance", key: "armedCraft", value: armedCraftNow - 1 });
-  }
-
-  if (actionId === "loadPayload") {
-    // No popup  -  commitment completes after duration, incrementing availablePayloads
-    }
-
-  if (actionId === "recallCraft") {
-    // Find nearby craft within 3VU, show selection popup, then recover selected craft
+    spawnRequests.push({ type: "strikeCraft", templateId, parentShipTokenId: shipToken.id, ...spawn });
+  } else if (actionId === "recallCraft") {
     const nearbyCraft = _findNearbyCraft(this.actor, 3);
     if (!nearbyCraft.length) {
       ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Ordnance.NoCraftInRange"));
       return;
     }
-
-    // Build ship position for the arrow overlay
-    const shipToken = this.actor.getActiveTokens()?.[0];
-    const gs = canvas.grid.size;
+    const gridSize = canvas.grid.size;
     const shipPos = shipToken ? {
-      x: shipToken.center?.x ?? (shipToken.x + (shipToken.document.width  ?? 1) * gs / 2),
-      y: shipToken.center?.y ?? (shipToken.y + (shipToken.document.height ?? 1) * gs / 2),
+      x: shipToken.center?.x ?? (shipToken.x + (shipToken.document.width ?? 1) * gridSize / 2),
+      y: shipToken.center?.y ?? (shipToken.y + (shipToken.document.height ?? 1) * gridSize / 2),
     } : null;
+    recoveringTokenId = await new RecoverCraftPopup({ nearbyCraft, shipPos }).show();
+    if (!recoveringTokenId) return;
+  }
 
-    const popup = new RecoverCraftPopup({ nearbyCraft, shipPos });
-    const selectedTokenId = await popup.show();
-    if (!selectedTokenId) return;
+  const committed = await emitToGM("commitOrdnanceAction", {
+    actionId,
+    shipActorId: this.actor.id,
+  });
+  if (!committed?.ok) {
+    if (committed?.reason === "insufficientCrew") {
+      ui.notifications.warn(game.i18n.format("SHIPCOMBAT.Ordnance.InsufficientCrew", { need: committed.need, have: committed.have }));
+    } else if (committed?.reason === "noArmedTorpedoes") {
+      ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Ordnance.NoArmedTorpedoes"));
+    } else {
+      ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Ordnance.ActionFailed"));
+    }
+    return;
+  }
+  ui.notifications.info(game.i18n.format("SHIPCOMBAT.Ordnance.ActionQueued", {
+    action: game.i18n.localize(entry.label),
+    turns: committed.duration,
+  }));
 
-    // Set recovering flag so deleteToken hook doesn't count as destroyed
-    const tokenDoc = canvas.scene.tokens.get(selectedTokenId);
+  for (const request of spawnRequests) {
+    await emitToGM("spawnOrdnance", request);
+  }
+
+  if (recoveringTokenId) {
+    const tokenDoc = canvas.scene.tokens.get(recoveringTokenId);
     if (tokenDoc?.actor) {
       await tokenDoc.actor.setFlag(MODULE_ID, "recovering", true);
     }
-
-    // Remove token from canvas
-    await canvas.scene.deleteEmbeddedDocuments("Token", [selectedTokenId]);
-
-    // Increment recovering counter
-    const recovering = sys.resources?.ordnance?.craftRecovering ?? 0;
-    emitToGM("updateResource", { roleId: "ordnance", key: "craftRecovering", value: recovering + 1 });
-
+    const deleted = await emitToGM("deleteOrdnanceTokens", { tokenIds: [recoveringTokenId] });
+    if ((deleted?.tokensDeleted ?? 0) > 0) {
+      await emitToGM("adjustResources", {
+        shipActorId: this.actor.id,
+        adjustments: [{ roleId: "ordnance", key: "craftRecovering", delta: 1 }],
+      });
+    }
   }
 }
 
@@ -789,7 +732,7 @@ async function _onOrdnanceMasterCoreAction(event, target) {
   let coreReserved = false;
   const reserveCore = async () => {
     if (coreReserved) return true;
-    coreReserved = await emitToGM("consumePowerCore", { roleId: "ordnance", actionId });
+    coreReserved = await emitToGM("consumePowerCore", { roleId: "ordnance", actionId, shipActorId: this.actor.id });
     if (!coreReserved) {
       ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NeedsPowerCore"));
     }
@@ -840,11 +783,21 @@ async function _onOrdnanceMasterCoreAction(event, target) {
 
     if (choice === "destroyed") {
       // First use on a destroyed craft: moves 1 airframe to partial repair
-      emitToGM("updateResource", { roleId: "ordnance", key: "craftDestroyed",       value: craftDestroyed - 1 });
-      emitToGM("updateResource", { roleId: "ordnance", key: "craftPartialRecovery", value: craftPartialRecovery + 1 });
+      await emitToGM("adjustResources", {
+        shipActorId: this.actor.id,
+        requirements: [{ roleId: "ordnance", key: "craftDestroyed", min: 1 }],
+        adjustments: [
+          { roleId: "ordnance", key: "craftDestroyed", delta: -1, min: 0 },
+          { roleId: "ordnance", key: "craftPartialRecovery", delta: 1 },
+        ],
+      });
     } else if (choice === "partial") {
       // Second use completes the repair  -  craft returns to empty bay slot (available for arming)
-      emitToGM("updateResource", { roleId: "ordnance", key: "craftPartialRecovery", value: craftPartialRecovery - 1 });
+      await emitToGM("adjustResources", {
+        shipActorId: this.actor.id,
+        requirements: [{ roleId: "ordnance", key: "craftPartialRecovery", min: 1 }],
+        adjustments: [{ roleId: "ordnance", key: "craftPartialRecovery", delta: -1, min: 0 }],
+      });
     }
   }
 
@@ -881,49 +834,14 @@ async function _onOrdnanceMasterCoreAction(event, target) {
     const idx = Number(result);
     if (Number.isNaN(idx) || idx < 0 || idx >= commitments.length) return;
 
-    const removed = commitments.splice(idx, 1)[0];
-    const manpower = sys.resources?.ordnance?.manpower ?? 0;
     if (!(await reserveCore())) return;
-
-    // Return crew and clear commitment
-    emitToGM("updateResource", { roleId: "ordnance", key: "commitments", value: commitments });
-    emitToGM("updateResource", { roleId: "ordnance", key: "manpower",    value: manpower + (removed.crewCount ?? 0) });
-
-    // Apply completion side-effect immediately (mirrors advanceRound logic)
-    switch (removed.action) {
-      case "armTorpedo": {
-        const armed = sys.resources?.ordnance?.armedTorpedoes ?? 0;
-        emitToGM("updateResource", { roleId: "ordnance", key: "armedTorpedoes", value: armed + 1 });
-        break;
-      }
-      case "armCraft": {
-        const armed = sys.resources?.ordnance?.armedCraft ?? 0;
-        emitToGM("updateResource", { roleId: "ordnance", key: "armedCraft", value: armed + 1 });
-        break;
-      }
-      case "loadPayload": {
-        const avail = sys.resources?.ordnance?.availablePayloads ?? 0;
-        emitToGM("updateResource", { roleId: "ordnance", key: "availablePayloads", value: avail + 1 });
-        break;
-      }
-      case "damageControl": {
-        const fire = sys.internalFire ?? 0;
-        if (fire > 0) emitToGM("updateResource", { roleId: "internalFire", key: "", value: Math.max(0, fire - 1) });
-        break;
-      }
-      case "hullRepairParty": {
-        const hullDmg = SystemAdapter.current.getShipData(this.actor)?.hull?.value ?? 0;
-        if (hullDmg > 0) emitToGM("updateResource", { roleId: "hull", key: "value", value: Math.max(0, hullDmg - 2) });
-        break;
-      }
-      case "loadAmmo": {
-        const gunAmmo  = sys.resources?.gunner?.ammo ?? 0;
-        const weapBay  = this.actor.items.find(i => i.system?.slot === "weaponsBay");
-        const ammoCap  = weapBay?.system?.bayAmmoCapacity ?? 0;
-        emitToGM("updateResource", { roleId: "gunner", key: "ammo", value: Math.min(ammoCap, gunAmmo + Math.ceil(ammoCap * 0.2)) });
-        break;
-      }
-      // core-type fatigue and others: no extra side effect
+    const completed = await emitToGM("completeOrdnanceCommitment", {
+      shipActorId: this.actor.id,
+      commitmentId: commitments[idx].id ?? null,
+      index: idx,
+    });
+    if (!completed?.ok) {
+      ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Ordnance.CommitmentNotFound"));
     }
   }
 
@@ -958,11 +876,23 @@ async function _onOrdnanceMasterCoreAction(event, target) {
     const availablePayloads = sys.resources?.ordnance?.availablePayloads ?? 0;
     if (!(await reserveCore())) return;
     if (choice === "torpedo") {
-      emitToGM("updateResource", { roleId: "gunner",   key: "ammo",              value: ammo - 6 });
-      emitToGM("updateResource", { roleId: "ordnance", key: "armedTorpedoes",    value: armedTorpedoes + 1 });
+      await emitToGM("adjustResources", {
+        shipActorId: this.actor.id,
+        requirements: [{ roleId: "gunner", key: "ammo", min: 6 }],
+        adjustments: [
+          { roleId: "gunner", key: "ammo", delta: -6, min: 0 },
+          { roleId: "ordnance", key: "armedTorpedoes", delta: 1 },
+        ],
+      });
     } else {
-      emitToGM("updateResource", { roleId: "gunner",   key: "ammo",              value: ammo - 4 });
-      emitToGM("updateResource", { roleId: "ordnance", key: "availablePayloads", value: availablePayloads + 1 });
+      await emitToGM("adjustResources", {
+        shipActorId: this.actor.id,
+        requirements: [{ roleId: "gunner", key: "ammo", min: 4 }],
+        adjustments: [
+          { roleId: "gunner", key: "ammo", delta: -4, min: 0 },
+          { roleId: "ordnance", key: "availablePayloads", delta: 1 },
+        ],
+      });
     }
   }
 
@@ -997,18 +927,23 @@ async function _onOrdnanceMasterCoreAction(event, target) {
         const permanentLoss = componentManpower - manpowerMax;
         const restore = Math.max(1, Math.ceil(permanentLoss * 0.10));
         const newMax = Math.min(componentManpower, manpowerMax + restore);
-        emitToGM("updateResource", { roleId: "ordnance", key: "manpowerMax", value: newMax });
-        emitToGM("updateResource", { roleId: "ordnance", key: "manpower",    value: manpower + restore });
+        await emitToGM("adjustResources", {
+          shipActorId: this.actor.id,
+          adjustments: [
+            { roleId: "ordnance", key: "manpowerMax", delta: restore, max: componentManpower },
+            { roleId: "ordnance", key: "manpower", delta: restore, max: componentManpower },
+          ],
+        });
       } else {
         // Temp gain: 25% of current manpower cap
         const tempGain = Math.max(1, Math.ceil(manpowerMax * 0.25));
-        emitToGM("updateResource", { roleId: "ordnance", key: "manpower", value: manpower + tempGain });
+        await emitToGM("adjustResources", { shipActorId: this.actor.id, adjustments: [{ roleId: "ordnance", key: "manpower", delta: tempGain }] });
       }
     } else {
       // No permanent loss  -  temp bonus: 25% of manpower cap
       if (!(await reserveCore())) return;
       const tempGain = Math.max(1, Math.ceil(manpowerMax * 0.25));
-      emitToGM("updateResource", { roleId: "ordnance", key: "manpower", value: manpower + tempGain });
+      await emitToGM("adjustResources", { shipActorId: this.actor.id, adjustments: [{ roleId: "ordnance", key: "manpower", delta: tempGain }] });
     }
   }
 
@@ -1023,15 +958,17 @@ async function _onOrdnanceMasterCoreAction(event, target) {
     if (!(await reserveCore())) return;
 
     // Always: immediately arm 1 torpedo and reset the auto-arm cycle
-    const armedTorpedoes = sys.resources?.ordnance?.armedTorpedoes ?? 0;
-    emitToGM("updateResource", { roleId: "ordnance", key: "armedTorpedoes", value: armedTorpedoes + 1 });
-    emitToGM("updateResource", { roleId: "ordnance", key: "autoArmTimer",   value: 3 });
+    const adjustments = [
+      { roleId: "ordnance", key: "armedTorpedoes", delta: 1 },
+      { roleId: "ordnance", key: "autoArmTimer", value: 3 },
+    ];
 
     if (crewSize >= 6) {
       // Full crew: also trigger auto-load (1 free payload)
-      const availablePayloads = sys.resources?.ordnance?.availablePayloads ?? 0;
-      emitToGM("updateResource", { roleId: "ordnance", key: "availablePayloads", value: availablePayloads + 1 });
-      emitToGM("updateResource", { roleId: "ordnance", key: "autoLoadTimer",     value: 2 });
+      adjustments.push(
+        { roleId: "ordnance", key: "availablePayloads", delta: 1 },
+        { roleId: "ordnance", key: "autoLoadTimer", value: 2 },
+      );
     } else {
       // Smaller crew: grant AP equal to half the reactor's AP-per-core value
       const reactorComp = this.actor.items?.find(i => i.type === `${MODULE_ID}.component` && i.system?.slot === "reactor" && i.system?.equipped !== false);
@@ -1039,10 +976,10 @@ async function _onOrdnanceMasterCoreAction(event, target) {
       const apGain = Math.floor(reserveMultiplier / 2);
       if (apGain > 0) {
         const auxCap  = reactorComp?.system?.bankCapacity ?? 0;
-        const currentAP = sys.resources?.engineer?.auxiliaryPower ?? 0;
-        emitToGM("updateResource", { roleId: "engineer", key: "auxiliaryPower", value: Math.min(auxCap, currentAP + apGain) });
+        adjustments.push({ roleId: "engineer", key: "auxiliaryPower", delta: apGain, max: auxCap });
       }
     }
+    await emitToGM("adjustResources", { shipActorId: this.actor.id, adjustments });
   }
 
   // Future core actions still reserve through the same atomic backend even if
@@ -1056,28 +993,16 @@ async function _onOrdnanceMasterCoreAction(event, target) {
  * lockStabilizer, reinforcedBulkheads) only need the flag set on the role
  * and are checked at usage time. Immediate-effect payloads modify resources.
  */
-function _applyImmediatePayloadEffect(sys, payloadId, { heatCapacity = 0 } = {}) {
+function _immediatePayloadAdjustments(payloadId, { heatCapacity = 0 } = {}) {
   switch (payloadId) {
-    case "emergencyCoolant": {
-      const heat = sys.resources?.engineer?.heat ?? 0;
-      const reduction = Math.max(1, Math.ceil(heatCapacity * 0.2));
-      emitToGM("updateResource", { roleId: "engineer", key: "heat", value: Math.max(0, heat - reduction) });
-      break;
-    }
-    case "auxCapacitors": {
-      const powerCores = sys.resources?.engineer?.powerCores ?? 0;
-      emitToGM("updateResource", { roleId: "engineer", key: "powerCores", value: powerCores + 1 });
-      break;
-    }
-    case "cogitatorDataSlate":
-    case "fireSuppression": {
-      emitToGM("captainPayloadActivate", { payloadId });
-      break;
-    }
+    case "emergencyCoolant":
+      return [{ roleId: "engineer", key: "heat", delta: -Math.max(1, Math.ceil(heatCapacity * 0.2)), min: 0 }];
+    case "auxCapacitors":
+      return [{ roleId: "engineer", key: "powerCores", delta: 1 }];
     // fuelCatalyst: +2 speed bonus is passive (checked in buildHelmContext)
     // apShells, scatterShot, chaffPods, sensorBuoy, lockStabilizer, reinforcedBulkheads: flag-based
     default:
-      break;
+      return [];
   }
 }
 
@@ -1104,14 +1029,27 @@ async function _onSendPayload(event, target) {
     return;
   }
 
-  // Immediately deliver payload and decrement counter
-  emitToGM("updateResource", { roleId: pDef.targetRole, key: "payload", value: pDef.id });
-  emitToGM("updateResource", { roleId: "ordnance", key: "availablePayloads", value: available - 1 });
-
-  // Apply immediate resource effects
   const reactorComp = this.actor.items?.find(i => i.type === `${MODULE_ID}.component` && i.system?.slot === "reactor" && i.system?.equipped !== false);
   const heatCapacity = reactorComp?.system?.heatCapacity ?? 0;
-  _applyImmediatePayloadEffect(sys, pDef.id, { heatCapacity });
+  const delivered = await emitToGM("adjustResources", {
+    shipActorId: this.actor.id,
+    requirements: [
+      { roleId: "ordnance", key: "availablePayloads", min: 1 },
+      { roleId: pDef.targetRole, key: "payload", equals: "" },
+    ],
+    adjustments: [
+      { roleId: pDef.targetRole, key: "payload", value: pDef.id },
+      { roleId: "ordnance", key: "availablePayloads", delta: -1, min: 0 },
+      ..._immediatePayloadAdjustments(pDef.id, { heatCapacity }),
+    ],
+  });
+  if (!delivered?.ok) {
+    ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Ordnance.ActionFailed"));
+    return;
+  }
+  if (["cogitatorDataSlate", "fireSuppression"].includes(pDef.id)) {
+    await emitToGM("captainPayloadActivate", { payloadId: pDef.id, shipActorId: this.actor.id });
+  }
 
 }
 
@@ -1278,7 +1216,7 @@ async function _onDiscardPayload(event, target) {
   const roleId = target.dataset.roleId;
   if (!roleId) return;
 
-  emitToGM("updateResource", { roleId, key: "payload", value: "" });
+  await emitToGM("updateResource", { roleId, key: "payload", value: "", shipActorId: this.actor.id });
 }
 
 /**
@@ -1327,25 +1265,21 @@ async function _onMarkOrdnanceDone(event, target) {
  * data-index = commitment array index
  */
 async function _onCancelCommitment(event, target) {
-  const sys   = SystemAdapter.current.getShipData(this.actor);
-  const index = Number(target.dataset.index);
-  const commitments = [...(sys.resources?.ordnance?.commitments ?? [])];
-  if (index < 0 || index >= commitments.length) return;
-  const c = commitments[index];
-  const currentRound = sys.round ?? 0;
-  if (c.addedRound !== currentRound) {
-    ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Ordnance.CannotCancelOldCommitment"));
+  const result = await emitToGM("cancelOrdnanceCommitment", {
+    shipActorId: this.actor.id,
+    commitmentId: target.dataset.commitmentId || null,
+    index: Number(target.dataset.index),
+  });
+  if (result?.ok) {
+    ui.notifications.info(game.i18n.localize("SHIPCOMBAT.Ordnance.CommitmentCancelled"));
     return;
   }
-  // Prevent canceling actions that gave their benefit immediately on assignment
-  if (ORDNANCE_MASTER_ACTIONS[c.action]?.noCancel) {
-    ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Ordnance.CannotCancelImmediateAction"));
-    return;
-  }
-  commitments.splice(index, 1);
-  const manpower = sys.resources?.ordnance?.manpower ?? 0;
-  emitToGM("updateResource", { roleId: "ordnance", key: "commitments", value: commitments });
-  emitToGM("updateResource", { roleId: "ordnance", key: "manpower", value: manpower + (c.crewCount ?? 0) });
+  const warningKey = result?.reason === "oldCommitment"
+    ? "SHIPCOMBAT.Ordnance.CannotCancelOldCommitment"
+    : result?.reason === "immediateAction"
+      ? "SHIPCOMBAT.Ordnance.CannotCancelImmediateAction"
+      : "SHIPCOMBAT.Ordnance.CommitmentNotFound";
+  ui.notifications.warn(game.i18n.localize(warningKey));
 }
 
 // ── Exports ──────────────────────────────────────────────────────────────────

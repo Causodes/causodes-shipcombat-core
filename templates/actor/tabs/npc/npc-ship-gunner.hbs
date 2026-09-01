@@ -101,10 +101,13 @@
 
     {{!-- ═══════ Weapon Batteries (by position) ═══════ --}}
     {{#each weaponSections}}
-    <div class="sheet-list shipcombat-weapon-battery-section{{#if (and @root.helm.prowGunLocked (shipcombatEq this.id "prow"))}} shipcombat-prow-locked{{/if}}{{#if (and this.items.length (shipcombatEq this.id @root.gunnerCtx.blindedSectionId))}} shipcombat-sensor-blind{{/if}}" data-component-slot="weapon" data-component-position="{{this.id}}">
+    <div class="sheet-list shipcombat-role-section shipcombat-weapon-battery-section{{#if (and this.items.length (shipcombatEq this.id @root.gunnerCtx.blindedSectionId))}} shipcombat-sensor-blind{{/if}}" data-component-slot="weapon" data-component-position="{{this.id}}">
         {{#if (and @root.helm.prowGunLocked (shipcombatEq this.id "prow"))}}
-        <div class="shipcombat-prow-locked-overlay">
-            <i class="fa-solid fa-ban"></i> {{localize "SHIPCOMBAT.Ram.ProwGunLocked"}}
+        <div class="shipcombat-section-overlay shipcombat-section-overlay--taken">
+            <div class="shipcombat-overlay-lock-indicator">
+                <i class="fa-solid fa-lock fa-lg"></i>
+                <span>{{localize "SHIPCOMBAT.Ram.ProwGunLocked"}}</span>
+            </div>
         </div>
         {{/if}}
         {{#if (and this.items.length (shipcombatEq this.id @root.gunnerCtx.blindedSectionId))}}

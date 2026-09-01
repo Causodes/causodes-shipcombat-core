@@ -259,6 +259,16 @@ Hooks.once("ready", () => {
   registerAnimations();
 });
 
+function refreshOrdnanceParentSheet(tokenDocument) {
+  if (!isOrdnance(tokenDocument?.actor)) return;
+  const parentTokenId = SystemAdapter.current.getShipData(tokenDocument.actor)?.parentShipTokenId;
+  const parentActor = parentTokenId ? canvas?.scene?.tokens.get(parentTokenId)?.actor : null;
+  if (parentActor?.sheet?.rendered) parentActor.sheet.render();
+}
+
+Hooks.on("createToken", refreshOrdnanceParentSheet);
+Hooks.on("deleteToken", refreshOrdnanceParentSheet);
+
 // ── Orphaned embeddedEdit actor cleanup ───────────────────────────────────
 // Purge temp Edit actors left behind when the browser was closed mid-session
 // (sheet.close() normally deletes them, but only runs when the sheet is closed).

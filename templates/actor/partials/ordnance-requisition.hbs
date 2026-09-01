@@ -20,14 +20,14 @@
                 <div class="shipcombat-alloc-row">
                     <button type="button" class="shipcombat-alloc-btn" data-action="allocOrdnanceSL" data-stat="efficiency" data-delta="-1"
                             {{#unless ordnanceCtx.bosunRolled}}disabled{{/unless}}
-                            {{#if ordnanceCtx.actionUsed}}disabled{{/if}}
+                            {{#if ordnanceCtx.allocationLocked}}disabled{{/if}}
                             {{#unless ordnanceCtx.allocEfficiency}}disabled{{/unless}}>
                         &minus;
                     </button>
                     <span class="shipcombat-helm-stat-value">{{ordnanceCtx.allocEfficiency}}</span>
                     <button type="button" class="shipcombat-alloc-btn" data-action="allocOrdnanceSL" data-stat="efficiency" data-delta="1"
                             {{#unless ordnanceCtx.bosunRolled}}disabled{{/unless}}
-                            {{#if ordnanceCtx.actionUsed}}disabled{{/if}}
+                            {{#if ordnanceCtx.allocationLocked}}disabled{{/if}}
                             {{#if (gte (add ordnanceCtx.allocEfficiency ordnanceCtx.allocExpedience) ordnanceCtx.bosunSL)}}disabled{{/if}}>
                         +
                     </button>
@@ -38,14 +38,14 @@
                 <div class="shipcombat-alloc-row">
                     <button type="button" class="shipcombat-alloc-btn" data-action="allocOrdnanceSL" data-stat="expedience" data-delta="-1"
                             {{#unless ordnanceCtx.bosunRolled}}disabled{{/unless}}
-                            {{#if ordnanceCtx.actionUsed}}disabled{{/if}}
+                            {{#if ordnanceCtx.allocationLocked}}disabled{{/if}}
                             {{#unless ordnanceCtx.allocExpedience}}disabled{{/unless}}>
                         &minus;
                     </button>
                     <span class="shipcombat-helm-stat-value">{{ordnanceCtx.allocExpedience}}</span>
                     <button type="button" class="shipcombat-alloc-btn" data-action="allocOrdnanceSL" data-stat="expedience" data-delta="1"
                             {{#unless ordnanceCtx.bosunRolled}}disabled{{/unless}}
-                            {{#if ordnanceCtx.actionUsed}}disabled{{/if}}
+                            {{#if ordnanceCtx.allocationLocked}}disabled{{/if}}
                             {{#if (gte (add ordnanceCtx.allocEfficiency ordnanceCtx.allocExpedience) ordnanceCtx.bosunSL)}}disabled{{/if}}>
                         +
                     </button>

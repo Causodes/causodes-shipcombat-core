@@ -491,29 +491,6 @@
   grid-template-columns: repeat(3, 1fr);
 }
 
-/* ── Prow gun lockout overlay (post-ram) ─────────────────────────────────── */
-.shipcombat-weapon-battery-section.shipcombat-prow-locked {
-  position: relative;
-  pointer-events: none;
-}
-.shipcombat-weapon-battery-section.shipcombat-prow-locked > :not(.shipcombat-prow-locked-overlay) {
-  opacity: 0.35;
-}
-.shipcombat-prow-locked-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
-  font-size: 0.75rem;
-  font-weight: bold;
-  color: #ff6b6b;
-  background: rgba(0,0,0,0.55);
-  pointer-events: none;
-}
-
 /* ── Sensor-blind weapon SECTION overlay (weaponsSensors Low+) ──────────── */
 .shipcombat-weapon-battery-section.shipcombat-sensor-blind {
   position: relative;

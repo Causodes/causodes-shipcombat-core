@@ -119,7 +119,7 @@
             {{#each ordnanceCtx.commitments}}
             <span class="shipcombat-commitment-pill {{#if isNew}}shipcombat-commitment-pill--new{{/if}} {{#if noCancel}}shipcombat-commitment-pill--locked{{/if}}"
                   data-tooltip="{{actionLabel}}  -  {{crewCount}} crew, {{turnsRemaining}} turn(s) left{{#if completionBenefit}} | Benefit awarded on completion{{/if}}{{#if isNew}}{{#if noCancel}} | Cannot cancel: effect already applied{{else}} | Right-click to cancel{{/if}}{{/if}}"
-                  data-index="{{index}}">
+                  data-index="{{index}}" data-commitment-id="{{id}}">
                 <i class="{{icon}}"></i> {{crewCount}}<i class="fa-solid fa-user fa-xs"></i> {{turnsRemaining}}T{{#if noCancel}}<i class="fa-solid fa-lock fa-xs" style="margin-left:2px;opacity:0.6"></i>{{/if}}
             </span>
             {{/each}}

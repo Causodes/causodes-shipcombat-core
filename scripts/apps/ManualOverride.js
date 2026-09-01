@@ -39,7 +39,7 @@ const RESOURCE_KEYS_BY_ROLE = {
     "manpower", "manpowerMax", "armedTorpedoes", "armedCraft",
     "craftDestroyed", "craftRecovering", "craftPartialRecovery",
     "bosunSL", "bosunRolled", "allocEfficiency", "allocExpedience",
-    "actionUsed", "availablePayloads", "autoArmTimer", "autoLoadTimer",
+    "availablePayloads", "autoArmTimer", "autoLoadTimer",
   ]),
 };
 const STRIKE_CRAFT_RESOURCE_PATHS = new Set([
