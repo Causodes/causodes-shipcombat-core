@@ -1,4 +1,4 @@
-## v2.3.4 (UNRELEASED)
+## v2.4.0
 ### Bug Fixes
 - Cap Engineer cooling and Hull Repair power spending to the effect that can actually apply, allow one-capacity Hull Repairs, and clarify all alternate-action formulas
 - Require an effective Lock 1 and a ship-scoped hostile torpedo before applying Designate Torpedo, and identify hostile torpedoes by shape starting at Lock 1
@@ -13,18 +13,20 @@
 - Preserve prototype-token images when editing embedded ordnance actors from NPC ship sheets
 - Create ordnance blast messages without the obsolete numeric chat-message type rejected by Foundry 14
 - Add the missing bow-launch ram-lockout localization
+- Bind and validate NPC weapon-fire requests against the firing NPC so they use the shared damage flow without active-player-ship fallback
+- Complete delayed Ordnance actions on the ship that advanced its round and report action commitment failures instead of failing silently
+- Remove generated ordnance Actors together with detonated, recovered, expired, or reset Tokens
+- Allow multiple parallel Ordnance main-action commitments while manpower remains, locking only allocation changes after the first commitment
+- Cancel new Ordnance crew commitments reliably from their right-click badges and return reserved manpower atomically
+- Require explicit ship identity for station socket mutations, bind delegated state handlers to that ship, and apply dependent resource transfers atomically on the GM
+### Improvements
 - Let pilots commit optional thrust beyond the minimum ram approach and scale collision damage above 100% thrust
 - Carry ramming ships through the target at 20% of their impact velocity and retain that momentum in both movement modes
 - Anchor ram collision effects at the contact point while the ships continue through and away from the impact
 - Unify normal weapon, strike-craft, and torpedo defense resolution around per-hit shields, IWR, armour, Rend, and hull updates
-- Bind and validate NPC weapon-fire requests against the firing NPC so they use the shared damage flow without active-player-ship fallback
+### New Features
 - Play collision and ship-destruction explosions for ramming when Sequencer and JB2A are available
-- Complete delayed Ordnance actions on the ship that advanced its round and report action commitment failures instead of failing silently
-- Remove generated ordnance Actors together with detonated, recovered, expired, or reset Tokens
 - Play the ship-destruction explosion for hull destruction from any damage source when Sequencer and JB2A are available
-- Allow multiple parallel Ordnance main-action commitments while manpower remains, locking only allocation changes after the first commitment
-- Cancel new Ordnance crew commitments reliably from their right-click badges and return reserved manpower atomically
-- Require explicit ship identity for station socket mutations, bind delegated state handlers to that ship, and apply dependent resource transfers atomically on the GM
 
 ## v2.3.3
 - Normalize malformed fractional stats while retaining integer schema validation
