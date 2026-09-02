@@ -618,9 +618,9 @@ function _paint(el, sheet) {
     ctx.fillStyle = col;
     const rad = BLIP_RADIUS;
 
-    if (b.lockTier >= 2) {
+    const isTorpedo = actorTypeIsTorpedo(b.actorType, b.actorSubtype);
+    if (b.lockTier >= 2 || (!b.friendly && isTorpedo && b.lockTier >= 1)) {
       const arrowHeading = _trueBearing ? b.targetHeadingAbs : b.targetHeadingRel;
-      const isTorpedo = actorTypeIsTorpedo(b.actorType, b.actorSubtype);
       const isCraft   = actorTypeIsStrikeCraft(b.actorType, b.actorSubtype);
       if (isTorpedo) {
         _drawTorpedoBlip(ctx, bx, by, rad, arrowHeading);
@@ -1335,7 +1335,7 @@ function _buildPopupHTML(blip, ctx, blipEffects) {
   const utilityActions = ctx.utilityActions ?? [];
   const visibleUtils = utilityActions.filter(a => {
     if (TOOLBAR_ACTION_IDS.includes(a.id)) return false;
-    if (a.id === "designateTorpedo") return isTorpedo; // only on torpedo blips
+    if (a.id === "designateTorpedo") return isTorpedo && (blip.friendly || tier >= 1);
     if (isHostileTorpedo) return false;               // hostile torps only get designate
     return tier >= 1;
   });

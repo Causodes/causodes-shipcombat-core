@@ -17,6 +17,7 @@ const SHIP_SCOPED_ACTIONS = new Set([
   "addSensorEffect", "setRecommendedTarget", "stripQuadrantShields", "upgradeLock", "upgradeAllLocks",
   "registerSensorContacts", "removeLock", "resolveBDA", "completeBDA", "setFireCorrection", "spendAP",
   "commitOrdnanceAction", "cancelOrdnanceCommitment", "completeOrdnanceCommitment",
+  "designateHostileTorpedo",
   "triageCondition", "playCard", "discardCard", "mulligan", "captainPayloadActivate", "captainCoreAction",
   "beginDeadReckoning", "completeDeadReckoning", "cancelDeadReckoning",
 ]);
@@ -522,7 +523,7 @@ async function _handleAction(action, payload = {}) {
       break;
 
     case "designateHostileTorpedo":
-      await ShipCombatState.designateHostileTorpedo(payload.tokenId);
+      await state.designateHostileTorpedo(payload.tokenId);
       break;
 
     case "torpedoPowerBoost":

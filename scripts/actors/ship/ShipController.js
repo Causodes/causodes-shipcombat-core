@@ -839,6 +839,7 @@ export class ShipController {
    * was hit, signalling the mixin to call `super._onDropActor`.
    */
   async onDropActor(data, event) {
+    if (!this.actor.isOwner) return;
     const ordnanceDrop = event.target.closest?.("[data-ordnance-drop]");
     if (ordnanceDrop) {
       const slotType = ordnanceDrop.dataset.ordnanceDrop;
@@ -887,6 +888,7 @@ export class ShipController {
    * Handles component item drops, assigning them to the targeted slot.
    */
   async onDropItem(data, event) {
+    if (!this.actor.isOwner) return;
     const dropZone = event.target.closest?.("[data-component-slot]");
     const item     = await Item.fromDropData(data);
     if (!item) return;

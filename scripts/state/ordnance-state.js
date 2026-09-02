@@ -6,7 +6,7 @@
  */
 
 import { MODULE_ID } from "../constants.js";
-import { ordnanceTypeName } from "../actors/ordnance/ordnance-types.js";
+import { isTorpedo, ordnanceTypeName } from "../actors/ordnance/ordnance-types.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
 import { getOrdnanceControllerUserId } from "../roles/crew-operators.js";
 
@@ -214,8 +214,21 @@ export async function setOrdnanceTurnDone(tokenId, done) {
 export async function designateHostileTorpedo(tokenId) {
   if (!game.user.isGM || !canvas?.scene) return;
   const td = canvas.scene.tokens.get(tokenId);
-  if (!td?.actor) return;
+  if (!td?.actor || !isTorpedo(td.actor)) return false;
+  const parentShipTokenId = SystemAdapter.current.getShipData(td.actor)?.parentShipTokenId;
+  const ownTokenIds = new Set((this.ship?.getActiveTokens?.() ?? []).map(token => token.id));
+  if (parentShipTokenId && ownTokenIds.has(parentShipTokenId)) return false;
+  const shipToken = this.ship?.getActiveTokens?.()?.[0];
+  if (!shipToken) return false;
+  const gridSize = canvas.grid.size;
+  const shipX = shipToken.document.x + (shipToken.document.width * gridSize) / 2;
+  const shipY = shipToken.document.y + (shipToken.document.height * gridSize) / 2;
+  const targetX = td.x + (td.width * gridSize) / 2;
+  const targetY = td.y + (td.height * gridSize) / 2;
+  const distance = Math.hypot(targetX - shipX, targetY - shipY) / gridSize;
+  if (this.getEffectiveLockTier(tokenId, distance) < 1) return false;
   await td.actor.update({ [SystemAdapter.current.systemPath("designated")]: true });
+  return true;
 }
 
 /**

@@ -29,14 +29,14 @@
             <p class="shipcombat-eng-action-desc">{{localize "SHIPCOMBAT.Engineer.ManageHeatDesc"}}</p>
             <div class="shipcombat-eng-action-ctrl">
                 <button type="button" class="shipcombat-alloc-btn" data-action="adjustHeatCores" data-delta="-1"
-                    {{#unless engineerCtx.hasBankedCores}}disabled{{/unless}}
+                    {{#unless engineerCtx.canManageHeat}}disabled{{/unless}}
                     {{#unless engineerCtx.heatCoresStaged}}disabled{{/unless}}>&minus;</button>
                 <span class="shipcombat-core-alloc-count">{{engineerCtx.heatCoresStaged}}</span>
                 <button type="button" class="shipcombat-alloc-btn" data-action="adjustHeatCores" data-delta="1"
-                        {{#unless engineerCtx.hasBankedCores}}disabled{{/unless}}>+</button>
+                    {{#unless engineerCtx.canManageHeat}}disabled{{/unless}}>+</button>
             </div>
             <button type="button" class="shipcombat-eng-confirm" data-action="manageHeat"
-                    {{#unless engineerCtx.hasBankedCores}}disabled{{/unless}}>
+                    {{#unless engineerCtx.canManageHeat}}disabled{{/unless}}>
                 {{localize "SHIPCOMBAT.Engineer.Execute"}}
             </button>
         </div>

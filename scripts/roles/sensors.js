@@ -161,7 +161,7 @@ async function _onSensorAction(event, target) {
       if (isAllied) {
         emitToGM("torpedoPowerBoost", { tokenId });
       } else {
-        emitToGM("designateHostileTorpedo", { tokenId });
+        emitToGM("designateHostileTorpedo", { tokenId, shipActorId: this.actor.id });
       }
       return;
     }

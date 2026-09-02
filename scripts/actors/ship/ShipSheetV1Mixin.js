@@ -36,6 +36,8 @@ import { openManualOverride } from "../../apps/ManualOverride.js";
 export const ShipSheetV1Mixin = (BaseClass) => {
   class ShipSheetV1Base extends BaseClass {
 
+    get isEditable() { return true; }
+
     static get defaultOptions() {
       return foundry.utils.mergeObject(super.defaultOptions, {
         classes:        [],   // concrete class adds system classes

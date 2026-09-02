@@ -113,9 +113,9 @@ export async function reduceInternalFire(amount, auxiliaryPowerSpent = 0) {
 export async function manageHeat(auxiliaryPowerSpent, sl) {
   const data = SystemAdapter.current.getShipData(this.ship) ?? {};
   const auxiliaryPower = data.resources?.engineer?.auxiliaryPower ?? 0;
-  const spent = Math.min(Math.max(0, auxiliaryPowerSpent), auxiliaryPower);
-  if (spent <= 0) return false;
   const heat = data.resources?.engineer?.heat ?? 0;
+  const spent = Math.min(Math.max(0, auxiliaryPowerSpent), auxiliaryPower, heat);
+  if (spent <= 0) return false;
   await this.update({
     "resources.engineer.auxiliaryPower": auxiliaryPower - spent,
     "resources.engineer.heat": Math.max(0, heat - Math.max(1, spent + Math.max(0, sl))),
@@ -227,18 +227,18 @@ export async function repairHull(auxiliaryPowerSpent, sl) {
 
   const heat = sys.resources?.engineer?.heat ?? 0;
   const auxiliaryPower = sys.resources?.engineer?.auxiliaryPower ?? 0;
-  const spent = Math.min(Math.max(0, auxiliaryPowerSpent), auxiliaryPower);
-  if (spent <= 0) return false;
   const reactor    = this.getReactorStats();
   const heatMax    = reactor.heatCapacity;
   const heatRoom   = Math.max(0, heatMax - heat);
   // Repair is capped to available heat budget (1 heat per HP) and remaining damage headroom.
-  const repairAttempted = Math.max(0, spent + sl);
   const hullCurrent = sys.hull?.value ?? 0;
   const hullMax     = sys.hull?.max ?? 50;
   const isHPMode    = SystemAdapter.current.hullDisplayMode === "hpRemaining";
   // HP mode: cap by remaining headroom to max; wounds mode: cap by damage taken.
   const repairRoom  = isHPMode ? Math.max(0, hullMax - hullCurrent) : hullCurrent;
+  const spent = Math.min(Math.max(0, auxiliaryPowerSpent), auxiliaryPower, heatRoom, repairRoom);
+  if (spent <= 0) return false;
+  const repairAttempted = Math.max(0, spent + Math.max(0, sl));
   const repairAmount = Math.min(repairAttempted, heatRoom, repairRoom);
   if (repairAmount <= 0) {
     ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.HullRepairNoRoom"));

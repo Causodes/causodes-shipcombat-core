@@ -232,8 +232,9 @@ async function _onAdjustHeatCores(event, target) {
   const delta = Number(target.dataset.delta) || 0;
   const sys = SystemAdapter.current.getShipData(this.actor);
   const bank = sys.resources?.engineer?.auxiliaryPower ?? 0;
+  const heat = sys.resources?.engineer?.heat ?? 0;
   const current = sys.resources?.engineer?.heatCoresStaged ?? 1;
-  const next = Math.max(1, Math.min(bank, current + delta));
+  const next = Math.max(1, Math.min(bank, heat, current + delta));
   await emitToGM("updateResource", { roleId: "engineer", key: "heatCoresStaged", value: next, shipActorId: this.actor.id });
 }
 
@@ -260,8 +261,8 @@ async function _onAdjustRepairAuxPower(event, target) {
 }
 
 /**
- * Hull Repair: costs 2 heat + N plasma reserves (banked cores).
- * Engineering test, hull restored = Auxiliary Power spent + SL (min 0).
+ * Hull Repair: spends Auxiliary Power and adds 1 heat per hull restored.
+ * Engineering test, hull restored = Auxiliary Power spent + positive SL.
  * Cannot repair while internal fire is active.
  */
 async function _onRepairHull() {
@@ -276,10 +277,13 @@ async function _onRepairHull() {
   if (fire > 0) {
     return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.RepairBlockedByFire"));
   }
-  if (hull >= hullMax) {
+  const hullFull = SystemAdapter.current.hullDisplayMode === "hpRemaining"
+    ? hull >= hullMax
+    : hull <= 0;
+  if (hullFull) {
     return ui.notifications.info(game.i18n.localize("SHIPCOMBAT.Engineer.HullFull"));
   }
-  if (heat + 2 > heatMax) {
+  if (heat >= heatMax) {
     return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.HeatTooHighForRepair"));
   }
   if (bank < 1) {
@@ -350,9 +354,8 @@ export function buildEngineerContext(sys, opts = {}) {
   const ventPending   = sys.ventPending ?? false;
   const shieldCommitted = sys.shieldPool?.committed ?? 0;
   const shieldCurrent   = sys.shieldPool?.current   ?? 0;
-  const heatCoresStaged = Math.max(1, Math.min(auxiliaryPower, sys.resources?.engineer?.heatCoresStaged ?? 1));
+  const heatCoresStaged = Math.max(1, Math.min(auxiliaryPower, heat, sys.resources?.engineer?.heatCoresStaged ?? 1));
   const fireCoresStaged = Math.max(1, Math.min(Math.min(auxiliaryPower, internalFire), sys.resources?.engineer?.fireCoresStaged ?? 1));
-  const repairAuxPowerStaged = Math.max(1, Math.min(auxiliaryPower, sys.resources?.engineer?.repairAuxPowerStaged ?? 1));
 
   const { reactorStats, shieldStats } = opts;
   const shieldStrengthPerCore = reactorStats?.shieldStrengthPerCore ?? 0;
@@ -360,6 +363,17 @@ export function buildEngineerContext(sys, opts = {}) {
   const heatMax               = reactorStats?.heatCapacity ?? 0;
   const auxPowerCapacity      = reactorStats?.auxPowerCapacity ?? 0;
   const reserveMultiplier     = reactorStats?.reserveMultiplier ?? 0;
+  const hullCurrent           = sys.hull?.value ?? 0;
+  const hullMax               = sys.hull?.max ?? 50;
+  const repairRoom            = SystemAdapter.current.hullDisplayMode === "hpRemaining"
+    ? Math.max(0, hullMax - hullCurrent)
+    : Math.max(0, hullCurrent);
+  const repairAuxPowerStaged = Math.max(1, Math.min(
+    auxiliaryPower,
+    Math.max(0, heatMax - heat),
+    repairRoom,
+    sys.resources?.engineer?.repairAuxPowerStaged ?? 1,
+  ));
 
   // Projected shield pool next turn: staged (not yet dispatched) + committed (dispatched this turn)
   const projectedShieldPool = Math.min(
@@ -404,6 +418,7 @@ export function buildEngineerContext(sys, opts = {}) {
     hasInternalFire:   internalFire > 0,
     hasStaged:         Object.values(stagedCores).some(Boolean) || stagedShieldCores > 0 || stagedAuxCores > 0,
     hasBankedCores:    auxiliaryPower > 0,
+    canManageHeat:     auxiliaryPower > 0 && heat > 0,
     ventLocked,
     ventPending,
     stagedShieldCores,

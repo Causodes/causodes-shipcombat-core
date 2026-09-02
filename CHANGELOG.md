@@ -1,6 +1,8 @@
 ## v2.3.4 (UNRELEASED)
 ### Bug Fixes
-- Fix invalid awaited pilot-bearing and Captain card-order callbacks that prevented Core from loading as an ES module
+- Cap Engineer cooling and Hull Repair power spending to the effect that can actually apply, allow one-capacity Hull Repairs, and clarify all alternate-action formulas
+- Require an effective Lock 1 and a ship-scoped hostile torpedo before applying Designate Torpedo, and identify hostile torpedoes by shape starting at Lock 1
+- Keep AppV1 bridge-station controls interactive for Observer users while restricting ship actor, ordnance, and component drag/drop configuration to Owners
 - Apply torpedo damage and conditions to unlinked NPC ship tokens instead of their unchanged base actors
 - Resolve every surviving torpedo warhead separately against armour, applying blast-distance falloff to each hit and Rend/Shield Burn per warhead
 - Use configured flat ordnance damage without forcing zero-damage payloads to deal 1 damage
