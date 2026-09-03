@@ -364,12 +364,22 @@ Hooks.on("canvasReady", () => {
   }
 });
 
-Hooks.on("updateActor", (actor) => {
+Hooks.on("updateActor", (actor, changed, options) => {
   if (actor.type === `${MODULE_ID}.ship` || actor.type === `${MODULE_ID}.npcShip`) {
     ShieldArcOverlay.refresh();
     refreshTokenVisibility();
     TargetDesignationOverlay.refresh();
   }
+  if (!game.user.isGM || !isOrdnance(actor) || options.shipCombatHandlesOrdnanceDestruction) return;
+  const hullPath = SystemAdapter.current.systemPath("hull.value");
+  if (foundry.utils.getProperty(changed, hullPath) === undefined) return;
+  const hull = SystemAdapter.current.getShipData(actor)?.hull ?? {};
+  const destroyed = SystemAdapter.current.hullDisplayMode === "hpRemaining"
+    ? (hull.value ?? 0) <= 0
+    : (hull.value ?? 0) >= (hull.max ?? 1);
+  if (!destroyed) return;
+  const tokenIds = actor.getActiveTokens?.().map(token => token.document.id) ?? [];
+  void ShipCombatState.destroyOrdnanceTokens(tokenIds);
 });
 
 // refreshToken fires every time a token is redrawn, including each frame of

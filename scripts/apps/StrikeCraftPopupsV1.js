@@ -267,7 +267,7 @@ export class StrikeCraftAttackPopupV1 extends foundry.appv1.api.Application {
     // HP-remaining systems store intact airframes in hull.value directly;
     // damage-taken systems store wounds, so remaining = max − value.
     const _scIsHP    = SystemAdapter.current.hullDisplayMode === "hpRemaining";
-    const flightSize = Math.max(1, _scIsHP ? (sys.hull?.value ?? 1) : (sys.hull?.max ?? 1) - (sys.hull?.value ?? 0));
+    const flightSize = Math.max(0, _scIsHP ? (sys.hull?.value ?? 0) : (sys.hull?.max ?? 0) - (sys.hull?.value ?? 0));
     const damage     = sys.payloadDamage ?? 0;
     const salvoSize  = (sys.payloadCount ?? 1) * flightSize;
 

@@ -47,6 +47,9 @@ export class WeaponArcOverlay {
   /** Currently hovered item ID, or null. */
   static _hovered = null;
 
+  /** Weapon-shaped overlays that are not backed by ship items. */
+  static _standalone = new Map();
+
   /** Whether the gunner tab is currently showing. */
   static _active = false;
 
@@ -65,7 +68,7 @@ export class WeaponArcOverlay {
   /** Turn arcs off  -  called when leaving the gunner tab.  */
   static deactivate() {
     this._active = false;
-    this._clearAll();
+    this._clearManaged();
   }
 
   /** Show arc on hover. */
@@ -93,11 +96,26 @@ export class WeaponArcOverlay {
     return this._pinned.has(itemId);
   }
 
+  /** Draw a token-centred weapon descriptor without replacing the active ship. */
+  static showStandalone(id, token, weaponSystem, sensor = {}) {
+    if (!id || !token) return;
+    const item = { id, system: weaponSystem };
+    this._standalone.set(id, { token, item, sensor });
+    this._drawStandalone(id);
+  }
+
+  /** Hide a standalone weapon descriptor. */
+  static hideStandalone(id) {
+    this._standalone.delete(id);
+    this._destroy(id);
+  }
+
   /** Full teardown  -  canvas destroyed or module unloaded. */
   static destroyAll() {
     this._clearAll();
     this._pinned.clear();
     this._hovered = null;
+    this._standalone.clear();
     this._actor = null;
     this._active = false;
   }
@@ -107,6 +125,12 @@ export class WeaponArcOverlay {
    * belongs to our tracked actor.
    */
   static onRefreshToken(token) {
+    for (const [id, entry] of this._standalone) {
+      if (token.id === entry.token.id) {
+        entry.token = token;
+        this._drawStandalone(id);
+      }
+    }
     if (!this._active || !this._actor) return;
     if (this._pinned.size === 0 && !this._hovered) return;
     if (token.document.actor?.id !== this._actor.id) return;
@@ -117,6 +141,12 @@ export class WeaponArcOverlay {
 
   static _clearAll() {
     for (const [id] of this._entries) this._destroy(id);
+  }
+
+  static _clearManaged() {
+    for (const [id] of this._entries) {
+      if (!this._standalone.has(id)) this._destroy(id);
+    }
   }
 
   static _destroy(id) {
@@ -135,11 +165,11 @@ export class WeaponArcOverlay {
   /** Main render pass. */
   static _draw() {
     if (!canvas?.ready || !canvas?.tokens) return;
-    if (!this._active || !this._actor) { this._clearAll(); return; }
+    if (!this._active || !this._actor) { this._clearManaged(); return; }
 
     // Find our actor's token on the current scene
     const tokens = this._actor.getActiveTokens?.() ?? [];
-    if (!tokens.length) { this._clearAll(); return; }
+    if (!tokens.length) { this._clearManaged(); return; }
     const tok = tokens[0];
 
     const gs = canvas.grid.size;
@@ -153,7 +183,7 @@ export class WeaponArcOverlay {
 
     // Remove stale
     for (const [id] of this._entries) {
-      if (!wanted.has(id)) this._destroy(id);
+      if (!wanted.has(id) && !this._standalone.has(id)) this._destroy(id);
     }
 
     // Draw each
@@ -162,6 +192,17 @@ export class WeaponArcOverlay {
       if (!item) { this._destroy(id); continue; }
       this._drawOne(item, cx, cy, h0, gs, sensor);
     }
+  }
+
+  static _drawStandalone(id) {
+    const entry = this._standalone.get(id);
+    if (!entry || !canvas?.ready || !canvas?.tokens) return;
+    const { token, item, sensor } = entry;
+    const gs = canvas.grid.size;
+    const cx = token.x + (token.document.width * gs) / 2;
+    const cy = token.y + (token.document.height * gs) / 2;
+    const h0 = (token.document.rotation + 90) * (Math.PI / 180);
+    this._drawOne(item, cx, cy, h0, gs, sensor);
   }
 
   /** Draw (or redraw) a single weapon arc with guaranteed, effective, and per-band extended zones. */
@@ -182,7 +223,7 @@ export class WeaponArcOverlay {
     const ghRange    = Math.min(sensor.autoScanRange, range);
     const rGH        = ghRange * gs;
     const rEff       = range * gs;
-    const col        = COLOURS[s.resource] ?? 0xffffff;
+    const col        = s.overlayColor ?? COLOURS[s.resource] ?? 0xffffff;
 
     // Calculate how many extended bands the sensor can reach beyond weapon range.
     // Delegated to the system adapter so each ruleset can apply its own cap

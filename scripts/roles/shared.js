@@ -144,7 +144,7 @@ export function adjustShieldSectorDelta(sheet, sector, delta) {
   const pool    = sys.shieldPool?.current ?? 0;
   if (delta > 0 && pool <= 0) return;
   const next = Math.max(0, current + delta);
-  emitToGM("adjustShieldZone", { sector, value: next, shipActorId: this.actor.id });
+  emitToGM("adjustShieldZone", { sector, value: next, shipActorId: sheet.actor.id });
 }
 
 // ── Exported action map ─────────────────────────────────────────────────────

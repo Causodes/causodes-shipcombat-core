@@ -76,6 +76,7 @@ export function setupSocket() {
     "registerSensorContacts",
     "spawnOrdnance",
     "deleteOrdnanceTokens",
+    "destroyOrdnanceTokens",
     "commitOrdnanceAction",
     "cancelOrdnanceCommitment",
     "completeOrdnanceCommitment",
@@ -486,6 +487,8 @@ async function _handleAction(action, payload = {}) {
 
     case "deleteOrdnanceTokens":
       return ShipCombatState.deleteOrdnanceTokens(payload.tokenIds);
+    case "destroyOrdnanceTokens":
+      return ShipCombatState.destroyOrdnanceTokens(payload.tokenIds);
 
     case "commitOrdnanceAction": {
       const shipActor = payload.shipActorId ? game.actors.get(payload.shipActorId) : null;

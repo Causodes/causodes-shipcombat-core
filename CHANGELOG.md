@@ -1,3 +1,14 @@
+## v2.4.1
+### Bug Fixes
+- Fix player-ship shield arc adjustments failing because the shared helper referenced an unbound sheet context
+- Automatically destroy zero-warhead torpedoes with their normal detonation animation, including torpedoes reduced manually or by weapon, strike-craft, and blast damage
+- Play a strike-craft destruction animation before removing flights reduced to zero HP, or maximum damage in damage-taken systems
+- Remove generated ordnance tokens and actors when they reach their system's destruction threshold
+- Roll dice-based torpedo payload damage against strike craft instead of treating payloads without flat damage as zero
+- Allow zero surviving strike craft in shared AppV1 and AppV2 attack salvo calculations
+### Improvements
+- Unify player ship, NPC ship, strike-craft, and torpedo range previews through the shared weapon arc renderer and refresh lifecycle
+
 ## v2.4.0
 ### Bug Fixes
 - Cap Engineer cooling and Hull Repair power spending to the effect that can actually apply, allow one-capacity Hull Repairs, and clarify all alternate-action formulas

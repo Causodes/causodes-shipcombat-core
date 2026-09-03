@@ -10,6 +10,8 @@ import { isTorpedo, ordnanceTypeName } from "../actors/ordnance/ordnance-types.j
 import { SystemAdapter } from "../systems/SystemAdapter.js";
 import { getOrdnanceControllerUserId } from "../roles/crew-operators.js";
 
+const destroyingOrdnanceTokenIds = new Set();
+
 /**
  * Spawn a torpedo or strike craft token near the ship.
  * If the ship has an ordnance actor template assigned, clone its data.
@@ -186,6 +188,45 @@ export async function deleteOrdnanceTokens(tokenIds = []) {
   return { tokensDeleted: tokenDocs.length, actorsDeleted };
 }
 
+/** Destroy ordnance after playing its destruction animation. */
+export async function destroyOrdnanceTokens(tokenIds = []) {
+  if (!game.user.isGM || !canvas?.scene) return { tokensDeleted: 0, actorsDeleted: 0 };
+
+  const tokenDocs = [...new Set(tokenIds)]
+    .filter(tokenId => !destroyingOrdnanceTokenIds.has(tokenId))
+    .map(tokenId => canvas.scene.tokens.get(tokenId))
+    .filter(Boolean);
+  if (tokenDocs.length === 0) return { tokensDeleted: 0, actorsDeleted: 0 };
+
+  for (const tokenDoc of tokenDocs) destroyingOrdnanceTokenIds.add(tokenDoc.id);
+  try {
+    if (tokenDocs.length > 0) {
+      const { emitToAll } = await import("../socket.js");
+      for (const tokenDoc of tokenDocs) {
+        const sys = SystemAdapter.current.getShipData(tokenDoc.actor) ?? {};
+        const torpedo = isTorpedo(tokenDoc.actor);
+        emitToAll("playWeaponAnimation", {
+          weaponCategory: torpedo ? "torpedo_detonation" : "strike_craft_destruction",
+          fireMode: "",
+          firingActorId: null,
+          targetTokenId: tokenDoc.id,
+          totalHits: 1,
+          totalSalvo: 1,
+          isNpcFire: false,
+          blastRadius: torpedo ? (sys.payloadRadius ?? 1) : null,
+        });
+        if (tokenDoc.object?._animation) {
+          await CanvasAnimation.terminateAnimation(tokenDoc.object._animation);
+        }
+      }
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+    return await deleteOrdnanceTokens(tokenDocs.map(tokenDoc => tokenDoc.id));
+  } finally {
+    for (const tokenDoc of tokenDocs) destroyingOrdnanceTokenIds.delete(tokenDoc.id);
+  }
+}
+
 /**
  * Set the RTB flag on a deployed ordnance token.
  */
@@ -253,7 +294,7 @@ export async function blastOrdnance({ torpedoTokenIds, craftDamages, torName } =
   // Destroy torpedoes caught in the blast
   const torpsToDelete = (torpedoTokenIds ?? []).filter(id => canvas.scene.tokens.get(id));
   if (torpsToDelete.length > 0) {
-    await deleteOrdnanceTokens(torpsToDelete);
+    await destroyOrdnanceTokens(torpsToDelete);
     await ChatMessage.create({
       content: `<b>${torName ?? "Torpedo"}</b> detonation destroyed ${torpsToDelete.length} torpedo(es) in the blast radius.`,
     });
@@ -261,20 +302,26 @@ export async function blastOrdnance({ torpedoTokenIds, craftDamages, torName } =
 
   // Apply hull damage to strike craft in the blast
   const craftDestroyed = [];
-  for (const { tokenId, damage } of (craftDamages ?? [])) {
+  for (const { tokenId, damage, diceCount, diceSize, warheadCount = 1, damageMultiplier = 1 } of (craftDamages ?? [])) {
     const td = canvas.scene.tokens.get(tokenId);
     if (!td?.actor) continue;
+    let resolvedDamage = damage;
+    if (diceCount && diceSize && warheadCount > 0) {
+      const damageRoll = await new Roll(`${diceCount * warheadCount}${diceSize}`).evaluate();
+      if (game.dice3d) game.dice3d.showForRoll(damageRoll, game.user, true);
+      resolvedDamage = Math.max(0, Math.round(damageRoll.total * damageMultiplier));
+    }
     const hull        = td.actor.system.hull ?? { value: 0, max: 1 };
     const _isHP       = SystemAdapter.current.hullDisplayMode === "hpRemaining";
     const newValue    = _isHP
-      ? Math.max(0, (hull.value ?? 0) - damage)
-      : Math.min(hull.max, (hull.value ?? 0) + damage);
+      ? Math.max(0, (hull.value ?? 0) - resolvedDamage)
+      : Math.min(hull.max, (hull.value ?? 0) + resolvedDamage);
     await td.actor.update({ [SystemAdapter.current.systemPath("hull.value")]: newValue });
     const isDestroyed = _isHP ? newValue <= 0 : newValue >= hull.max;
     if (isDestroyed) craftDestroyed.push(tokenId);
   }
   if (craftDestroyed.length > 0) {
-    await deleteOrdnanceTokens(craftDestroyed);
+    await destroyOrdnanceTokens(craftDestroyed);
     await ChatMessage.create({
       content: `<b>${torName ?? "Torpedo"}</b> detonation destroyed ${craftDestroyed.length} strike craft flight(s).`,
     });

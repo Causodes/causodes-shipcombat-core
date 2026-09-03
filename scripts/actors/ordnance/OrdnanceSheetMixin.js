@@ -151,9 +151,12 @@ async function _onOrdDetonate() {
   const baseDmg     = sys.payloadDamage;
   const hullMax     = sys.hull?.max ?? 1;
   const hullValue   = sys.hull?.value ?? hullMax;
-  const warheads    = Math.max(1, SystemAdapter.current.hullDisplayMode === "hpRemaining"
+  const warheads    = Math.max(0, SystemAdapter.current.hullDisplayMode === "hpRemaining"
     ? hullValue
     : hullMax - hullValue);
+  if (warheads <= 0) {
+    return emitToGM("destroyOrdnanceTokens", { tokenIds: [token.document.id] });
+  }
   const gs          = canvas.grid.size;
   const cx          = token.x + (token.document.width * gs) / 2;
   const cy          = token.y + (token.document.height * gs) / 2;
@@ -248,6 +251,10 @@ async function _onOrdDetonate() {
         tokenId: t.document.id,
         actorId: t.document.actorId,
         damage:  Math.max(0, Math.round((baseDmg ?? 0) * warheads * decay)),
+        diceCount: sys.payloadDiceCount ?? null,
+        diceSize: sys.payloadDiceSize ?? null,
+        warheadCount: warheads,
+        damageMultiplier: decay,
       };
     });
     emitToGM("blastOrdnance", {

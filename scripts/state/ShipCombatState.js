@@ -1744,7 +1744,14 @@ export class ShipCombatState {
       const hullMax     = sys.hull?.max ?? 1;
       const _isHP       = SystemAdapter.current.hullDisplayMode === "hpRemaining";
       const _newHull    = _isHP ? Math.max(0, currentHull - totalHits) : Math.min(hullMax, currentHull + totalHits);
-      await targetActor.update({ [SystemAdapter.current.systemPath("hull.value")]: _newHull });
+      await targetActor.update(
+        { [SystemAdapter.current.systemPath("hull.value")]: _newHull },
+        { shipCombatHandlesOrdnanceDestruction: true },
+      );
+      const isDestroyed = _isHP ? _newHull <= 0 : _newHull >= hullMax;
+      if (isDestroyed && targetTok?.document?.id) {
+        await this.destroyOrdnanceTokens([targetTok.document.id]);
+      }
       const content = await renderTemplate(templatePath, {
         ..._baseData(),
         hasShieldResults: false,
@@ -2035,6 +2042,7 @@ ShipCombatState.spendAP              = SensorsState.spendAP;
 // Ordnance
 ShipCombatState.spawnOrdnance             = OrdnanceState.spawnOrdnance;
 ShipCombatState.deleteOrdnanceTokens      = OrdnanceState.deleteOrdnanceTokens;
+ShipCombatState.destroyOrdnanceTokens     = OrdnanceState.destroyOrdnanceTokens;
 ShipCombatState.setOrdnanceRtb            = OrdnanceState.setOrdnanceRtb;
 ShipCombatState.setOrdnanceTurnDone       = OrdnanceState.setOrdnanceTurnDone;
 ShipCombatState.designateHostileTorpedo   = OrdnanceState.designateHostileTorpedo;

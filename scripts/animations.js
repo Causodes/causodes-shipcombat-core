@@ -68,6 +68,9 @@ const CATEGORY_ASSETS = {
   torpedo_detonation: {
     impact: "jb2a.explosion.08.1200.orange",
   },
+  strike_craft_destruction: {
+    impact: "jb2a.explosion.04.orange",
+  },
   ram_collision: {
     impact: "jb2a.explosion.04.orange",
   },
@@ -87,6 +90,7 @@ const SCALE = {
   plasma:         0.9,
   missile:        1.0,
   torpedo_detonation: 2.5,
+  strike_craft_destruction: 1.5,
   ram_collision: 1.5,
   ship_destruction: 2.5,
 };
