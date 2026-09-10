@@ -3,8 +3,10 @@
  * Includes captain, engineer, gunner, sensors, and generic resource actions.
  */
 import { MODULE_ID } from "../constants.js";
-import { emitToGM } from "../socket.js";
+import { createActionRequester } from "../socket.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
+
+const requestGM = createActionRequester(context => context.actor);
 
 // ── Item management ─────────────────────────────────────────────────────────
 
@@ -43,16 +45,15 @@ async function _onDeleteEmbedded(event, target) {
 // ── Role management ─────────────────────────────────────────────────────────
 
 async function _onUnassignRole(event, target) {
-  emitToGM("assignRole", { userId: null, roleId: target.dataset.roleId, shipActorId: this.actor.id });
+  requestGM(this, "assignRole", { userId: null, roleId: target.dataset.roleId });
 }
 
 async function _onClaimRole(event, target) {
   const actor = game.user.character;
   const ref = actor ?? game.actors.find(a => a.isOwner && a.type === "character");
-  emitToGM("assignRole", {
+  requestGM(this, "assignRole", {
     userId: game.user.id,
     roleId: target.dataset.roleId,
-    shipActorId: this.actor.id,
     actorRef: ref ? {
       id: ref.id,
       uuid: ref.uuid,
@@ -64,7 +65,7 @@ async function _onClaimRole(event, target) {
 
 async function _onReleaseRole(event, target) {
   // Release the current user's own role by un-assigning via the roleId on the row
-  emitToGM("assignRole", { userId: null, roleId: target.dataset.roleId, shipActorId: this.actor.id });
+  requestGM(this, "assignRole", { userId: null, roleId: target.dataset.roleId });
 }
 
 // ── Captain ─────────────────────────────────────────────────────────────────
@@ -72,12 +73,12 @@ async function _onReleaseRole(event, target) {
 async function _onPerformStandard(event, target) {
   // Captain/crew generic "perform standard"  -  just marks the role's turn done
   const roleId = target.dataset.roleId;
-  if (roleId) emitToGM("toggleTurnDone", { roleId, shipActorId: this.actor.id });
+  if (roleId) requestGM(this, "toggleTurnDone", { roleId });
 }
 
 async function _onPerformOvercharged(event, target) {
   const roleId = target.dataset.roleId;
-  if (roleId) await emitToGM("consumePowerCore", { roleId, shipActorId: this.actor.id });
+  if (roleId) await requestGM(this, "consumePowerCore", { roleId });
 }
 
 // ── Engineer ───────────────────────────────────────────────────────────────
@@ -89,7 +90,10 @@ async function _onToggleCore(event, target) {
   // Once dispatched, the Engineer cannot assign another core to this role.
   if (sys.assignedCores?.[roleId]) return;
   const hasStaged = !!(sys.resources?.engineer?.stagedCores?.[roleId]);
-  emitToGM(hasStaged ? "unstagePowerCore" : "stagePowerCore", { targetRoleId: roleId });
+  if (hasStaged) {
+    return requestGM(this, "unstagePowerCore", { targetRoleId: roleId });
+  }
+  return requestGM(this, "stagePowerCore", { targetRoleId: roleId });
 }
 
 // ── Sectors ─────────────────────────────────────────────────────────────────
@@ -104,7 +108,7 @@ async function _onAdjustSector(event, target) {
   // When increasing, cannot exceed available pool; when decreasing, cannot go below 0
   if (d > 0 && pool <= 0) return;
   const next = Math.max(0, current + d);
-  emitToGM("adjustShieldZone", { sector, value: next, shipActorId: this.actor.id });
+  requestGM(this, "adjustShieldZone", { sector, value: next });
 }
 
 
@@ -112,16 +116,14 @@ async function _onAdjustSector(event, target) {
 
 async function _onIncrementResource(event, target) {
   const { roleId, key, max } = target.dataset;
-  await emitToGM("adjustResources", {
-    shipActorId: this.actor.id,
+  await requestGM(this, "adjustResources", {
     adjustments: [{ roleId, key, delta: 1, max: Number(max ?? Infinity) }],
   });
 }
 
 async function _onDecrementResource(event, target) {
   const { roleId, key } = target.dataset;
-  await emitToGM("adjustResources", {
-    shipActorId: this.actor.id,
+  await requestGM(this, "adjustResources", {
     adjustments: [{ roleId, key, delta: -1, min: 0 }],
   });
 }
@@ -129,7 +131,7 @@ async function _onDecrementResource(event, target) {
 async function _onMarkDone(event, target) {
   const roleId = target.dataset.roleId;
   if (!roleId) return;
-  emitToGM("toggleTurnDone", { roleId, shipActorId: this.actor.id });
+  requestGM(this, "toggleTurnDone", { roleId });
 }
 
 // ── Exported helpers ─────────────────────────────────────────────────────────
@@ -144,7 +146,7 @@ export function adjustShieldSectorDelta(sheet, sector, delta) {
   const pool    = sys.shieldPool?.current ?? 0;
   if (delta > 0 && pool <= 0) return;
   const next = Math.max(0, current + delta);
-  emitToGM("adjustShieldZone", { sector, value: next, shipActorId: sheet.actor.id });
+  requestGM(sheet, "adjustShieldZone", { sector, value: next });
 }
 
 // ── Exported action map ─────────────────────────────────────────────────────

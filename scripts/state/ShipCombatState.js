@@ -1,10 +1,10 @@
 /**
  * ShipCombatState – all state lives directly in the Ship actor's system data.
  *
- * The active ship is the first actor of type "impmal-shipcombat.ship" found in
- * the current combat tracker; if no combat is running it falls back to the
- * first such actor in the world.  The GM is the only one who writes via
- * actor.update(); players request changes through the socket (see socket.js).
+ * The active ship is resolved from the current user's station assignment or
+ * ownership, preferring ships in the combat tracker. The GM is the only one
+ * who writes via actor.update(); players request changes through the socket
+ * (see socket.js).
  *
  * Domain-specific methods are defined in separate files and attached as static
  * methods below.  This keeps the core infrastructure small while preserving
@@ -36,34 +36,53 @@ import { getNpcRoundConditionEffects } from "./npc-condition-effects.js";
 
 export class ShipCombatState {
 
-  /** Suppresses the deleteToken hook's craftDestroyed counter during fullReset. */
-  static _suppressDestroyTracking = false;
-
   /** Serializes every Power Core count mutation per ship on the GM. */
   static _powerCoreQueues = new Map();
 
-  /** Serializes point-allocation validation and writes per ship on the GM. */
+  /** Serializes allocation and shared Auxiliary Power mutations per ship on the GM. */
   static _allocationQueues = new Map();
+
+  /** Serializes self-contained actions against the same actor on the GM. */
+  static _actorActionQueues = new Map();
 
   // ── Ship resolution ───────────────────────────────────────────────────────
 
   static get ship() {
+    const chooseForUser = actors => {
+      const ships = [...new Map(
+        (actors ?? []).filter(Boolean).map(actor => [actor.id, actor]),
+      ).values()];
+      if (!game.user?.isGM) {
+        const assigned = ships.find(actor =>
+          Boolean(SystemAdapter.current.getShipData(actor)?.roles?.[game.user?.id])
+        );
+        if (assigned) return assigned;
+        const owned = ships.find(actor => actor.testUserPermission?.(game.user, "OWNER"));
+        if (owned) return owned;
+      }
+      return ships[0] ?? null;
+    };
+
     if (game.combat) {
-      const combatant = game.combat.combatants.find(
-        c => c.actor?.type === `${MODULE_ID}.ship`
+      const combatShip = chooseForUser(
+        game.combat.combatants
+          .filter(combatant => combatant.actor?.type === `${MODULE_ID}.ship`)
+          .map(combatant => combatant.actor),
       );
-      if (combatant?.actor) return combatant.actor;
+      if (combatShip) return combatShip;
     }
     // game.actors only includes actors the current user has Limited+ on.
     // Fall back to canvas scene tokens so Observer-level players can resolve
     // the ship even when their world-actor collection omits it.
-    const worldActor = game.actors.find(a => a.type === `${MODULE_ID}.ship`);
+    const worldActor = chooseForUser(game.actors.filter(a => a.type === `${MODULE_ID}.ship`));
     if (worldActor) return worldActor;
     if (canvas?.scene) {
-      const tokenDoc = canvas.scene.tokens.find(
-        t => t.actor?.type === `${MODULE_ID}.ship`
+      const sceneShip = chooseForUser(
+        canvas.scene.tokens
+          .filter(tokenDoc => tokenDoc.actor?.type === `${MODULE_ID}.ship`)
+          .map(tokenDoc => tokenDoc.actor),
       );
-      if (tokenDoc?.actor) return tokenDoc.actor;
+      if (sceneShip) return sceneShip;
     }
     return null;
   }
@@ -196,6 +215,41 @@ export class ShipCombatState {
         this._allocationQueues.delete(shipKey);
       }
     }
+  }
+
+  /** Prevent concurrent requests from validating against the same stale actor state. */
+  static async withActorActionTransaction(actor, operation) {
+    if (!actor) throw new TypeError("Actor action transaction requires an actor.");
+    if (typeof operation !== "function") throw new TypeError("Actor action transaction requires a function.");
+    const actorKey = actor.uuid ?? actor.id;
+    const previous = this._actorActionQueues.get(actorKey) ?? Promise.resolve();
+    const transaction = previous.catch(() => {}).then(operation);
+
+    this._actorActionQueues.set(actorKey, transaction);
+    try {
+      return await transaction;
+    } finally {
+      if (this._actorActionQueues.get(actorKey) === transaction) {
+        this._actorActionQueues.delete(actorKey);
+      }
+    }
+  }
+
+  /**
+   * Acquire several actor queues in stable UUID order. Shared-target actions
+   * use this so different attackers cannot overwrite the same stale defenses.
+   */
+  static async withActorActionTransactions(actors, operation) {
+    if (typeof operation !== "function") throw new TypeError("Actor action transaction requires a function.");
+    const uniqueActors = [...new Map(
+      (actors ?? []).filter(Boolean).map(actor => [actor.uuid ?? actor.id, actor]),
+    ).entries()]
+      .sort(([left], [right]) => String(left).localeCompare(String(right)))
+      .map(([, actor]) => actor);
+    const acquire = index => index >= uniqueActors.length
+      ? operation()
+      : this.withActorActionTransaction(uniqueActors[index], () => acquire(index + 1));
+    return acquire(0);
   }
 
   /**
@@ -641,39 +695,42 @@ export class ShipCombatState {
 
   static async updateResource(roleId, key, value, shipActor = null) {
     const ship = shipActor ?? this.ship;
-    if (!ship) return;
-    const updateShip = updates => ship.update(
-      Object.fromEntries(Object.entries(updates).map(([path, entryValue]) => [`system.${path}`, entryValue]))
-    );
-    if (roleId === "hull") {
-      return updateShip({ [`hull.${key}`]: value });
-    }
-    if (roleId.includes(".")) {
-      return updateShip({ [`${roleId}.${key}`]: value });
-    }
-    // Initiative totals are tracker state, not a persistent ship resource.
-    if (roleId === "captain" && key === "initiativeTotal") {
-      return recordPlayerShipInitiative({ shipActor: ship, rawTotal: value });
-    }
-    if (roleId === "engineer" && key === "auxiliaryPower") {
-      const data = SystemAdapter.current.getShipData(ship) ?? {};
-      const current = data.resources?.engineer?.auxiliaryPower ?? 0;
-      if (data.conditions?.coreSystems?.tier === "high" && Number(value) > current) {
-        ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.APShutdown"));
-        return false;
-      }
-    }
-    if (isAllocationResource(roleId, key)) {
-      return this.withAllocationTransaction(async () => {
+    if (!ship || typeof roleId !== "string" || typeof key !== "string") return false;
+    return this.withAllocationTransaction(
+      () => this.withActorActionTransaction(ship, async () => {
+        const updateShip = updates => ship.update(
+          Object.fromEntries(Object.entries(updates).map(([path, entryValue]) => [`system.${path}`, entryValue]))
+        );
+        if (roleId === "hull") {
+          return updateShip({ [`hull.${key}`]: value });
+        }
+        if (roleId.includes(".")) {
+          return updateShip({ [`${roleId}.${key}`]: value });
+        }
+        // Initiative totals are tracker state, not a persistent ship resource.
+        if (roleId === "captain" && key === "initiativeTotal") {
+          return recordPlayerShipInitiative({ shipActor: ship, rawTotal: value });
+        }
+        if (roleId === "engineer" && key === "auxiliaryPower") {
+          const data = SystemAdapter.current.getShipData(ship) ?? {};
+          const current = data.resources?.engineer?.auxiliaryPower ?? 0;
+          if (data.conditions?.coreSystems?.tier === "high" && Number(value) > current) {
+            ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.APShutdown"));
+            return false;
+          }
+        }
+        if (!isAllocationResource(roleId, key)) {
+          return updateShip({ [`resources.${roleId}.${key}`]: value });
+        }
         const data = SystemAdapter.current.getShipData(ship) ?? {};
         if (roleId === "captain" && key === "allocInitiative"
           && !hasPlayerShipInitiative({ shipActor: ship })) return;
         const validated = validateAllocationChange(data, roleId, key, value);
         if (!validated) return;
         return updateShip({ [`resources.${roleId}.${key}`]: validated.value });
-      }, ship);
-    }
-    return updateShip({ [`resources.${roleId}.${key}`]: value });
+      }),
+      ship,
+    );
   }
 
   static resourcePath(roleId, key) {
@@ -688,56 +745,73 @@ export class ShipCombatState {
     const ship = shipActor ?? this.ship;
     if (!ship || !Array.isArray(updates) || updates.length === 0) return null;
 
-    return this.withAllocationTransaction(async () => {
-      const changes = {};
-      for (const { roleId, key, value } of updates) {
-        if (typeof roleId !== "string" || typeof key !== "string") return null;
-        changes[`system.${this.resourcePath(roleId, key)}`] = value;
-      }
-      return ship.update(changes);
-    }, ship);
+    return this.withAllocationTransaction(
+      () => this.withActorActionTransaction(ship, async () => {
+        const changes = {};
+        for (const { roleId, key, value } of updates) {
+          if (typeof roleId !== "string" || typeof key !== "string") return null;
+          changes[`system.${this.resourcePath(roleId, key)}`] = value;
+        }
+        return ship.update(changes);
+      }),
+      ship,
+    );
   }
 
   /** Apply resource deltas against current GM state, optionally as an all-or-nothing conditional transfer. */
   static async adjustResources(adjustments, requirements = [], shipActor = null) {
     const ship = shipActor ?? this.ship;
-    if (!ship || !Array.isArray(adjustments) || adjustments.length === 0) return null;
+    const hasInvalidEntry = entries => entries.some(entry =>
+      typeof entry?.roleId !== "string" || typeof entry?.key !== "string"
+    );
+    if (!ship
+      || !Array.isArray(adjustments)
+      || adjustments.length === 0
+      || !Array.isArray(requirements)
+      || hasInvalidEntry(adjustments)
+      || hasInvalidEntry(requirements)) return null;
 
-    return this.withAllocationTransaction(async () => {
-      const data = SystemAdapter.current.getShipData(ship) ?? {};
-      for (const requirement of requirements) {
-        const current = foundry.utils.getProperty(data, this.resourcePath(requirement.roleId, requirement.key));
-        if (Object.hasOwn(requirement, "equals") && current !== requirement.equals) {
-          return { ok: false, reason: "requirementFailed" };
+    return this.withAllocationTransaction(
+      () => this.withActorActionTransaction(ship, async () => {
+        const data = SystemAdapter.current.getShipData(ship) ?? {};
+        for (const requirement of requirements) {
+          const current = foundry.utils.getProperty(data, this.resourcePath(requirement.roleId, requirement.key));
+          if (Object.hasOwn(requirement, "equals") && current !== requirement.equals) {
+            return { ok: false, reason: "requirementFailed" };
+          }
+          if (Object.hasOwn(requirement, "min") && Number(current ?? 0) < requirement.min) {
+            return { ok: false, reason: "requirementFailed" };
+          }
+          if (Object.hasOwn(requirement, "max") && Number(current ?? 0) > requirement.max) {
+            return { ok: false, reason: "requirementFailed" };
+          }
         }
-        if (Object.hasOwn(requirement, "min") && Number(current ?? 0) < requirement.min) {
-          return { ok: false, reason: "requirementFailed" };
-        }
-        if (Object.hasOwn(requirement, "max") && Number(current ?? 0) > requirement.max) {
-          return { ok: false, reason: "requirementFailed" };
-        }
-      }
 
-      const changes = {};
-      for (const adjustment of adjustments) {
-        const path = this.resourcePath(adjustment.roleId, adjustment.key);
-        const current = foundry.utils.getProperty(data, path);
-        let value = Object.hasOwn(adjustment, "value")
-          ? adjustment.value
-          : Number(current ?? 0) + Number(adjustment.delta ?? 0);
-        if (typeof value === "number" && Number.isFinite(adjustment.min)) value = Math.max(adjustment.min, value);
-        if (typeof value === "number" && Number.isFinite(adjustment.max)) value = Math.min(adjustment.max, value);
-        changes[`system.${path}`] = value;
-      }
-      await ship.update(changes);
-      return { ok: true };
-    }, ship);
+        const changes = {};
+        for (const adjustment of adjustments) {
+          const path = this.resourcePath(adjustment.roleId, adjustment.key);
+          const current = foundry.utils.getProperty(data, path);
+          let value = Object.hasOwn(adjustment, "value")
+            ? adjustment.value
+            : Number(current ?? 0) + Number(adjustment.delta ?? 0);
+          if (typeof value === "number" && Number.isFinite(adjustment.min)) value = Math.max(adjustment.min, value);
+          if (typeof value === "number" && Number.isFinite(adjustment.max)) value = Math.min(adjustment.max, value);
+          changes[`system.${path}`] = value;
+        }
+        await ship.update(changes);
+        return { ok: true };
+      }),
+      ship,
+    );
   }
 
   /** Atomically lock Ordnance allocation and commit its manpower/turn costs. */
   static async commitOrdnanceAction(actionId, shipActor = null) {
     const entry = ORDNANCE_MASTER_ACTIONS[actionId];
     if (!entry) return null;
+    if (["launchTorpedo", "torpedoSalvo", "emergencyLaunch", "launchCraft"].includes(actionId)) {
+      return { ok: false, reason: "launchRequiresSpawn" };
+    }
     const ship = shipActor ?? this.ship;
     if (!ship) return null;
 
@@ -1141,7 +1215,7 @@ export class ShipCombatState {
     const ship = shipActor ?? this.ship;
     if (!ship) {
       ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoShip"));
-      return;
+      return false;
     }
     const data = SystemAdapter.current.getShipData(ship) ?? foundry.utils.deepClone(DEFAULT_COMBAT_STATE);
     await applyPlayerShipInitiativeBonus({
@@ -1347,25 +1421,25 @@ export class ShipCombatState {
         await td.actor.update(npcUpdate);
       }
     }
-    // ── Delete all deployed ordnance (torpedo/strike craft) tokens ──────────
+    // ── Delete only this ship's deployed ordnance ───────────────────────────
     if (canvas?.scene) {
+      const parentTokenIds = new Set(
+        ship.getActiveTokens?.().map(token => token.id).filter(Boolean) ?? [],
+      );
       const ordnanceTokenIds = canvas.scene.tokens
-        .filter(td => isOrdnance(td.actor))
+        .filter(td => isOrdnance(td.actor)
+          && parentTokenIds.has(SystemAdapter.current.getShipData(td.actor)?.parentShipTokenId))
         .map(td => td.id);
       if (ordnanceTokenIds.length > 0) {
-        ShipCombatState._suppressDestroyTracking = true;
-        try {
-          await this.deleteOrdnanceTokens(ordnanceTokenIds);
-        } finally {
-          ShipCombatState._suppressDestroyTracking = false;
-        }
+        await this.deleteOrdnanceTokens(ordnanceTokenIds, { suppressDestroyTracking: true });
       }
     }
+    return true;
   }
 
   static async advanceRound(shipActor = null) {
     const ship = shipActor ?? this.ship;
-    if (!ship) return;
+    if (!ship) return false;
     const data = this.getData(ship);
 
     await this.update({
@@ -1444,12 +1518,13 @@ export class ShipCombatState {
         await td.actor.update(npcRoundUpdates);
       }
     }
+    return true;
   }
 
   static async startCombat() {
     if (!this.ship) {
       ui.notifications.error(game.i18n.localize("SHIPCOMBAT.Warning.NoShip"));
-      return;
+      return false;
     }
     const data = this.getData();
     const max = this.getReactorStats().coreOutput;
@@ -1527,6 +1602,7 @@ export class ShipCombatState {
     updates["resources.ordnance.autoLoadTimer"] = 2;
 
     await this.withPowerCoreTransaction(() => this.update(updates));
+    return true;
   }
 
   static async endCombat() {
@@ -1546,8 +1622,9 @@ export class ShipCombatState {
    * Should only be called when all active roles have marked turnDone.
    */
   static async endShipTurn() {
-    if (!game.combat) return;
+    if (!game.combat) return false;
     await game.combat.nextTurn();
+    return true;
   }
 
 
@@ -1646,15 +1723,55 @@ export class ShipCombatState {
    * through the same resolution path as the gunner.
    * Called via socket from StrikeCraftAttackPopup._onConfirmAttack.
    */
-  static async strikeCraftAttack({ craftActorId, craftName, craftImg, targetTokenId, hitQuadrant, accuracy, damage, payloadDiceCount, payloadDiceSize, traits, salvoSize = 1, payloadDamageType = null }) {
+  static async strikeCraftAttack(payload) {
+    const craftActor = game.actors.get(payload.craftActorId);
+    if (!craftActor || !isStrikeCraft(craftActor)) return false;
+    const targetActor = canvas.tokens.get(payload.targetTokenId)?.document?.actor ?? null;
+    if (!targetActor) return false;
+
+    return this.withActorActionTransactions([craftActor, targetActor], async () => {
+      const craftSys = SystemAdapter.current.getShipData(craftActor) ?? {};
+      const ammo = Math.max(0, Number(craftSys.ammo?.value) || 0);
+      const attackedThisTurn = craftActor.getFlag(MODULE_ID, "attackedThisTurn") ?? [];
+      if (ammo <= 0 || attackedThisTurn.includes(payload.targetTokenId)) return false;
+
+      await craftActor.update({
+        [SystemAdapter.current.systemPath("ammo.value")]: ammo - 1,
+        [`flags.${MODULE_ID}.attackedThisTurn`]: [...attackedThisTurn, payload.targetTokenId],
+      });
+
+      const resolution = { mechanicalCommitted: false };
+      try {
+        const result = await this._resolveStrikeCraftAttack(payload, craftActor, resolution);
+        return { ok: true, ...result };
+      } catch (error) {
+        console.error(`${MODULE_ID} | Strike-craft attack resolution failed`, error);
+        if (resolution.mechanicalCommitted) {
+          return { ok: true, totalHits: resolution.totalHits ?? 0, warning: "postCommitFailed" };
+        }
+        try {
+          await craftActor.update({
+            [SystemAdapter.current.systemPath("ammo.value")]: ammo,
+            [`flags.${MODULE_ID}.attackedThisTurn`]: attackedThisTurn,
+          });
+          return { ok: false, reason: "resolutionFailed", rolledBack: true };
+        } catch (rollbackError) {
+          console.error(`${MODULE_ID} | Strike-craft attack rollback failed`, rollbackError);
+          return { ok: false, reason: "rollbackFailed", rolledBack: false };
+        }
+      }
+    });
+  }
+
+  static async _resolveStrikeCraftAttack({ craftName, craftImg, targetTokenId, hitQuadrant, accuracy, damage, payloadDiceCount, payloadDiceSize, traits, salvoSize = 1, payloadDamageType = null }, craftActor, actionState) {
     const targetTok   = canvas.tokens.get(targetTokenId);
     const targetActor = targetTok?.document?.actor ?? null;
-    if (!targetActor) return;
+    if (!targetActor) throw new Error("Strike-craft target is no longer available");
 
     const sys              = SystemAdapter.current.getShipData(targetActor);
-    const craftActor       = game.actors.get(craftActorId);
     const parentShipTokenId = SystemAdapter.current.getShipData(craftActor)?.parentShipTokenId;
     const parentShipActor  = canvas.tokens.get(parentShipTokenId)?.document?.actor ?? null;
+    const parentState      = parentShipActor ? this.forShip(parentShipActor) : this;
     const attackerSys      = SystemAdapter.current.getShipData(parentShipActor) ?? {};
     const isDevastation    = hasDevastationProtocol(attackerSys, sys);
     const qLabel           = game.i18n.localize(
@@ -1669,17 +1786,17 @@ export class ShipCombatState {
     const adapter    = SystemAdapter.current;
     const formula    = adapter.getRollFormula();
     const targetAC   = adapter.getTargetAC(targetActor);
-    const ownToken = this.ship?.getActiveTokens?.()?.[0];
+    const ownToken = parentState.ship?.getActiveTokens?.()?.[0];
     const gs = canvas?.grid?.size;
-    let contactTier = this.getLockTier(targetTokenId);
+    let contactTier = parentState.getLockTier(targetTokenId);
     if (ownToken && gs) {
       const tx = targetTok.x + (targetTok.document.width * gs) / 2;
       const ty = targetTok.y + (targetTok.document.height * gs) / 2;
       const sx = ownToken.x + (ownToken.document.width * gs) / 2;
       const sy = ownToken.y + (ownToken.document.height * gs) / 2;
-      contactTier = this.getEffectiveLockTier(targetTokenId, Math.hypot(tx - sx, ty - sy) / gs);
+      contactTier = parentState.getEffectiveLockTier(targetTokenId, Math.hypot(tx - sx, ty - sy) / gs);
     }
-    const targetName = getContactDisplayName(this.getData(), targetTokenId, {
+    const targetName = getContactDisplayName(parentState.getData(), targetTokenId, {
       currentTier: contactTier,
       realName: targetActor.name ?? "Unknown",
     });
@@ -1710,6 +1827,7 @@ export class ShipCombatState {
 
     const totalHits = salvoRolls.filter(r => r.hit).length;
     const anyCrit   = salvoRolls.some(r => r.isCrit);
+    actionState.totalHits = totalHits;
 
     const _baseData = () => ({
       weaponImg:        craftImg,
@@ -1728,14 +1846,15 @@ export class ShipCombatState {
     });
 
     if (totalHits === 0) {
+      actionState.mechanicalCommitted = true;
       const content = await renderTemplate(templatePath, {
         ..._baseData(),
         hasShieldResults: false,
         hasDamageResults: false,
         critResult:       { hasCrit: false },
       });
-      ChatMessage.create({ content, speaker: ChatMessage.getSpeaker() });
-      return;
+      await ChatMessage.create({ content, speaker: ChatMessage.getSpeaker() });
+      return { totalHits };
     }
 
     // ── Ordnance targets (torpedo / strike craft): 1 HP per hit ──
@@ -1748,6 +1867,7 @@ export class ShipCombatState {
         { [SystemAdapter.current.systemPath("hull.value")]: _newHull },
         { shipCombatHandlesOrdnanceDestruction: true },
       );
+      actionState.mechanicalCommitted = true;
       const isDestroyed = _isHP ? _newHull <= 0 : _newHull >= hullMax;
       if (isDestroyed && targetTok?.document?.id) {
         await this.destroyOrdnanceTokens([targetTok.document.id]);
@@ -1759,8 +1879,8 @@ export class ShipCombatState {
         damageResults: { totalDamage: totalHits, rawDamagePerHit: 1, effectiveArmour: 0, ap: null, rendTotal: null },
         critResult: { hasCrit: false },
       });
-      ChatMessage.create({ content, rolls: [], speaker: ChatMessage.getSpeaker() });
-      return;
+      await ChatMessage.create({ content, rolls: [], speaker: ChatMessage.getSpeaker() });
+      return { totalHits };
     }
 
     // ── Shared defensive resolution ──
@@ -1824,10 +1944,11 @@ export class ShipCombatState {
     // ── Apply to target ──
     const targetUpdates = buildDefenseUpdates(resolution, hitQuadrant);
     if (Object.keys(targetUpdates).length) await targetActor.update(targetUpdates);
+    actionState.mechanicalCommitted = true;
 
     // ── Crit ──
     const critResult = totalDamage > 0
-      ? await CritState.rollCrit.call(ShipCombatState, targetActor, totalDamage, anyCrit || isDevastation)
+      ? await CritState.rollCrit.call(parentState, targetActor, totalDamage, anyCrit || isDevastation)
       : null;
 
     // ── Chat ──
@@ -1847,7 +1968,7 @@ export class ShipCombatState {
       },
       critResult: critResult ?? { hasCrit: false },
     });
-    ChatMessage.create({
+    await ChatMessage.create({
       content,
       rolls:   critResult?.critRolls ?? [],
       speaker: ChatMessage.getSpeaker(),
@@ -1859,14 +1980,27 @@ export class ShipCombatState {
    * Apply torpedo detonation damage to a ship.
    * Called via socket from TorpedoSheet._onDetonate.
    */
-  static async torpedoDamage({ torpedoActorId, targetTokenId, targetActorId, torName, torImg, damage, diceFormula, hitQuadrant, traits, warheadCount = 1, damageMultiplier = 1, payloadDamageType = null }) {
-    const target = canvas.tokens.get(targetTokenId)?.document?.actor ?? game.actors.get(targetActorId);
-    if (!target) return;
+  static async torpedoDamage(payload) {
+    const target = canvas.tokens.get(payload.targetTokenId)?.document?.actor ?? game.actors.get(payload.targetActorId);
+    if (!target) return { ok: false, reason: "invalidTarget" };
+    return this.withActorActionTransaction(target, () => {
+      const resolutionId = payload.detonationId
+        ? `${payload.detonationId}:${payload.targetTokenId ?? target.uuid ?? target.id}`
+        : null;
+      const resolvedIds = target.getFlag(MODULE_ID, "resolvedDetonationIds") ?? [];
+      if (resolutionId && resolvedIds.includes(resolutionId)) {
+        return { ok: true, duplicate: true };
+      }
+      return this._resolveTorpedoDamage(payload, target, resolutionId, resolvedIds);
+    });
+  }
 
+  static async _resolveTorpedoDamage({ torpedoActorId, targetTokenId, torName, torImg, damage, diceFormula, hitQuadrant, traits, warheadCount = 1, damageMultiplier = 1, payloadDamageType = null }, target, resolutionId = null, resolvedIds = []) {
     const sys             = SystemAdapter.current.getShipData(target);
     const torpedoActor    = game.actors.get(torpedoActorId);
     const parentShipTokenId = SystemAdapter.current.getShipData(torpedoActor)?.parentShipTokenId;
     const parentShipActor = canvas.tokens.get(parentShipTokenId)?.document?.actor ?? null;
+    const parentState     = parentShipActor ? this.forShip(parentShipActor) : this;
     const attackerSys     = SystemAdapter.current.getShipData(parentShipActor) ?? {};
     const isDevastation   = hasDevastationProtocol(attackerSys, sys);
 
@@ -1940,19 +2074,30 @@ export class ShipCombatState {
     } : null;
 
     const hullUpdates = buildDefenseUpdates(resolution, hitQuadrant);
+    if (resolutionId) {
+      hullUpdates[`flags.${MODULE_ID}.resolvedDetonationIds`] = [...resolvedIds, resolutionId].slice(-20);
+    }
     if (Object.keys(hullUpdates).length) {
       await target.update(hullUpdates);
     }
 
     // Crit check  -  torpedo damage triggers crits like any other weapon
-    const critResult = appliedDamage > 0
-      ? await CritState.rollCrit.call(ShipCombatState, target, appliedDamage, isDevastation)
-      : null;
+    let critResult = null;
+    let warning = null;
+    if (appliedDamage > 0) {
+      try {
+        critResult = await CritState.rollCrit.call(parentState, target, appliedDamage, isDevastation);
+      } catch (error) {
+        warning = "criticalResolutionFailed";
+        console.error(`${MODULE_ID} | Torpedo critical resolution failed after damage committed`, error);
+      }
+    }
 
     // Chat message
-    const content = await renderTemplate(
-      `modules/${CORE_MODULE_ID}/templates/chat/torpedo-result.hbs`,
-      {
+    try {
+      const content = await renderTemplate(
+        `modules/${CORE_MODULE_ID}/templates/chat/torpedo-result.hbs`,
+        {
         weaponImg:        torImg,
         weaponName:       torName ?? game.i18n.localize("SHIPCOMBAT.TorpedoDamage.Title"),
         fireModeLabel:    game.i18n.localize("SHIPCOMBAT.TorpedoDamage.Title"),
@@ -1971,22 +2116,45 @@ export class ShipCombatState {
           diceBreakdown,
         },
         critResult: critResult ?? { hasCrit: false },
-      }
-    );
-    ChatMessage.create({
-      content,
-      rolls:   critResult?.critRolls ?? [],
-      speaker: ChatMessage.getSpeaker(),
-    });
+        }
+      );
+      await ChatMessage.create({
+        content,
+        rolls:   critResult?.critRolls ?? [],
+        speaker: ChatMessage.getSpeaker(),
+      });
+    } catch (error) {
+      warning ??= "chatFailed";
+      console.error(`${MODULE_ID} | Torpedo result chat failed after damage committed`, error);
+    }
+    return { ok: true, warning };
   }
 }
 
 // ── Attach domain methods as static properties ──────────────────────────────
 // This preserves the public API: ShipCombatState.fireWeapon(...) etc.
 
+function allocationSerialized(method) {
+  return function (...args) {
+    return this.withAllocationTransaction(() => method.apply(this, args));
+  };
+}
+
+function powerCoreSerialized(method) {
+  return function (...args) {
+    return this.withPowerCoreTransaction(() => method.apply(this, args));
+  };
+}
+
 // Gunner
 ShipCombatState.fireWeapon      = function (payload) {
-  return this.withAllocationTransaction(() => GunnerState.fireWeapon.call(this, payload));
+  const firingActor = payload.actorId ? game.actors.get(payload.actorId) : this.ship;
+  const targetActor = canvas.tokens.get(payload.targetToken)?.document?.actor ?? null;
+  if (!firingActor?.items.get(payload.weaponId) || !targetActor) return false;
+  return this.withAllocationTransaction(() => this.withActorActionTransactions(
+    [firingActor, targetActor],
+    () => GunnerState.fireWeapon.call(this, payload),
+  ));
 };
 ShipCombatState._fireWeaponChat = GunnerState._fireWeaponChat;
 
@@ -1996,51 +2164,69 @@ ShipCombatState.pilotRetrograde  = PilotState.pilotRetrograde;
 ShipCombatState.pilotOverdrive   = PilotState.pilotOverdrive;
 ShipCombatState.pilotStrafe      = PilotState.pilotStrafe;
 ShipCombatState.pilotFlipAndBurn = PilotState.pilotFlipAndBurn;
-ShipCombatState.pilotRam         = PilotState.pilotRam;
+ShipCombatState.pilotRam         = function (...args) {
+  const targetTokenId = args[1];
+  const rammingActorId = args[11] ?? null;
+  const rammingActor = rammingActorId ? game.actors?.get(rammingActorId) : this.ship;
+  const rammedActor = canvas?.tokens?.get(targetTokenId)?.document?.actor ?? null;
+  if (!rammingActor || !rammedActor) return false;
+  return this.withAllocationTransaction(() => this.withActorActionTransactions(
+    [rammingActor, rammedActor],
+    () => PilotState.pilotRam.apply(this, args),
+  ));
+};
 ShipCombatState.confirmMovement  = function (payload) {
   return this.withAllocationTransaction(() => PilotState.confirmMovement.call(this, payload));
 };
-ShipCombatState.apToThrust       = PilotState.apToThrust;
+ShipCombatState.apToThrust       = allocationSerialized(PilotState.apToThrust);
 
 // Engineer (power cores, heat/fire, shields, core bank, hull repair)
-ShipCombatState.stagePowerCore      = EngineerState.stagePowerCore;
-ShipCombatState.unstagePowerCore    = EngineerState.unstagePowerCore;
+ShipCombatState.stagePowerCore      = powerCoreSerialized(EngineerState.stagePowerCore);
+ShipCombatState.unstagePowerCore    = powerCoreSerialized(EngineerState.unstagePowerCore);
 ShipCombatState.dispatchStagedCores = EngineerState.dispatchStagedCores;
 ShipCombatState.hasPowerCore        = EngineerState.hasPowerCore;
-ShipCombatState.emergencyVent       = EngineerState.emergencyVent;
-ShipCombatState.reduceInternalFire  = EngineerState.reduceInternalFire;
-ShipCombatState.manageHeat          = EngineerState.manageHeat;
-ShipCombatState.setInternalFire     = EngineerState.setInternalFire;
-ShipCombatState.spendBankedCores    = EngineerState.spendBankedCores;
-ShipCombatState.commitShieldCores   = EngineerState.commitShieldCores;
-ShipCombatState.uncommitShieldCore  = EngineerState.uncommitShieldCore;
-ShipCombatState.commitAuxCore       = EngineerState.commitAuxCore;
-ShipCombatState.uncommitAuxCore     = EngineerState.uncommitAuxCore;
-ShipCombatState.adjustShieldZone    = EngineerState.adjustShieldZone;
-ShipCombatState.repairHull          = EngineerState.repairHull;
-ShipCombatState.fluxToCharge        = EngineerState.fluxToCharge;
+ShipCombatState.emergencyVent       = allocationSerialized(EngineerState.emergencyVent);
+ShipCombatState.reduceInternalFire  = allocationSerialized(EngineerState.reduceInternalFire);
+ShipCombatState.manageHeat          = allocationSerialized(EngineerState.manageHeat);
+ShipCombatState.setInternalFire     = allocationSerialized(EngineerState.setInternalFire);
+ShipCombatState.spendBankedCores    = allocationSerialized(EngineerState.spendBankedCores);
+ShipCombatState.commitShieldCores   = powerCoreSerialized(EngineerState.commitShieldCores);
+ShipCombatState.uncommitShieldCore  = powerCoreSerialized(EngineerState.uncommitShieldCore);
+ShipCombatState.commitAuxCore       = powerCoreSerialized(EngineerState.commitAuxCore);
+ShipCombatState.uncommitAuxCore     = powerCoreSerialized(EngineerState.uncommitAuxCore);
+ShipCombatState.adjustShieldZone    = allocationSerialized(EngineerState.adjustShieldZone);
+ShipCombatState.repairHull          = allocationSerialized(EngineerState.repairHull);
+ShipCombatState.fluxToCharge        = allocationSerialized(EngineerState.fluxToCharge);
 
 // Sensors
 ShipCombatState.addSensorEffect      = SensorsState.addSensorEffect;
+ShipCombatState.executeSensorAction  = SensorsState.executeSensorAction;
+ShipCombatState.executeSensorCoreAction = SensorsState.executeSensorCoreAction;
 ShipCombatState.stripQuadrantShields = SensorsState.stripQuadrantShields;
 ShipCombatState.hasSensorEffectOn    = SensorsState.hasSensorEffectOn;
 ShipCombatState.getDisruptionPenalty = SensorsState.getDisruptionPenalty;
 ShipCombatState.upgradeLock          = SensorsState.upgradeLock;
 ShipCombatState.upgradeAllLocks      = SensorsState.upgradeAllLocks;
-ShipCombatState.registerSensorContacts = SensorsState.registerSensorContacts;
+ShipCombatState.registerSensorContacts = allocationSerialized(SensorsState.registerSensorContacts);
 ShipCombatState.getLockTier          = SensorsState.getLockTier;
 ShipCombatState.getEffectiveLockTier = SensorsState.getEffectiveLockTier;
-ShipCombatState.setRecommendedTarget = SensorsState.setRecommendedTarget;
+ShipCombatState.hasEffectiveLock     = SensorsState.hasEffectiveLock;
+ShipCombatState.setRecommendedTarget = allocationSerialized(SensorsState.setRecommendedTarget);
 ShipCombatState.clearTargetReferences = SensorsState.clearTargetReferences;
+ShipCombatState.pruneTargetReferences = SensorsState.pruneTargetReferences;
 ShipCombatState.consumeLock          = SensorsState.consumeLock;
 ShipCombatState.removeLock           = SensorsState.removeLock;
-ShipCombatState.resolveBDA           = SensorsState.resolveBDA;
+ShipCombatState.resolveBDA           = allocationSerialized(SensorsState.resolveBDA);
 ShipCombatState.completeBDA          = SensorsState.completeBDA;
+ShipCombatState.applyBdaCorrection   = SensorsState.applyBdaCorrection;
 ShipCombatState.setFireCorrection    = SensorsState.setFireCorrection;
-ShipCombatState.spendAP              = SensorsState.spendAP;
+ShipCombatState.spendAP              = allocationSerialized(SensorsState.spendAP);
 
 // Ordnance
+// Internal primitive used by executeOrdnanceLaunch; intentionally not socket-exposed.
 ShipCombatState.spawnOrdnance             = OrdnanceState.spawnOrdnance;
+ShipCombatState.executeOrdnanceLaunch     = OrdnanceState.executeOrdnanceLaunch;
+ShipCombatState.executeCraftRecovery      = OrdnanceState.executeCraftRecovery;
 ShipCombatState.deleteOrdnanceTokens      = OrdnanceState.deleteOrdnanceTokens;
 ShipCombatState.destroyOrdnanceTokens     = OrdnanceState.destroyOrdnanceTokens;
 ShipCombatState.setOrdnanceRtb            = OrdnanceState.setOrdnanceRtb;
@@ -2053,7 +2239,7 @@ ShipCombatState.blastOrdnance             = OrdnanceState.blastOrdnance;
 ShipCombatState.rollCrit = CritState.rollCrit;
 
 // Captain
-ShipCombatState.triageCondition  = CaptainState.triageCondition;
+ShipCombatState.triageCondition  = allocationSerialized(CaptainState.triageCondition);
 ShipCombatState.drawCards        = CaptainState.drawCards;
 ShipCombatState.playCard         = CaptainState.playCard;
 ShipCombatState.discardCard      = CaptainState.discardCard;

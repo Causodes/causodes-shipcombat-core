@@ -5,10 +5,12 @@
  * designated; Lock 0 targets are shown but greyed out.
  */
 import { MODULE_ID, CORE_MODULE_ID } from "../constants.js";
-import { emitToGM }  from "../socket.js";
+import { createActionRequester }  from "../socket.js";
 import { ShipCombatState } from "../state/ShipCombatState.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
 import { getContactDisplayName, isTargetableContactToken } from "../targeting/contact-intelligence.js";
+
+const requestGM = createActionRequester(context => context.shipActor);
 
 // Lock tier palette (matches SensorRadar TIER_COLOUR)
 const TIER_COLOUR = {
@@ -132,7 +134,11 @@ export class BattleClarityPopup extends foundry.applications.api.HandlebarsAppli
   static async _onConfirmDesignate(event, element) {
     const tokenId = element.dataset.tokenId;
     if (!tokenId) return;
-    emitToGM("captainCoreAction", { actionId: "battleClarity", tokenId, shipActorId: this.shipActor?.id });
+    const committed = await requestGM(this, "captainCoreAction", {
+      actionId: "battleClarity",
+      tokenId,
+    });
+    if (committed === false) return;
     this.close();
   }
 }

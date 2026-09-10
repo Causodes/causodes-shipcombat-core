@@ -17,12 +17,14 @@
  * Payloads: still loaded via loadPayload action (commits 3 crew for 1 turn).
  */
 
-import { emitToGM } from "../socket.js";
+import { createActionRequester } from "../socket.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
 import { MODULE_ID, PAYLOAD_TYPES, PAYLOADS_BY_ROLE, ORDNANCE_MASTER_ACTIONS, ORDNANCE_MASTER_CORE_ACTIONS, ORDNANCE_4MAN_COSTS } from "../constants.js";
 import { RecoverCraftPopup } from "../apps/StrikeCraftPopups.js";
 import { isOrdnance, isTorpedo, isStrikeCraft, ordnanceSubtype } from "../actors/ordnance/ordnance-types.js";
 import { getPowerCoreCount, resolveStationOperatorActor } from "./crew-operators.js";
+
+const requestGM = createActionRequester(context => context.actor);
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -554,8 +556,7 @@ async function _onRollOrdnanceMaster(event, target) {
   if (!result) return;
 
   const sl = Math.max(0, result.SL ?? 0);
-  await emitToGM("updateResources", {
-    shipActorId: this.actor.id,
+  await requestGM(this, "updateResources", {
     updates: [
       { roleId: "ordnance", key: "bosunSL", value: sl },
       { roleId: "ordnance", key: "bosunRolled", value: true },
@@ -600,9 +601,9 @@ async function _onAllocOrdnanceSL(event, target) {
   }
 
   if (stat === "efficiency") {
-    await emitToGM("updateResource", { roleId: "ordnance", key: "allocEfficiency", value: newEfficiency, shipActorId: this.actor.id });
+    await requestGM(this, "updateResource", { roleId: "ordnance", key: "allocEfficiency", value: newEfficiency });
   } else {
-    await emitToGM("updateResource", { roleId: "ordnance", key: "allocExpedience", value: newExpedience, shipActorId: this.actor.id });
+    await requestGM(this, "updateResource", { roleId: "ordnance", key: "allocExpedience", value: newExpedience });
   }
 }
 
@@ -676,15 +677,39 @@ async function _onOrdnanceMasterAction(event, target) {
     if (!recoveringTokenId) return;
   }
 
-  const committed = await emitToGM("commitOrdnanceAction", {
-    actionId,
-    shipActorId: this.actor.id,
-  });
+  let committed;
+  try {
+    committed = recoveringTokenId
+      ? await requestGM(this, "executeCraftRecovery", {
+        tokenId: recoveringTokenId,
+      })
+      : spawnRequests.length > 0
+      ? await requestGM(this, "executeOrdnanceLaunch", {
+        actionId,
+        spawnRequests,
+      })
+      : await requestGM(this, "commitOrdnanceAction", {
+        actionId,
+      });
+  } catch (error) {
+    console.error(`${MODULE_ID} | Ordnance commitment failed`, error);
+    ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Ordnance.ActionFailed"));
+    return;
+  }
+  if (committed === false) return;
   if (!committed?.ok) {
     if (committed?.reason === "insufficientCrew") {
       ui.notifications.warn(game.i18n.format("SHIPCOMBAT.Ordnance.InsufficientCrew", { need: committed.need, have: committed.have }));
     } else if (committed?.reason === "noArmedTorpedoes") {
       ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Ordnance.NoArmedTorpedoes"));
+    } else if (committed?.reason === "noArmedCraft") {
+      ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Ordnance.NoArmedCraft"));
+    } else if (committed?.reason === "flightCapacityReached") {
+      ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Ordnance.FlightCapacityReached"));
+    } else if (committed?.reason === "prowGunLocked") {
+      ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Ordnance.BowLaunchLocked"));
+    } else if (committed?.reason === "rollbackFailed") {
+      ui.notifications.error(game.i18n.localize("SHIPCOMBAT.Ordnance.ProvisionalCleanupFailed"));
     } else {
       ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Ordnance.ActionFailed"));
     }
@@ -694,24 +719,6 @@ async function _onOrdnanceMasterAction(event, target) {
     action: game.i18n.localize(entry.label),
     turns: committed.duration,
   }));
-
-  for (const request of spawnRequests) {
-    await emitToGM("spawnOrdnance", request);
-  }
-
-  if (recoveringTokenId) {
-    const tokenDoc = canvas.scene.tokens.get(recoveringTokenId);
-    if (tokenDoc?.actor) {
-      await tokenDoc.actor.setFlag(MODULE_ID, "recovering", true);
-    }
-    const deleted = await emitToGM("deleteOrdnanceTokens", { tokenIds: [recoveringTokenId] });
-    if ((deleted?.tokensDeleted ?? 0) > 0) {
-      await emitToGM("adjustResources", {
-        shipActorId: this.actor.id,
-        adjustments: [{ roleId: "ordnance", key: "craftRecovering", delta: 1 }],
-      });
-    }
-  }
 }
 
 /**
@@ -732,7 +739,7 @@ async function _onOrdnanceMasterCoreAction(event, target) {
   let coreReserved = false;
   const reserveCore = async () => {
     if (coreReserved) return true;
-    coreReserved = await emitToGM("consumePowerCore", { roleId: "ordnance", actionId, shipActorId: this.actor.id });
+    coreReserved = await requestGM(this, "consumePowerCore", { roleId: "ordnance", actionId });
     if (!coreReserved) {
       ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NeedsPowerCore"));
     }
@@ -783,8 +790,7 @@ async function _onOrdnanceMasterCoreAction(event, target) {
 
     if (choice === "destroyed") {
       // First use on a destroyed craft: moves 1 airframe to partial repair
-      await emitToGM("adjustResources", {
-        shipActorId: this.actor.id,
+      await requestGM(this, "adjustResources", {
         requirements: [{ roleId: "ordnance", key: "craftDestroyed", min: 1 }],
         adjustments: [
           { roleId: "ordnance", key: "craftDestroyed", delta: -1, min: 0 },
@@ -793,8 +799,7 @@ async function _onOrdnanceMasterCoreAction(event, target) {
       });
     } else if (choice === "partial") {
       // Second use completes the repair  -  craft returns to empty bay slot (available for arming)
-      await emitToGM("adjustResources", {
-        shipActorId: this.actor.id,
+      await requestGM(this, "adjustResources", {
         requirements: [{ roleId: "ordnance", key: "craftPartialRecovery", min: 1 }],
         adjustments: [{ roleId: "ordnance", key: "craftPartialRecovery", delta: -1, min: 0 }],
       });
@@ -835,8 +840,7 @@ async function _onOrdnanceMasterCoreAction(event, target) {
     if (Number.isNaN(idx) || idx < 0 || idx >= commitments.length) return;
 
     if (!(await reserveCore())) return;
-    const completed = await emitToGM("completeOrdnanceCommitment", {
-      shipActorId: this.actor.id,
+    const completed = await requestGM(this, "completeOrdnanceCommitment", {
       commitmentId: commitments[idx].id ?? null,
       index: idx,
     });
@@ -876,8 +880,7 @@ async function _onOrdnanceMasterCoreAction(event, target) {
     const availablePayloads = sys.resources?.ordnance?.availablePayloads ?? 0;
     if (!(await reserveCore())) return;
     if (choice === "torpedo") {
-      await emitToGM("adjustResources", {
-        shipActorId: this.actor.id,
+      await requestGM(this, "adjustResources", {
         requirements: [{ roleId: "gunner", key: "ammo", min: 6 }],
         adjustments: [
           { roleId: "gunner", key: "ammo", delta: -6, min: 0 },
@@ -885,8 +888,7 @@ async function _onOrdnanceMasterCoreAction(event, target) {
         ],
       });
     } else {
-      await emitToGM("adjustResources", {
-        shipActorId: this.actor.id,
+      await requestGM(this, "adjustResources", {
         requirements: [{ roleId: "gunner", key: "ammo", min: 4 }],
         adjustments: [
           { roleId: "gunner", key: "ammo", delta: -4, min: 0 },
@@ -927,8 +929,7 @@ async function _onOrdnanceMasterCoreAction(event, target) {
         const permanentLoss = componentManpower - manpowerMax;
         const restore = Math.max(1, Math.ceil(permanentLoss * 0.10));
         const newMax = Math.min(componentManpower, manpowerMax + restore);
-        await emitToGM("adjustResources", {
-          shipActorId: this.actor.id,
+        await requestGM(this, "adjustResources", {
           adjustments: [
             { roleId: "ordnance", key: "manpowerMax", delta: restore, max: componentManpower },
             { roleId: "ordnance", key: "manpower", delta: restore, max: componentManpower },
@@ -937,13 +938,13 @@ async function _onOrdnanceMasterCoreAction(event, target) {
       } else {
         // Temp gain: 25% of current manpower cap
         const tempGain = Math.max(1, Math.ceil(manpowerMax * 0.25));
-        await emitToGM("adjustResources", { shipActorId: this.actor.id, adjustments: [{ roleId: "ordnance", key: "manpower", delta: tempGain }] });
+        await requestGM(this, "adjustResources", { adjustments: [{ roleId: "ordnance", key: "manpower", delta: tempGain }] });
       }
     } else {
       // No permanent loss  -  temp bonus: 25% of manpower cap
       if (!(await reserveCore())) return;
       const tempGain = Math.max(1, Math.ceil(manpowerMax * 0.25));
-      await emitToGM("adjustResources", { shipActorId: this.actor.id, adjustments: [{ roleId: "ordnance", key: "manpower", delta: tempGain }] });
+      await requestGM(this, "adjustResources", { adjustments: [{ roleId: "ordnance", key: "manpower", delta: tempGain }] });
     }
   }
 
@@ -979,7 +980,7 @@ async function _onOrdnanceMasterCoreAction(event, target) {
         adjustments.push({ roleId: "engineer", key: "auxiliaryPower", delta: apGain, max: auxCap });
       }
     }
-    await emitToGM("adjustResources", { shipActorId: this.actor.id, adjustments });
+    await requestGM(this, "adjustResources", { adjustments });
   }
 
   // Future core actions still reserve through the same atomic backend even if
@@ -1031,8 +1032,7 @@ async function _onSendPayload(event, target) {
 
   const reactorComp = this.actor.items?.find(i => i.type === `${MODULE_ID}.component` && i.system?.slot === "reactor" && i.system?.equipped !== false);
   const heatCapacity = reactorComp?.system?.heatCapacity ?? 0;
-  const delivered = await emitToGM("adjustResources", {
-    shipActorId: this.actor.id,
+  const delivered = await requestGM(this, "adjustResources", {
     requirements: [
       { roleId: "ordnance", key: "availablePayloads", min: 1 },
       { roleId: pDef.targetRole, key: "payload", equals: "" },
@@ -1048,7 +1048,7 @@ async function _onSendPayload(event, target) {
     return;
   }
   if (["cogitatorDataSlate", "fireSuppression"].includes(pDef.id)) {
-    await emitToGM("captainPayloadActivate", { payloadId: pDef.id, shipActorId: this.actor.id });
+    await requestGM(this, "captainPayloadActivate", { payloadId: pDef.id });
   }
 
 }
@@ -1206,7 +1206,7 @@ async function _onRecall(event, target) {
   const tokenId = target.dataset.tokenId;
   if (!tokenId) return;
 
-  emitToGM("setOrdnanceRtb", { tokenId, rtb: true });
+  await requestGM(this, "setOrdnanceRtb", { tokenId, rtb: true });
 }
 
 /**
@@ -1216,7 +1216,7 @@ async function _onDiscardPayload(event, target) {
   const roleId = target.dataset.roleId;
   if (!roleId) return;
 
-  await emitToGM("updateResource", { roleId, key: "payload", value: "", shipActorId: this.actor.id });
+  await requestGM(this, "updateResource", { roleId, key: "payload", value: "" });
 }
 
 /**
@@ -1242,7 +1242,11 @@ async function _onMarkOrdnanceDone(event, target) {
   if (!token?.actor) return;
 
   const done = !SystemAdapter.current.getShipData(token.actor).turnComplete;
-  emitToGM("setOrdnanceTurnDone", { tokenId, done });
+  const updated = await requestGM(this, "setOrdnanceTurnDone", {
+    tokenId,
+    done,
+  });
+  if (!updated) return;
 
   // Optimistically update the DOM; the ship sheet does not auto-re-render
   // when a foreign (ordnance) actor is updated via socket.
@@ -1265,8 +1269,7 @@ async function _onMarkOrdnanceDone(event, target) {
  * data-index = commitment array index
  */
 async function _onCancelCommitment(event, target) {
-  const result = await emitToGM("cancelOrdnanceCommitment", {
-    shipActorId: this.actor.id,
+  const result = await requestGM(this, "cancelOrdnanceCommitment", {
     commitmentId: target.dataset.commitmentId || null,
     index: Number(target.dataset.index),
   });

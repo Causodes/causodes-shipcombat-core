@@ -6,7 +6,7 @@
  */
 import { MODULE_ID, CORE_MODULE_ID, MACRO_FIRE_TIERS, buildChargeTiers }
   from "../constants.js";
-import { emitToGM }
+import { createActionRequester }
   from "../socket.js";
 import { ShipCombatState }
   from "../state/ShipCombatState.js";
@@ -22,6 +22,8 @@ import { getContactDisplayName, isTargetableContactToken }
   from "../targeting/contact-intelligence.js";
 import { getAttackStanceModifier }
   from "../stances.js";
+
+const requestGM = createActionRequester(context => context.weapon?.parent);
 
 // ── TargetingPopupV1 ─────────────────────────────────────────────────────────
 
@@ -62,6 +64,7 @@ export class TargetingPopupV1 extends foundry.appv1.api.Application {
     const ship = this.weapon?.parent;
     if (!ship || !this.weapon) return { ...context, targets: [], weapon: null };
 
+    const state     = ShipCombatState.forShip(ship);
     const adapter   = SystemAdapter.current;
     const sys       = adapter.getShipData(ship) ?? {};
     const gunnerRes = sys.resources?.gunner ?? {};
@@ -119,7 +122,7 @@ export class TargetingPopupV1 extends foundry.appv1.api.Application {
 
       const lockTier = ship.type === `${MODULE_ID}.npcShip`
         ? 3
-        : ShipCombatState.getEffectiveLockTier(candidate.id, distSquares);
+        : state.getEffectiveLockTier(candidate.id, distSquares);
       if (lockTier < 1) continue;
 
       const attackAngle = Math.atan2(ty - cy, tx - cx);
@@ -461,9 +464,7 @@ export class TargetingPopupV1 extends foundry.appv1.api.Application {
     const ship        = this.weapon?.parent;
     const gunnerRes   = ship?.system?.resources?.gunner ?? {};
     const fmd         = this._getFireModeDetails(gunnerRes);
-    const committed = await emitToGM("fireWeapon", {
-      shipActorId:    this.weapon.parent?.id,
-      actorId:        this.weapon.parent?.id,
+    const committed = await requestGM(this, "fireWeapon", {
       weaponId:       this.weapon.id,
       fireMode:       this.fireMode,
       targetToken:    tokenId,

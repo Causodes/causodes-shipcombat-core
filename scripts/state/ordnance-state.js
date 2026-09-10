@@ -5,12 +5,231 @@
  * Inside each function, `this` refers to the ShipCombatState class itself.
  */
 
-import { MODULE_ID } from "../constants.js";
-import { isTorpedo, ordnanceTypeName } from "../actors/ordnance/ordnance-types.js";
+import { MODULE_ID, ORDNANCE_4MAN_COSTS, ORDNANCE_MASTER_ACTIONS } from "../constants.js";
+import { isStrikeCraft, isTorpedo, ordnanceTypeName } from "../actors/ordnance/ordnance-types.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
 import { getOrdnanceControllerUserId } from "../roles/crew-operators.js";
 
 const destroyingOrdnanceTokenIds = new Set();
+
+const LAUNCH_REQUEST_SHAPES = {
+  launchTorpedo:  ["torpedo"],
+  torpedoSalvo:   ["torpedo", "torpedo"],
+  emergencyLaunch: ["torpedo"],
+  launchCraft:    ["strikeCraft"],
+};
+
+async function _cleanupFailedSpawn(actor) {
+  if (!actor) return;
+  const tokenIds = canvas?.scene?.tokens
+    ?.filter(tokenDoc => tokenDoc.actorId === actor.id)
+    .map(tokenDoc => tokenDoc.id) ?? [];
+  if (tokenIds.length > 0) {
+    await deleteOrdnanceTokens(tokenIds, { suppressDestroyTracking: true });
+    return;
+  }
+  const generatedActor = game.actors.get(actor.id);
+  if (generatedActor) await generatedActor.delete();
+}
+
+async function _cleanupProvisionalTokens(tokenIds) {
+  if (tokenIds.length === 0) return true;
+  try {
+    const result = await deleteOrdnanceTokens(tokenIds, { suppressDestroyTracking: true });
+    return (result?.tokensDeleted ?? 0) === tokenIds.length;
+  } catch (error) {
+    console.error(`${MODULE_ID} | Provisional ordnance cleanup failed`, error);
+    return false;
+  }
+}
+
+/**
+ * Validate, spawn, and commit a player-ship launch in one GM-side request.
+ * The allocation queue covers both the authoritative resource check and the
+ * compensating cleanup, so a dropped client response cannot split the action.
+ */
+export async function executeOrdnanceLaunch({ actionId, spawnRequests = [] } = {}) {
+  if (!game.user.isGM || !canvas?.scene) return { ok: false, reason: "notGM" };
+  const ship = this.ship;
+  const entry = ORDNANCE_MASTER_ACTIONS[actionId];
+  const expectedTypes = LAUNCH_REQUEST_SHAPES[actionId];
+  if (!ship || !entry || !expectedTypes || !Array.isArray(spawnRequests)
+    || spawnRequests.length !== expectedTypes.length) {
+    return { ok: false, reason: "invalidLaunch" };
+  }
+
+  return this.withAllocationTransaction(async () => {
+    const validRequests = spawnRequests.every((request, index) => {
+      const parentToken = request?.parentShipTokenId
+        ? canvas.scene.tokens.get(request.parentShipTokenId)
+        : null;
+      return request?.type === expectedTypes[index] && parentToken?.actorId === ship.id;
+    });
+    if (!validRequests) return { ok: false, reason: "invalidLaunch" };
+
+    const data = SystemAdapter.current.getShipData(ship) ?? {};
+    const ordnance = data.resources?.ordnance ?? {};
+    if (data.resources?.pilot?.prowGunLocked) {
+      return { ok: false, reason: "prowGunLocked" };
+    }
+    const configuredTemplates = {
+      torpedo: data.ordnanceActors?.torpedo ?? [],
+      strikeCraft: data.ordnanceActors?.strikeCraft ?? [],
+    };
+    const activeTemplateIds = {
+      torpedo: new Set((data.activeOrdnance ?? [])
+        .filter(entry => entry?.type === "torpedo")
+        .map(entry => entry.actorId)),
+      strikeCraft: new Set((data.activeOrdnance ?? [])
+        .filter(entry => entry?.type === "strikeCraft")
+        .map(entry => entry.actorId)),
+    };
+    const hasConfiguredTemplates = spawnRequests.every(request => request.templateId
+      && activeTemplateIds[request.type].has(request.templateId)
+      && configuredTemplates[request.type].some(template => template?.id === request.templateId));
+    if (!hasConfiguredTemplates) return { ok: false, reason: "invalidTemplate" };
+
+    const override = (data.crewSize ?? 6) <= 4 ? ORDNANCE_4MAN_COSTS[actionId] : null;
+    const crewCost = Math.max(2, (override?.crew ?? entry.crew) - Math.max(0, ordnance.allocEfficiency ?? 0));
+    const duration = Math.max(1, (override?.duration ?? entry.duration) - Math.max(0, ordnance.allocExpedience ?? 0));
+    const manpower = ordnance.manpower ?? 0;
+    if (manpower < crewCost) {
+      return { ok: false, reason: "insufficientCrew", need: crewCost, have: manpower };
+    }
+    if (["launchTorpedo", "torpedoSalvo"].includes(actionId) && (ordnance.armedTorpedoes ?? 0) < 1) {
+      return { ok: false, reason: "noArmedTorpedoes" };
+    }
+    if (actionId === "launchCraft") {
+      if ((ordnance.armedCraft ?? 0) < 1) return { ok: false, reason: "noArmedCraft" };
+      const shipTokenIds = new Set((ship.getActiveTokens?.() ?? []).map(token => token.id));
+      const deployedCraftCount = canvas.scene.tokens.filter(tokenDoc => {
+        if (!isStrikeCraft(tokenDoc.actor)) return false;
+        const parentTokenId = SystemAdapter.current.getShipData(tokenDoc.actor)?.parentShipTokenId;
+        return shipTokenIds.has(parentTokenId);
+      }).length;
+      const bayStats = this.getOrdnanceBayStats(ship);
+      if (deployedCraftCount >= (bayStats.maxFlights ?? 2)
+        || deployedCraftCount + (ordnance.craftDestroyed ?? 0) >= (bayStats.strikeCraftCapacity ?? 6)) {
+        return { ok: false, reason: "flightCapacityReached" };
+      }
+    }
+
+    const spawnedTokenIds = [];
+    for (const request of spawnRequests) {
+      let spawned;
+      try {
+        spawned = await spawnOrdnance.call(this, request);
+      } catch (error) {
+        console.error(`${MODULE_ID} | Ordnance launch spawn failed`, error);
+      }
+      if (!spawned?.ok) {
+        const rolledBack = await _cleanupProvisionalTokens(spawnedTokenIds);
+        return { ok: false, reason: rolledBack ? "spawnFailed" : "rollbackFailed" };
+      }
+      spawnedTokenIds.push(...(spawned.tokenIds ?? []));
+    }
+
+    const commitments = [...(ordnance.commitments ?? []), {
+      id: foundry.utils.randomID(),
+      action: actionId,
+      crewCount: crewCost,
+      turnsRemaining: duration,
+      addedRound: data.round ?? 0,
+    }];
+    const updates = {
+      "resources.ordnance.manpower": manpower - crewCost,
+      "resources.ordnance.commitments": commitments,
+    };
+    if (["launchTorpedo", "torpedoSalvo"].includes(actionId)) {
+      updates["resources.ordnance.armedTorpedoes"] = ordnance.armedTorpedoes - 1;
+    }
+    if (actionId === "launchCraft") {
+      updates["resources.ordnance.armedCraft"] = ordnance.armedCraft - 1;
+    }
+
+    try {
+      await this.update(updates, ship);
+    } catch (error) {
+      console.error(`${MODULE_ID} | Ordnance launch commitment failed`, error);
+      const rolledBack = await _cleanupProvisionalTokens(spawnedTokenIds);
+      return { ok: false, reason: rolledBack ? "commitFailed" : "rollbackFailed" };
+    }
+    return { ok: true, crewCost, duration, tokenIds: spawnedTokenIds };
+  }, ship);
+}
+
+/** Reserve a recall and remove its craft as one compensating GM workflow. */
+export async function executeCraftRecovery({ tokenId } = {}) {
+  if (!game.user.isGM || !canvas?.scene) return { ok: false, reason: "notGM" };
+  const ship = this.ship;
+  if (!ship || !tokenId) return { ok: false, reason: "invalidRecovery" };
+
+  return this.withAllocationTransaction(async () => {
+    const tokenDoc = canvas.scene.tokens.get(tokenId);
+    const craft = tokenDoc?.actor;
+    const parentTokenId = SystemAdapter.current.getShipData(craft)?.parentShipTokenId;
+    const parentToken = parentTokenId ? canvas.scene.tokens.get(parentTokenId) : null;
+    const shipToken = ship.getActiveTokens?.()?.find(token => token.id === parentTokenId) ?? null;
+    if (!craft || !isStrikeCraft(craft) || parentToken?.actorId !== ship.id || !shipToken) {
+      return { ok: false, reason: "invalidRecovery" };
+    }
+
+    const gridSize = canvas.grid?.size ?? 0;
+    if (!gridSize) return { ok: false, reason: "invalidRecovery" };
+    const shipX = shipToken.center?.x ?? (shipToken.x + (shipToken.document.width ?? 1) * gridSize / 2);
+    const shipY = shipToken.center?.y ?? (shipToken.y + (shipToken.document.height ?? 1) * gridSize / 2);
+    const craftX = (tokenDoc.x ?? 0) + (tokenDoc.width ?? 1) * gridSize / 2;
+    const craftY = (tokenDoc.y ?? 0) + (tokenDoc.height ?? 1) * gridSize / 2;
+    if (Math.hypot(craftX - shipX, craftY - shipY) / gridSize > 3) {
+      return { ok: false, reason: "outOfRange" };
+    }
+
+    const data = SystemAdapter.current.getShipData(ship) ?? {};
+    const ordnance = data.resources?.ordnance ?? {};
+    const entry = ORDNANCE_MASTER_ACTIONS.recallCraft;
+    const override = (data.crewSize ?? 6) <= 4 ? ORDNANCE_4MAN_COSTS.recallCraft : null;
+    const crewCost = Math.max(2, (override?.crew ?? entry.crew) - Math.max(0, ordnance.allocEfficiency ?? 0));
+    const duration = Math.max(1, (override?.duration ?? entry.duration) - Math.max(0, ordnance.allocExpedience ?? 0));
+    const manpower = ordnance.manpower ?? 0;
+    if (manpower < crewCost) {
+      return { ok: false, reason: "insufficientCrew", need: crewCost, have: manpower };
+    }
+
+    const priorCommitments = [...(ordnance.commitments ?? [])];
+    const commitments = [...priorCommitments, {
+      id: foundry.utils.randomID(),
+      action: "recallCraft",
+      crewCount: crewCost,
+      turnsRemaining: duration,
+      addedRound: data.round ?? 0,
+    }];
+    const priorRecovering = ordnance.craftRecovering ?? 0;
+    await this.update({
+      "resources.ordnance.manpower": manpower - crewCost,
+      "resources.ordnance.commitments": commitments,
+      "resources.ordnance.craftRecovering": priorRecovering + 1,
+    }, ship);
+
+    try {
+      const deleted = await deleteOrdnanceTokens([tokenId], { suppressDestroyTracking: true });
+      if ((deleted?.tokensDeleted ?? 0) !== 1) throw new Error("Recovered craft token was not deleted");
+      return { ok: true, crewCost, duration, warning: deleted.actorCleanupFailed ? "actorCleanupFailed" : null };
+    } catch (error) {
+      console.error(`${MODULE_ID} | Craft recovery deletion failed; rolling back reservation`, error);
+      try {
+        await this.update({
+          "resources.ordnance.manpower": manpower,
+          "resources.ordnance.commitments": priorCommitments,
+          "resources.ordnance.craftRecovering": priorRecovering,
+        }, ship);
+        return { ok: false, reason: "deletionFailed", rolledBack: true };
+      } catch (rollbackError) {
+        console.error(`${MODULE_ID} | Craft recovery rollback failed`, rollbackError);
+        return { ok: false, reason: "rollbackFailed", rolledBack: false };
+      }
+    }
+  }, ship);
+}
 
 /**
  * Spawn a torpedo or strike craft token near the ship.
@@ -135,33 +354,55 @@ export async function spawnOrdnance({ type, parentShipTokenId, x, y, rotation, t
     console.warn(`${MODULE_ID} | spawnOrdnance: aborting after Actor.create returned null`, {
       type, subtype, unifiedType, templateId, parentShipTokenId, actorDataType: actorData?.type, actorDataSubtype: actorData?.system?.subtype,
     });
-    return;
+    return { ok: false, reason: "actorCreateFailed" };
   }
-  if (canvas?.scene) {
-    try {
-      const tokenOverrides = { x, y, rotation, hidden: false, disposition: CONST.TOKEN_DISPOSITIONS.NEUTRAL };
-      tokenOverrides.width = 0.5;
-      tokenOverrides.height = 0.5;
-      // Restore custom token texture. Priority:
-      //   1. templateRef.tokenImg — stored explicitly at registration, survives normalisation
-      //   2. actorData.prototypeToken.texture.src — serialised actor data (may be normalised)
-      const _origTextureSrc = templateRef?.tokenImg ?? actorData?.prototypeToken?.texture?.src;
-      if (_origTextureSrc) tokenOverrides.texture = { src: _origTextureSrc };
-      const tokenData = await actor.getTokenDocument(tokenOverrides);
-      await canvas.scene.createEmbeddedDocuments("Token", [tokenData.toObject()]);
-    } catch (err) {
-      console.error(`${MODULE_ID} | spawnOrdnance: token creation failed`, err);
-      ui.notifications?.error(`Ordnance token creation failed: ${err.message ?? err}`);
+  if (!canvas?.scene) {
+    await _cleanupFailedSpawn(actor);
+    return { ok: false, reason: "noScene" };
+  }
+
+  let createdTokens;
+  try {
+    const tokenOverrides = { x, y, rotation, hidden: false, disposition: CONST.TOKEN_DISPOSITIONS.NEUTRAL };
+    tokenOverrides.width = 0.5;
+    tokenOverrides.height = 0.5;
+    // Restore custom token texture. Priority:
+    //   1. templateRef.tokenImg — stored explicitly at registration, survives normalisation
+    //   2. actorData.prototypeToken.texture.src — serialised actor data (may be normalised)
+    const _origTextureSrc = templateRef?.tokenImg ?? actorData?.prototypeToken?.texture?.src;
+    if (_origTextureSrc) tokenOverrides.texture = { src: _origTextureSrc };
+    const tokenData = await actor.getTokenDocument(tokenOverrides);
+    createdTokens = await canvas.scene.createEmbeddedDocuments("Token", [tokenData.toObject()]);
+    if (createdTokens.length !== 1) {
+      throw new Error(`Expected one created token, received ${createdTokens.length}`);
     }
+  } catch (err) {
+    console.error(`${MODULE_ID} | spawnOrdnance: token creation failed`, err);
+    ui.notifications?.error(`Ordnance token creation failed: ${err.message ?? err}`);
+    try {
+      await _cleanupFailedSpawn(actor);
+    } catch (cleanupError) {
+      console.error(`${MODULE_ID} | spawnOrdnance: failed-spawn cleanup also failed`, cleanupError);
+    }
+    return { ok: false, reason: "tokenCreateFailed" };
   }
 
   // Re-render any open ship sheets so Deployed Ordnance updates immediately
   if (shipActor?.sheet?.rendered) {
-    shipActor.sheet.render();
+    try {
+      shipActor.sheet.render();
+    } catch (error) {
+      console.error(`${MODULE_ID} | spawnOrdnance: parent-sheet refresh failed`, error);
+    }
   }
+  return {
+    ok: true,
+    actorId: actor.id,
+    tokenIds: createdTokens.map(tokenDoc => tokenDoc.id),
+  };
 }
 
-export async function deleteOrdnanceTokens(tokenIds = []) {
+export async function deleteOrdnanceTokens(tokenIds = [], { suppressDestroyTracking = false } = {}) {
   if (!game.user.isGM || !canvas?.scene) return { tokensDeleted: 0, actorsDeleted: 0 };
 
   const tokenDocs = [...new Set(tokenIds)]
@@ -172,20 +413,33 @@ export async function deleteOrdnanceTokens(tokenIds = []) {
     .filter(actorId => game.actors.get(actorId)?.getFlag(MODULE_ID, "fromOrdnanceMaster")));
 
   if (tokenDocs.length > 0) {
-    await canvas.scene.deleteEmbeddedDocuments("Token", tokenDocs.map(tokenDoc => tokenDoc.id));
+    await canvas.scene.deleteEmbeddedDocuments(
+      "Token",
+      tokenDocs.map(tokenDoc => tokenDoc.id),
+      {
+        shipCombatSuppressDestroyTracking: suppressDestroyTracking,
+        shipCombatHandlesActorCleanup: true,
+      },
+    );
   }
 
   let actorsDeleted = 0;
+  let actorCleanupFailed = 0;
   for (const actorId of generatedActorIds) {
     const stillDeployed = canvas.scene.tokens.some(tokenDoc => tokenDoc.actorId === actorId);
     const actor = game.actors.get(actorId);
     if (!stillDeployed && actor) {
-      await actor.delete();
-      actorsDeleted += 1;
+      try {
+        await actor.delete();
+        actorsDeleted += 1;
+      } catch (error) {
+        actorCleanupFailed += 1;
+        console.error(`${MODULE_ID} | Failed to clean up generated ordnance Actor`, error);
+      }
     }
   }
 
-  return { tokensDeleted: tokenDocs.length, actorsDeleted };
+  return { tokensDeleted: tokenDocs.length, actorsDeleted, actorCleanupFailed };
 }
 
 /** Destroy ordnance after playing its destruction animation. */
@@ -241,10 +495,11 @@ export async function setOrdnanceRtb(tokenId, rtb) {
  * Set the turnComplete flag on a deployed ordnance token.
  */
 export async function setOrdnanceTurnDone(tokenId, done) {
-  if (!game.user.isGM || !canvas?.scene) return;
+  if (!game.user.isGM || !canvas?.scene) return false;
   const td = canvas.scene.tokens.get(tokenId);
-  if (!td?.actor) return;
+  if (!td?.actor) return false;
   await td.actor.update({ [SystemAdapter.current.systemPath("turnComplete")]: !!done });
+  return true;
 }
 
 /**
@@ -277,10 +532,14 @@ export async function designateHostileTorpedo(tokenId) {
  * maximum (100 → 200) so it can commit up to 200% thrust this turn.
  */
 export async function torpedoPowerBoost(tokenId) {
-  if (!game.user.isGM || !canvas?.scene) return;
+  if (!game.user.isGM || !canvas?.scene) return false;
   const td = canvas.scene.tokens.get(tokenId);
-  if (!td?.actor) return;
+  if (!td?.actor || !isTorpedo(td.actor)) return false;
+  const parentShipTokenId = SystemAdapter.current.getShipData(td.actor)?.parentShipTokenId;
+  const ownTokenIds = new Set((this.ship?.getActiveTokens?.() ?? []).map(token => token.id));
+  if (!parentShipTokenId || !ownTokenIds.has(parentShipTokenId)) return false;
   await td.actor.update({ [SystemAdapter.current.systemPath("powerBoostActive")]: true });
+  return true;
 }
 
 /**
@@ -288,16 +547,25 @@ export async function torpedoPowerBoost(tokenId) {
  * Destroys torpedoes immediately; applies hull damage to strike craft (deletes if hull maxed).
  * GM-only.
  */
-export async function blastOrdnance({ torpedoTokenIds, craftDamages, torName } = {}) {
-  if (!game.user.isGM || !canvas?.scene) return;
+export async function blastOrdnance({ torpedoTokenIds, craftDamages, torName, detonationId = null } = {}) {
+  if (!game.user.isGM || !canvas?.scene) return { ok: false, reason: "notGM" };
+
+  const postResultChat = async content => {
+    try {
+      await ChatMessage.create({ content });
+    } catch (error) {
+      console.error(`${MODULE_ID} | Ordnance blast chat failed after resolution committed`, error);
+    }
+  };
 
   // Destroy torpedoes caught in the blast
   const torpsToDelete = (torpedoTokenIds ?? []).filter(id => canvas.scene.tokens.get(id));
   if (torpsToDelete.length > 0) {
-    await destroyOrdnanceTokens(torpsToDelete);
-    await ChatMessage.create({
-      content: `<b>${torName ?? "Torpedo"}</b> detonation destroyed ${torpsToDelete.length} torpedo(es) in the blast radius.`,
-    });
+    const deleted = await destroyOrdnanceTokens(torpsToDelete);
+    if ((deleted?.tokensDeleted ?? 0) !== torpsToDelete.length) {
+      return { ok: false, reason: "torpedoDestructionFailed" };
+    }
+    await postResultChat(`<b>${torName ?? "Torpedo"}</b> detonation destroyed ${torpsToDelete.length} torpedo(es) in the blast radius.`);
   }
 
   // Apply hull damage to strike craft in the blast
@@ -305,25 +573,41 @@ export async function blastOrdnance({ torpedoTokenIds, craftDamages, torName } =
   for (const { tokenId, damage, diceCount, diceSize, warheadCount = 1, damageMultiplier = 1 } of (craftDamages ?? [])) {
     const td = canvas.scene.tokens.get(tokenId);
     if (!td?.actor) continue;
-    let resolvedDamage = damage;
-    if (diceCount && diceSize && warheadCount > 0) {
-      const damageRoll = await new Roll(`${diceCount * warheadCount}${diceSize}`).evaluate();
-      if (game.dice3d) game.dice3d.showForRoll(damageRoll, game.user, true);
-      resolvedDamage = Math.max(0, Math.round(damageRoll.total * damageMultiplier));
-    }
-    const hull        = td.actor.system.hull ?? { value: 0, max: 1 };
-    const _isHP       = SystemAdapter.current.hullDisplayMode === "hpRemaining";
-    const newValue    = _isHP
-      ? Math.max(0, (hull.value ?? 0) - resolvedDamage)
-      : Math.min(hull.max, (hull.value ?? 0) + resolvedDamage);
-    await td.actor.update({ [SystemAdapter.current.systemPath("hull.value")]: newValue });
-    const isDestroyed = _isHP ? newValue <= 0 : newValue >= hull.max;
+    const isDestroyed = await this.withActorActionTransaction(td.actor, async () => {
+      const resolutionId = detonationId ? `${detonationId}:${tokenId}` : null;
+      const resolvedIds = td.actor.getFlag(MODULE_ID, "resolvedDetonationIds") ?? [];
+      if (resolutionId && resolvedIds.includes(resolutionId)) {
+        const hull = SystemAdapter.current.getShipData(td.actor)?.hull ?? { value: 0, max: 1 };
+        return SystemAdapter.current.hullDisplayMode === "hpRemaining"
+          ? (hull.value ?? 0) <= 0
+          : (hull.value ?? 0) >= hull.max;
+      }
+      let resolvedDamage = damage;
+      if (diceCount && diceSize && warheadCount > 0) {
+        const damageRoll = await new Roll(`${diceCount * warheadCount}${diceSize}`).evaluate();
+        if (game.dice3d) game.dice3d.showForRoll(damageRoll, game.user, true);
+        resolvedDamage = Math.max(0, Math.round(damageRoll.total * damageMultiplier));
+      }
+      const hull = SystemAdapter.current.getShipData(td.actor)?.hull ?? { value: 0, max: 1 };
+      const isHP = SystemAdapter.current.hullDisplayMode === "hpRemaining";
+      const newValue = isHP
+        ? Math.max(0, (hull.value ?? 0) - resolvedDamage)
+        : Math.min(hull.max, (hull.value ?? 0) + resolvedDamage);
+      const updates = { [SystemAdapter.current.systemPath("hull.value")]: newValue };
+      if (resolutionId) {
+        updates[`flags.${MODULE_ID}.resolvedDetonationIds`] = [...resolvedIds, resolutionId].slice(-20);
+      }
+      await td.actor.update(updates);
+      return isHP ? newValue <= 0 : newValue >= hull.max;
+    });
     if (isDestroyed) craftDestroyed.push(tokenId);
   }
   if (craftDestroyed.length > 0) {
-    await destroyOrdnanceTokens(craftDestroyed);
-    await ChatMessage.create({
-      content: `<b>${torName ?? "Torpedo"}</b> detonation destroyed ${craftDestroyed.length} strike craft flight(s).`,
-    });
+    const deleted = await destroyOrdnanceTokens(craftDestroyed);
+    if ((deleted?.tokensDeleted ?? 0) !== craftDestroyed.length) {
+      return { ok: false, reason: "craftDestructionFailed" };
+    }
+    await postResultChat(`<b>${torName ?? "Torpedo"}</b> detonation destroyed ${craftDestroyed.length} strike craft flight(s).`);
   }
+  return { ok: true };
 }

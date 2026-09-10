@@ -7,13 +7,15 @@
  * with a "Fire" confirmation button.
  */
 import { MODULE_ID, CORE_MODULE_ID, MACRO_FIRE_TIERS, LANCE_CHARGE_TIERS, buildChargeTiers } from "../constants.js";
-import { emitToGM } from "../socket.js";
+import { createActionRequester } from "../socket.js";
 import { ShipCombatState } from "../state/ShipCombatState.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
 import { THEME, pixi } from "../theme.js";
 import { isOrdnance as _isOrdActorType } from "../actors/ordnance/ordnance-types.js";
 import { getContactDisplayName, isTargetableContactToken } from "../targeting/contact-intelligence.js";
 import { getAttackStanceModifier } from "../stances.js";
+
+const requestGM = createActionRequester(context => context.weapon?.parent);
 
 // ── Geometry helpers ────────────────────────────────────────────────────────
 
@@ -160,6 +162,7 @@ export class TargetingPopup extends foundry.applications.api.HandlebarsApplicati
     const ship = this.weapon?.parent;
     if (!ship || !this.weapon) return { ...context, targets: [], weapon: null };
 
+    const state   = ShipCombatState.forShip(ship);
     const adapter = SystemAdapter.current;
     const sys     = adapter.getShipData(ship) ?? {};
     const gunnerRes = sys.resources?.gunner ?? {};
@@ -223,7 +226,7 @@ export class TargetingPopup extends foundry.applications.api.HandlebarsApplicati
       // NPC ships are treated as Lock 3 by default (no augur sensor system).
       const lockTier = ship.type === `${MODULE_ID}.npcShip`
         ? 3
-        : ShipCombatState.getEffectiveLockTier(candidate.id, distSquares);
+        : state.getEffectiveLockTier(candidate.id, distSquares);
       if (lockTier < 1) continue;
 
       const attackAngle = Math.atan2(ty - cy, tx - cx);
@@ -626,9 +629,7 @@ export class TargetingPopup extends foundry.applications.api.HandlebarsApplicati
     const ship = this.weapon?.parent;
     const gunnerRes = ship?.system?.resources?.gunner ?? {};
     const fireModeDetails = this._getFireModeDetails(gunnerRes);
-    const committed = await emitToGM("fireWeapon", {
-      shipActorId:  this.weapon.parent?.id,
-      actorId:      this.weapon.parent?.id,
+    const committed = await requestGM(this, "fireWeapon", {
       weaponId:     this.weapon.id,
       fireMode:     this.fireMode,
       targetToken:  tokenId,

@@ -61,7 +61,7 @@ A companion module has five responsibilities:
    import { SystemAdapter } from "/modules/causodes-shipcombat-core/scripts/systems/SystemAdapter.js";
 
    // ✓  Always correct (runtime global — same object reference everywhere)
-   const { SystemAdapter, emitToGM } = globalThis.ShipCombat._api;
+   const { SystemAdapter, createActionRequester } = globalThis.ShipCombat._api;
    export class MyAdapter extends SystemAdapter { ... }
    ```
 
@@ -97,13 +97,18 @@ Hooks.once("init", () => {
 | `registerPartialOverride(name, path)` | `init` hook | Replace a named Handlebars partial with a companion-supplied template. |
 | `registerPopupOverride(key, PopupClass)` | `init` hook | Replace a core popup class. Keys: `"targeting"`, `"ramTarget"`, `"battleClarity"`, `"strikeCraftAttack"`, `"recoverCraft"`. |
 
-Popup overrides must submit core actions through `emitToGM`. Core automatically
-applies allocation commitment warnings to relevant actions at that boundary, so
-companions must not call the warning dialog directly. Await the result when the
-popup should remain open after cancellation:
+Popup overrides must submit core actions through a scoped requester. The Actor
+resolver is declared once per file; core then injects the correct ship/source
+identity, resolves ordnance parent ships, and applies allocation commitment
+warnings. Companions must not call the warning dialog or construct identity
+fields directly. Await the result when the popup should remain open after
+cancellation:
 
 ```js
-const committed = await emitToGM("fireWeapon", payload);
+const { createActionRequester } = globalThis.ShipCombat._api;
+const requestGM = createActionRequester(popup => popup.weapon.parent);
+
+const committed = await requestGM(this, "fireWeapon", payload);
 if (committed === false) return;
 this.close();
 ```

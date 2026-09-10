@@ -16,7 +16,7 @@
  *   - Charge Ammo Track: +6 Ammo or +5 Charge.
  *   - Weapon Arc Overlay: Show firing arcs to the Helmsman.
  */
-import { emitToGM, emitToAll } from "../socket.js";
+import { createActionRequester, emitToAll } from "../socket.js";
 import { MODULE_ID, MACRO_FIRE_TIERS, buildChargeTiers, scaleDiceFormula, GUNNER_CORE_ACTIONS, CRIT_LOCATIONS } from "../constants.js";
 import { TargetingPopup } from "../apps/TargetingPopup.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
@@ -25,10 +25,12 @@ import { getPowerCoreCount, resolveStationOperatorActor } from "./crew-operators
 import { getAttackStanceModifier } from "../stances.js";
 import { getDisabledWeaponSectionId } from "../state/weapon-section.js";
 
+const requestGM = createActionRequester(context => context?.actor ?? context);
+
 // ── Constants ────────────────────────────────────────────────────────────────
 
 async function _reserveGunnerCore(shipActor, actionId) {
-  const consumed = await emitToGM("consumePowerCore", { roleId: "gunner", actionId, shipActorId: shipActor.id });
+  const consumed = await requestGM(shipActor, "consumePowerCore", { roleId: "gunner", actionId });
   if (!consumed) ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NeedsPowerCore"));
   return consumed;
 }
@@ -74,8 +76,7 @@ async function _onRollOrdnance() {
   if (!result) return;
 
   const sl = Math.max(0, result.SL);
-  await emitToGM("updateResources", {
-    shipActorId: this.actor.id,
+  await requestGM(this, "updateResources", {
     updates: [
       { roleId: "gunner", key: "ordnanceSL", value: sl },
       { roleId: "gunner", key: "ordnanceRolled", value: true },
@@ -114,7 +115,7 @@ async function _onAllocGunnerSL(event, target) {
   // Total allocated cannot exceed pool
   if (newAcc + newPen + newFp > pool) return;
 
-  await emitToGM("updateResource", { roleId: "gunner", key: `alloc${stat.charAt(0).toUpperCase() + stat.slice(1)}`, value: stat === "accuracy" ? newAcc : stat === "penetration" ? newPen : newFp, shipActorId: this.actor.id });
+  await requestGM(this, "updateResource", { roleId: "gunner", key: `alloc${stat.charAt(0).toUpperCase() + stat.slice(1)}`, value: stat === "accuracy" ? newAcc : stat === "penetration" ? newPen : newFp });
 }
 
 /**
@@ -133,7 +134,7 @@ async function _onGunnerCoreAction(event, target) {
 
   if (action === "extendRange") {
     if (!(await _reserveGunnerCore(this.actor, "extendRange"))) return;
-    await emitToGM("updateResource", { roleId: "gunner", key: "sensorBandExpanded", value: true, shipActorId: this.actor.id });
+    await requestGM(this, "updateResource", { roleId: "gunner", key: "sensorBandExpanded", value: true });
   } else if (action === "chooseCritLoc") {
     // Gunner picks the location NOW (player-side dialog), stores choice for the next crit.
     const buttons = CRIT_LOCATIONS.map(l => ({
@@ -152,8 +153,7 @@ async function _onGunnerCoreAction(event, target) {
     });
     if (!locId) return; // cancelled  -  do NOT consume core
     if (!(await _reserveGunnerCore(this.actor, "chooseCritLoc"))) return;
-    await emitToGM("updateResources", {
-      shipActorId: this.actor.id,
+    await requestGM(this, "updateResources", {
       updates: [
         { roleId: "gunner", key: "chooseCritLocation", value: true },
         { roleId: "gunner", key: "critLocationChoice", value: locId },
@@ -166,7 +166,7 @@ async function _onGunnerCoreAction(event, target) {
     const gain    = Math.max(1, Math.ceil(caps.ammoMax * 0.25));
     const next    = Math.min(caps.ammoMax, current + gain);
     if (!(await _reserveGunnerCore(this.actor, "emergencyResupply"))) return;
-    await emitToGM("updateResource", { roleId: "gunner", key: "ammo", value: next, shipActorId: this.actor.id });
+    await requestGM(this, "updateResource", { roleId: "gunner", key: "ammo", value: next });
   }
 }
 

@@ -18,7 +18,7 @@ import {
 } from "../../constants.js";
 import { isTorpedo, isStrikeCraft } from "../ordnance/ordnance-types.js";
 import { normalizeStrikeCraftTemplateHull } from "../ordnance/ordnance-helpers.js";
-import { emitToGM } from "../../socket.js";
+import { createActionRequester } from "../../socket.js";
 import { ShipCombatState } from "../../state/ShipCombatState.js";
 import { buildHelmContext, helmOnRender } from "../../roles/pilot.js";
 import { buildEngineerContext } from "../../roles/engineer.js";
@@ -35,6 +35,9 @@ import { SystemAdapter } from "../../systems/SystemAdapter.js";
 import { hasPlayerShipInitiative } from "../../initiative.js";
 import { normalizeCaptainZone } from "../../captain/card-instances.js";
 import { SHIP_PARTS, SHIP_TABS } from "./parts.js";
+import { buildPowerCorePips } from "./power-core-pips.js";
+
+const requestGM = createActionRequester(context => context.actor);
 
 // ── Module-level constants ────────────────────────────────────────────────
 
@@ -447,7 +450,7 @@ export class ShipController {
 
     const myRoleData   = myRole ? roles[myRole] : null;
     const hasPowerCore = getPowerCoreCount(sys, "pilot") > 0;
-    const shieldCfg    = ShipCombatState.getShieldStats();
+    const shieldCfg    = ShipCombatState.getShieldStats(this.actor);
 
     const sectors = SECTORS.map(sector => ({
       id:            sector,
@@ -465,8 +468,6 @@ export class ShipController {
     const committedAuxCoreCount = sys.resources?.engineer?.committedAuxCores ?? 0;
     const shieldCommittedCount  = sys.shieldPool?.committed ?? 0;
     const assignedCoreCount     = Object.values(sys.assignedCores ?? {}).filter(Boolean).length;
-    const distributedCores      = stagedCoreCount + stagedShieldCoreCount + stagedAuxCoreCount + committedAuxCoreCount + shieldCommittedCount + assignedCoreCount;
-    const totalCoreCount        = powerCoresPool + distributedCores;
     const powerCoresAvailable   = powerCoresPool;
 
     const components          = this.actor.items.filter(i => i.type === `${MODULE_ID}.component`);
@@ -497,14 +498,14 @@ export class ShipController {
       sectors,
       powerCoresAvailable,
       powerCoresMax,
-      powerCorePips: Array.from({ length: totalCoreCount }, (_, i) => {
-        if (i < assignedCoreCount) return { state: "assigned" };
-        if (i < assignedCoreCount + stagedCoreCount) return { state: "staged" };
-        if (i < assignedCoreCount + stagedCoreCount + stagedShieldCoreCount) return { state: "shield-staged" };
-        if (i < assignedCoreCount + stagedCoreCount + stagedShieldCoreCount + shieldCommittedCount) return { state: "shield-committed" };
-        if (i < assignedCoreCount + stagedCoreCount + stagedShieldCoreCount + shieldCommittedCount + stagedAuxCoreCount) return { state: "aux-staged" };
-        if (i < assignedCoreCount + stagedCoreCount + stagedShieldCoreCount + shieldCommittedCount + stagedAuxCoreCount + committedAuxCoreCount) return { state: "aux-committed" };
-        return { state: "available" };
+      powerCorePips: buildPowerCorePips({
+        assigned: assignedCoreCount,
+        shieldCommitted: shieldCommittedCount,
+        auxiliaryCommitted: committedAuxCoreCount,
+        staged: stagedCoreCount,
+        shieldStaged: stagedShieldCoreCount,
+        auxiliaryStaged: stagedAuxCoreCount,
+        available: powerCoresAvailable,
       }),
       shipSectors: sectors.map(sector => ({
         ...sector,
@@ -877,9 +878,8 @@ export class ShipController {
     const userByOwner = game.users.find(u => !u.isGM && ownerIds.includes(u.id));
     const targetUser = userByCharacter ?? userByOwner;
     if (!targetUser) return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoAssignableUser"));
-    emitToGM("assignRole", {
+    requestGM(this, "assignRole", {
       userId: targetUser.id, roleId,
-      shipActorId: this.actor.id,
       actorRef: { id: actor.id, uuid: actor.uuid, name: actor.name, img: actor.img },
     });
   }
@@ -1006,10 +1006,9 @@ export class ShipController {
 
     rootEl.querySelectorAll("[data-equip-slot]").forEach(sel => {
       sel.addEventListener("change", ev => {
-        emitToGM("assignEquipment", {
+        requestGM(this, "assignEquipment", {
           slotId: sel.dataset.equipSlot,
           newItemId: sel.value,
-          shipActorId: this.actor.id,
         });
       });
     });
@@ -1020,11 +1019,10 @@ export class ShipController {
         const itemId = sel.value;
         if (!itemId) return;
         const isFlank = pos === "port" || pos === "starboard";
-        emitToGM("assignWeapon", {
+        requestGM(this, "assignWeapon", {
           itemId,
           weaponPosition: isFlank ? "flank" : pos,
           weaponBay:      isFlank ? pos : "port",
-          shipActorId:     this.actor.id,
         });
         if (sel.isConnected) sel.value = "";
       });
@@ -1101,7 +1099,7 @@ export class ShipController {
           hand.splice(toIdx, 0, movedCard);
           _dragCardId = null;
           card.classList.remove("shipcombat-captain-card--drag-over");
-          await emitToGM("updateResource", { roleId: "captain", key: "hand", value: hand, shipActorId: this.actor.id });
+          await requestGM(this, "updateResource", { roleId: "captain", key: "hand", value: hand });
         });
       });
     }

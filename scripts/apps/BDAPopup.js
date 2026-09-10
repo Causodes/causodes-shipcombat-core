@@ -7,9 +7,11 @@
  * BDA-pending chat card is updated with the full result.
  */
 import { MODULE_ID, CORE_MODULE_ID, BDA_CORRECTIONS } from "../constants.js";
-import { emitToGM } from "../socket.js";
+import { createActionRequester } from "../socket.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
 import { resolveSensorsOperatorActor } from "../roles/crew-operators.js";
+
+const requestGM = createActionRequester(context => context?.ship ?? context);
 
 // ── Shared helpers ─────────────────────────────────────────────────────────────
 
@@ -128,8 +130,7 @@ export async function launchBDAFromChat(ship, message, attackId = null) {
   }
 
   // The GM resolves state and updates the matching chat card authoritatively.
-  await emitToGM("resolveBDA", {
-    shipActorId: ship.id,
+  await requestGM(ship, "resolveBDA", {
     attackId,
     sl: rawSL,
     messageId: message?.id ?? null,
@@ -219,31 +220,10 @@ export class BDAPopup extends foundry.appv1.api.Application {
   async _doSelectCorrection(correctionId) {
     const sys           = SystemAdapter.current.getShipData(this.ship);
     const attack        = sys.resources?.sensors?.bdaAttacks?.[this.attackId] ?? null;
-    const targetTokenId = this.targetTokenId ?? attack?.targetTokenId ?? null;
     const sl            = this.sl ?? attack?.sl ?? 0;
 
     const correction = BDA_CORRECTIONS.find(c => c.id === correctionId);
     if (!correction) return;
-
-    if (correctionId === "ceaseFireSwitch") {
-      // Grant 20% of max AP and drop the lock on the target to Lock 0
-      const reactor = this.ship?.items?.find(i => i.type === `${MODULE_ID}.component` && i.system?.slot === "reactor");
-      const maxAP = reactor?.system?.bankCapacity ?? 0;
-      const grant = Math.floor(maxAP * 0.2);
-      await emitToGM("adjustResources", {
-        shipActorId: this.ship.id,
-        adjustments: [{ roleId: "engineer", key: "auxiliaryPower", delta: grant, max: maxAP }],
-      });
-      if (targetTokenId) emitToGM("removeLock", { targetTokenId, shipActorId: this.ship.id });
-    } else {
-      emitToGM("setFireCorrection", {
-        shipActorId: this.ship.id,
-        type:          correctionId,
-        targetTokenId: targetTokenId ?? null,
-        weaponId:      null,
-        sl,
-      });
-    }
 
     // Render the originating BDA card update for the GM-owned completion path.
     const messageId = this.messageId ?? attack?.messageId ?? null;
@@ -274,12 +254,13 @@ export class BDAPopup extends foundry.appv1.api.Application {
       }
     }
 
-    await emitToGM("completeBDA", {
-      shipActorId: this.ship.id,
+    const applied = await requestGM(this, "applyBdaCorrection", {
       attackId: this.attackId,
+      correctionId,
       messageId,
       messageContent,
     });
+    if (!applied?.ok) return;
     this.close();
   }
 }

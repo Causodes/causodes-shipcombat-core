@@ -12,9 +12,8 @@
  */
 
 import { MODULE_ID } from "../../constants.js";
-import { emitToGM } from "../../socket.js";
+import { createActionRequester } from "../../socket.js";
 import { coerceEmptyNumberInputs } from "../../sheet-utils.js";
-
 import { OVERVIEW_ACTIONS } from "../../roles/overview.js";
 import { SHARED_ACTIONS } from "../../roles/shared.js";
 import { PILOT_ACTIONS, helmUpdatePreview } from "../../roles/pilot.js";
@@ -31,6 +30,8 @@ import { ShipController } from "./ShipController.js";
 import { normalizeStrikeCraftTemplateHull } from "../ordnance/ordnance-helpers.js";
 import { userOperatesStation } from "../../roles/crew-operators.js";
 import { openManualOverride } from "../../apps/ManualOverride.js";
+
+const requestGM = createActionRequester(context => context.actor);
 export { getEffectiveSkillSpec } from "./ShipController.js";
 
 const GUNNER_TABS = new Set(["gunner", "gunner4man", "gunner5man"]);
@@ -203,14 +204,14 @@ export const ShipSheetV2Mixin = (BaseClass) => {
       const row = target.closest("[data-id]");
       const id  = row?.dataset?.id;
       if (!id) return;
-      emitToGM("unassignComponent", { itemId: id, shipActorId: this.actor.id });
+      requestGM(this, "unassignComponent", { itemId: id });
     }
 
     static async _onUnassignEquipment(event, target) {
       const row = target.closest("[data-id]");
       const id  = row?.dataset?.id;
       if (!id) return;
-      emitToGM("unassignComponent", { itemId: id, shipActorId: this.actor.id });
+      requestGM(this, "unassignComponent", { itemId: id });
     }
 
     // ── Post-render wiring ─────────────────────────────────────────────────

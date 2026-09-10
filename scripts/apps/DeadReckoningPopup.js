@@ -6,7 +6,9 @@
  * drawn next.  On confirm the new pile order is emitted to the GM.
  */
 import { CAPTAIN_CARDS, CORE_MODULE_ID } from "../constants.js";
-import { emitToGM }  from "../socket.js";
+import { createActionRequester }  from "../socket.js";
+
+const requestGM = createActionRequester(context => context._shipActorId);
 
 const CARD_DEFS = Object.fromEntries(CAPTAIN_CARDS.map(card => [card.id, card]));
 const CARD_ICONS = {
@@ -71,8 +73,7 @@ export class DeadReckoningPopup extends foundry.appv1.api.Application {
       if (this._settled) return;
       this._settled = true;
       const orderedInstanceIds = this._getCurrentOrder().map(card => card.instanceId);
-      const result = await emitToGM("completeDeadReckoning", {
-        shipActorId: this._shipActorId,
+      const result = await requestGM(this, "completeDeadReckoning", {
         reservationId: this._reservationId,
         orderedInstanceIds,
       });
@@ -158,7 +159,7 @@ export class DeadReckoningPopup extends foundry.appv1.api.Application {
   async close(options) {
     if (!this._settled && this._reservationId) {
       this._settled = true;
-      await emitToGM("cancelDeadReckoning", { reservationId: this._reservationId, shipActorId: this._shipActorId });
+      await requestGM(this, "cancelDeadReckoning", { reservationId: this._reservationId });
     }
     return super.close(options);
   }

@@ -34,58 +34,26 @@
  *   Sensor Surge (8 AP)  -  BDA +30; fire correction applies to ALL weapons
  *   Deep Revelation (15 AP)  -  reveal ALL target stats permanently
  */
-import { emitToGM } from "../socket.js";
+import { createActionRequester } from "../socket.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
-import { LOCK_DECAY_ROUNDS, AUGUR_LOCK_COSTS, AUGUR_CORE_ACTIONS, BDA_CORRECTIONS, MODULE_ID } from "../constants.js";
+import { LOCK_DECAY_ROUNDS, AUGUR_LOCK_ACTIONS, AUGUR_UTILITY_ACTIONS, AUGUR_CORE_ACTIONS, BDA_CORRECTIONS, MODULE_ID } from "../constants.js";
 import { SensorRadar } from "../canvas/SensorRadar.js";
 import { BDAPopup, launchBDAFromChat } from "../apps/BDAPopup.js";
 import { getPowerCoreCount } from "./crew-operators.js";
-import { ShipCombatState } from "../state/ShipCombatState.js";
+
+const requestGM = createActionRequester(context => context.actor);
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
 // Lock-upgrade actions  -  each advances one lock tier on a target. Costs AP.
-const LOCK_ACTIONS = [
-  { id: "activePing",        cost: AUGUR_LOCK_COSTS.activePing,        label: "SHIPCOMBAT.Sensors.ActivePing",        desc: "SHIPCOMBAT.Sensors.ActivePingDesc",        setsTier: 1, requiresTier: 0 },
-  { id: "breachAnalysis",    cost: AUGUR_LOCK_COSTS.breachAnalysis,    label: "SHIPCOMBAT.Sensors.BreachAnalysis",    desc: "SHIPCOMBAT.Sensors.BreachAnalysisDesc",    setsTier: 2, requiresTier: 1 },
-  { id: "deepScan",          cost: AUGUR_LOCK_COSTS.deepScan,          label: "SHIPCOMBAT.Sensors.DeepScan",          desc: "SHIPCOMBAT.Sensors.DeepScanDesc",          setsTier: 3, requiresTier: 2 },
-  { id: "targetingSolution", cost: AUGUR_LOCK_COSTS.targetingSolution, label: "SHIPCOMBAT.Sensors.TargetingSolution", desc: "SHIPCOMBAT.Sensors.TargetingSolutionDesc", setsTier: 4, requiresTier: 2 },
-];
+const LOCK_ACTIONS = AUGUR_LOCK_ACTIONS;
 
 // Non-lock utility actions  -  also cost AP now.
-const UTILITY_ACTIONS = [
-  { id: "sensorDisruption",      cost: 12, label: "SHIPCOMBAT.Sensors.SensorDisruption",      desc: "SHIPCOMBAT.Sensors.SensorDisruptionDesc",      targeted: true,  duration: 1, requiresTier: 1 },
-  { id: "lockHarmonics",         cost: 6,  label: "SHIPCOMBAT.Sensors.LockHarmonics",         desc: "SHIPCOMBAT.Sensors.LockHarmonicsDesc",         targeted: false, duration: 1 },
-  { id: "sensorOvercharge",      cost: 16, label: "SHIPCOMBAT.Sensors.SensorOvercharge",      desc: "SHIPCOMBAT.Sensors.SensorOverchargeDesc",      targeted: true,  duration: 2 },
-  { id: "rangeAmplifier",        cost: 24, label: "SHIPCOMBAT.Sensors.RangeAmplifier",        desc: "SHIPCOMBAT.Sensors.RangeAmplifierDesc",        targeted: false, duration: 2 },
-  { id: "designateTorpedo",      cost: 20, label: "SHIPCOMBAT.Sensors.DesignateTorpedo",      desc: "SHIPCOMBAT.Sensors.DesignateTorpedoDesc",      targeted: false, duration: 0 },
-];
+const UTILITY_ACTIONS = AUGUR_UTILITY_ACTIONS;
 
 // Core actions now use imported AUGUR_CORE_ACTIONS from constants.js
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-/**
- * Spend AP from the Engineer's auxiliary power pool.
- * Returns true on success.
- */
-async function _spendAP(shipActor, sys, cost) {
-  const ap = sys.resources?.engineer?.auxiliaryPower ?? 0;
-  if (ap < cost) {
-    ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.InsufficientAP"));
-    return false;
-  }
-  const result = await emitToGM("adjustResources", {
-    shipActorId: shipActor.id,
-    requirements: [{ roleId: "engineer", key: "auxiliaryPower", min: cost }],
-    adjustments: [{ roleId: "engineer", key: "auxiliaryPower", delta: -cost, min: 0 }],
-  });
-  if (!result?.ok) {
-    ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.InsufficientAP"));
-    return false;
-  }
-  return true;
-}
 
 /**
  * Apply Telemetry Buoy -20% AP discount (rounded up) when active.
@@ -94,11 +62,6 @@ function _buoyDiscount(sys, baseCost) {
   if (baseCost <= 0) return 0;
   const hasBuoy = (sys.resources?.sensors?.payload ?? "") === "sensorBuoy";
   return hasBuoy ? Math.ceil(baseCost * 0.8) : baseCost;
-}
-
-function _getAuxPowerCapacity(shipActor) {
-  const reactor = shipActor?.items?.find(i => i.type === `${MODULE_ID}.component` && i.system.slot === "reactor");
-  return reactor?.system?.bankCapacity ?? 0;
 }
 
 function _getSensorApCostMultiplier(shipActor) {
@@ -126,55 +89,34 @@ function _lockActionApCost(sys, lockEntry, apCostMultiplier) {
  * data-target-token-id identifies the blip target.
  */
 async function _onSensorAction(event, target) {
-  const sys      = SystemAdapter.current.getShipData(this.actor);
   const actionId = target.dataset.actionId;
-  const apCostMultiplier = _getSensorApCostMultiplier(this.actor);
-
-  // Try lock upgrades first
   const lockEntry = LOCK_ACTIONS.find(a => a.id === actionId);
-  if (lockEntry) {
-    const effectiveCost = _lockActionApCost(sys, lockEntry, apCostMultiplier);
-    if (!(await _spendAP(this.actor, sys, effectiveCost))) return;
-    const targetTokenId = target.dataset.targetTokenId;
-    if (!targetTokenId) return;
-    await emitToGM("updateResource", { roleId: "sensors", key: "actionUsed", value: true, shipActorId: this.actor.id });
-    emitToGM("upgradeLock", { targetTokenId, tier: lockEntry.setsTier, shipActorId: this.actor.id });
+  const utilEntry = UTILITY_ACTIONS.find(a => a.id === actionId);
+  if (!lockEntry && !utilEntry) return;
+
+  const targetTokenId = target.dataset.targetTokenId ?? null;
+  if ((lockEntry || utilEntry?.targeted) && (!targetTokenId || !canvas?.tokens?.get(targetTokenId))) {
+    if (actionId === "designateTorpedo") {
+      ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoDesignateTorpedoTargets"));
+    }
     return;
   }
 
-  // Utility actions
-  const utilEntry = UTILITY_ACTIONS.find(a => a.id === actionId);
-  if (utilEntry) {
-    // designateTorpedo: use the clicked blip's token ID directly (no dialog)
-    if (actionId === "designateTorpedo") {
-      const tokenId = target.dataset.targetTokenId;
-      if (!tokenId) {
-        ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoDesignateTorpedoTargets"));
-        return;
-      }
-      const ownTokenId = this.actor?.getActiveTokens?.()?.[0]?.id ?? null;
-      const td = canvas?.scene?.tokens.get(tokenId);
-      if (!td?.actor) return;
-      const isAllied = ownTokenId && SystemAdapter.current.getShipData(td.actor)?.parentShipTokenId === ownTokenId;
-      if (!(await _spendAP(this.actor, sys, _buoyDiscount(sys, Math.ceil(utilEntry.cost * apCostMultiplier))))) return;
-      await emitToGM("updateResource", { roleId: "sensors", key: "actionUsed", value: true, shipActorId: this.actor.id });
-      if (isAllied) {
-        emitToGM("torpedoPowerBoost", { tokenId });
-      } else {
-        emitToGM("designateHostileTorpedo", { tokenId, shipActorId: this.actor.id });
-      }
-      return;
-    }
-
-    if (!(await _spendAP(this.actor, sys, _buoyDiscount(sys, Math.ceil(utilEntry.cost * apCostMultiplier))))) return;
-    await emitToGM("updateResource", { roleId: "sensors", key: "actionUsed", value: true, shipActorId: this.actor.id });
-    const targetTokenId = target.dataset.targetTokenId;
-    if (targetTokenId && utilEntry.targeted) {
-      emitToGM("addSensorEffect", { actionId: utilEntry.id, targetTokenId, roundsRemaining: utilEntry.duration, shipActorId: this.actor.id });
-    } else if (!utilEntry.targeted) {
-      emitToGM("addSensorEffect", { actionId: utilEntry.id, targetTokenId: "__self__", roundsRemaining: utilEntry.duration, shipActorId: this.actor.id });
-    }
-    return;
+  const result = await requestGM(this, "executeSensorAction", {
+    actionId,
+    targetTokenId,
+  });
+  if (result?.ok) return;
+  if (result?.reason === "insufficientAP") {
+    ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.InsufficientAP"));
+  } else if (result?.reason === "sensorBlind") {
+    ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Crit.SensorBlindDisabled"));
+  } else if (result?.reason === "noLock") {
+    ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Sensors.RequiresLock"));
+  } else if (result?.reason === "rollbackFailed") {
+    ui.notifications.error(game.i18n.localize("SHIPCOMBAT.Sensors.ActionRefundFailed"));
+  } else {
+    ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Sensors.ActionFailed"));
   }
 }
 
@@ -193,6 +135,8 @@ async function _onSensorCoreAction(event, target) {
 
   const entry = AUGUR_CORE_ACTIONS.find(a => a.id === actionId);
   if (!entry) return;
+  const targetTokenId = target.dataset.targetTokenId;
+  if (entry.targeted && (!targetTokenId || !canvas?.tokens?.get(targetTokenId))) return;
 
   // Validate AP before reserving the shared operator core. The GM-side core
   // reservation is serialized, so only its successful caller applies effects.
@@ -202,30 +146,37 @@ async function _onSensorCoreAction(event, target) {
     ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.InsufficientAP"));
     return;
   }
-  const consumed = await emitToGM("consumePowerCore", { roleId: "sensors", actionId, shipActorId: this.actor.id });
-  if (!consumed) {
-    ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NeedsPowerCore"));
+  if (actionId === "combatTelemetry") {
+    const sensorCondition = sys.conditions?.weaponsSensors?.tier;
+    if (sensorCondition === "medium" || sensorCondition === "high") {
+      ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Crit.SensorBlindDisabled"));
+      return;
+    }
+  }
+
+  const result = await requestGM(this, "executeSensorCoreAction", {
+    actionId,
+    targetTokenId,
+  });
+  if (result?.ok) {
+    if (result.warning === "effectMarkerFailed") {
+      ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Sensors.CoreMarkerFailed"));
+    }
     return;
   }
-  if (!(await _spendAP(this.actor, sys, apCost))) return;
 
-  // Combat Telemetry: upgrade ALL currently locked targets to tier 4
-  if (actionId === "combatTelemetry") {
-    // Apply every lock upgrade in one GM-side actor update. Emitting one
-    // upgradeLock request per target lets concurrent requests read the same
-    // stale lock array and overwrite one another.
-    emitToGM("upgradeAllLocks", { tier: 4, shipActorId: this.actor.id });
-  }
-
-  // Store targeted effect for radar visualisation
-  const targetTokenId = target.dataset.targetTokenId;
-  if (targetTokenId) {
-    emitToGM("addSensorEffect", { actionId: entry.id, targetTokenId, roundsRemaining: entry.duration ?? 1, shipActorId: this.actor.id });
-  }
-
-  // Signal Inversion: strip all shields from the target's closest quadrant
-  if (actionId === "signalInversion" && targetTokenId) {
-    emitToGM("stripQuadrantShields", { targetTokenId, shipActorId: this.actor.id });
+  if (result?.reason === "insufficientAP") {
+    ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.InsufficientAP"));
+  } else if (result?.reason === "noPowerCore") {
+    ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NeedsPowerCore"));
+  } else if (result?.reason === "sensorBlind") {
+    ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Crit.SensorBlindDisabled"));
+  } else if (result?.reason === "noLock") {
+    ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Sensors.RequiresLock"));
+  } else if (result?.reason === "rollbackFailed") {
+    ui.notifications.error(game.i18n.localize("SHIPCOMBAT.Sensors.CoreRollbackFailed"));
+  } else {
+    ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Sensors.CoreActionFailed"));
   }
 }
 
@@ -233,7 +184,7 @@ async function _onSensorCoreAction(event, target) {
 async function _onRecommendTarget(event, target) {
   const targetTokenId = target.dataset.targetTokenId;
   if (!targetTokenId) return;
-  await emitToGM("setRecommendedTarget", { targetTokenId, shipActorId: this.actor.id });
+  await requestGM(this, "setRecommendedTarget", { targetTokenId });
 }
 
 /**

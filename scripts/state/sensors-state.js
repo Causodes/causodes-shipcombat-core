@@ -5,8 +5,9 @@
  * Inside each function, `this` refers to the ShipCombatState class itself.
  */
 
-import { MODULE_ID, CORE_MODULE_ID, LOCK_DECAY_ROUNDS } from "../constants.js";
+import { MODULE_ID, CORE_MODULE_ID, LOCK_DECAY_ROUNDS, AUGUR_LOCK_ACTIONS, AUGUR_UTILITY_ACTIONS, AUGUR_CORE_ACTIONS, BDA_CORRECTIONS } from "../constants.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
+import { getPowerCoreCount, getPowerCorePoolRole } from "../roles/crew-operators.js";
 import {
   ensureContactRecord,
   getContactDisplayName,
@@ -14,6 +15,7 @@ import {
   isMarkableContactToken,
   isTargetableContactToken,
 } from "../targeting/contact-intelligence.js";
+import { buildTargetReferenceCleanup, collectTargetReferenceIds } from "./target-references.js";
 
 function _targetName(targetTokenId) {
   return canvas?.tokens?.get(targetTokenId)?.document?.name ?? null;
@@ -74,6 +76,8 @@ function _contactUpdates(data, targets) {
  * Add a sensor effect targeting an enemy token.
  */
 export async function addSensorEffect({ actionId, targetTokenId, roundsRemaining = 1 }) {
+  if (!actionId || !targetTokenId) return false;
+  if (targetTokenId !== "__self__" && !canvas?.tokens?.get(targetTokenId)) return false;
   const data = this.getData();
   const effects = [...(data.resources?.sensors?.effects ?? [])];
   effects.push({ actionId, targetTokenId, roundsRemaining });
@@ -111,13 +115,13 @@ export function getDisruptionPenalty(actor) {
  * quadrant closest to the player ship.  GM-side.
  */
 export async function stripQuadrantShields({ targetTokenId }) {
-  if (!game.user.isGM || !canvas?.scene) return;
+  if (!game.user.isGM || !canvas?.scene) return false;
   const targetToken = canvas.tokens.placeables.find(t => t.id === targetTokenId);
   const targetActor = targetToken?.document?.actor ?? targetToken?.actor;
-  if (!targetToken || !targetActor) return;
+  if (!targetToken || !targetActor) return false;
 
   const shipToken = this.ship?.getActiveTokens?.()?.[0];
-  if (!shipToken) return;
+  if (!shipToken) return false;
 
   const gs = canvas.grid.size;
   const sx = shipToken.x   + (shipToken.document.width    * gs) / 2;
@@ -151,10 +155,231 @@ export async function stripQuadrantShields({ targetTokenId }) {
     currentTier: this.getEffectiveLockTier(targetTokenId, Math.hypot(tx - sx, ty - sy) / gs),
     realName: targetToken.document.name ?? "Unknown",
   });
-  await ChatMessage.create({
-    flavor:  game.i18n.localize("SHIPCOMBAT.Sensors.SignalInversion"),
-    content: `<p><b>${targetName}</b>: ${quadrantLabel} shields stripped (${current} → 0).</p>`,
+  try {
+    await ChatMessage.create({
+      flavor:  game.i18n.localize("SHIPCOMBAT.Sensors.SignalInversion"),
+      content: `<p><b>${targetName}</b>: ${quadrantLabel} shields stripped (${current} → 0).</p>`,
+    });
+  } catch (error) {
+    console.error(`${MODULE_ID} | Signal Inversion chat message failed`, error);
+  }
+  return true;
+}
+
+export function hasEffectiveLock({ belowTier = Infinity } = {}) {
+  const ship = this.ship;
+  if (!ship) return false;
+  return (canvas?.tokens?.placeables ?? []).some(target => {
+    if (!isTargetableContactToken(target, ship, { requireVisible: false })) return false;
+    const tier = this.getEffectiveLockTier(target.id, _distanceSquaresToTarget(target.id, ship));
+    return tier >= 1 && tier < belowTier;
   });
+}
+
+/** Reserve a normal Sensors action and resolve its effect under one ship queue. */
+export async function executeSensorAction({ actionId, targetTokenId = null } = {}) {
+  if (!game.user.isGM) return { ok: false, reason: "notGM" };
+  const ship = this.ship;
+  const lockEntry = AUGUR_LOCK_ACTIONS.find(action => action.id === actionId);
+  const utilityEntry = AUGUR_UTILITY_ACTIONS.find(action => action.id === actionId);
+  const entry = lockEntry ?? utilityEntry;
+  if (!ship || !entry) return { ok: false, reason: "invalidAction" };
+
+  return this.withAllocationTransaction(async () => {
+    const data = this.getData(ship) ?? {};
+    const priorActionUsed = data.resources?.sensors?.actionUsed ?? false;
+
+    const targetToken = targetTokenId ? canvas?.tokens?.get(targetTokenId) : null;
+    if (lockEntry || utilityEntry.targeted) {
+      if (!targetToken) return { ok: false, reason: "invalidTarget" };
+      if (actionId !== "designateTorpedo"
+        && !isTargetableContactToken(targetToken, ship, { requireVisible: false })) {
+        return { ok: false, reason: "invalidTarget" };
+      }
+    }
+
+    if (lockEntry) {
+      if (_sensorBlindBlocksTier(data, lockEntry.setsTier)) {
+        return { ok: false, reason: "sensorBlind" };
+      }
+      const currentTier = this.getEffectiveLockTier(
+        targetTokenId,
+        _distanceSquaresToTarget(targetTokenId, ship),
+      );
+      if (currentTier < lockEntry.requiresTier) return { ok: false, reason: "noLock" };
+      if (currentTier >= lockEntry.setsTier) return { ok: false, reason: "noChange" };
+    } else if (utilityEntry.requiresTier) {
+      const currentTier = this.getEffectiveLockTier(
+        targetTokenId,
+        _distanceSquaresToTarget(targetTokenId, ship),
+      );
+      if (currentTier < utilityEntry.requiresTier) return { ok: false, reason: "noLock" };
+    } else if (utilityEntry.requiresAnyLock && !this.hasEffectiveLock()) {
+      return { ok: false, reason: "noLock" };
+    }
+
+    const apMultiplier = this.getSensorStats(ship)?.apCostMultiplier ?? 1;
+    let baseCost = entry.cost * apMultiplier;
+    if (lockEntry && (data.resources?.sensors?.sensorPriorityActive ?? false) && lockEntry.setsTier <= 2) {
+      baseCost *= 0.5;
+    }
+    const roundedCost = Math.ceil(baseCost);
+    const apCost = (data.resources?.sensors?.payload ?? "") === "sensorBuoy"
+      ? Math.ceil(roundedCost * 0.8)
+      : roundedCost;
+    const auxiliaryPower = data.resources?.engineer?.auxiliaryPower ?? 0;
+    if (auxiliaryPower < apCost) {
+      return { ok: false, reason: "insufficientAP", apCost, auxiliaryPower };
+    }
+
+    try {
+      await this.update({
+        "resources.engineer.auxiliaryPower": auxiliaryPower - apCost,
+        "resources.sensors.actionUsed": true,
+      }, ship);
+    } catch (error) {
+      console.error(`${MODULE_ID} | Sensors action reservation failed`, error);
+      return { ok: false, reason: "reservationFailed" };
+    }
+
+    try {
+      let effectResult;
+      if (lockEntry) {
+        effectResult = await this.upgradeLock({ targetTokenId, tier: lockEntry.setsTier });
+      } else if (actionId === "designateTorpedo") {
+        const parentShipTokenId = SystemAdapter.current.getShipData(targetToken.actor)?.parentShipTokenId;
+        const ownTokenIds = new Set((ship.getActiveTokens?.() ?? []).map(token => token.id));
+        effectResult = ownTokenIds.has(parentShipTokenId)
+          ? await this.torpedoPowerBoost(targetTokenId)
+          : await this.designateHostileTorpedo(targetTokenId);
+      } else {
+        effectResult = await this.addSensorEffect({
+          actionId,
+          targetTokenId: utilityEntry.targeted ? targetTokenId : "__self__",
+          roundsRemaining: utilityEntry.duration,
+        });
+      }
+      if (!effectResult) throw new Error("Sensors effect was rejected");
+    } catch (error) {
+      console.error(`${MODULE_ID} | Sensors action failed; rolling back reservation`, error);
+      try {
+        await this.update({
+          "resources.engineer.auxiliaryPower": auxiliaryPower,
+          "resources.sensors.actionUsed": priorActionUsed,
+        }, ship);
+        return { ok: false, reason: "effectFailed", rolledBack: true };
+      } catch (rollbackError) {
+        console.error(`${MODULE_ID} | Sensors action rollback failed`, rollbackError);
+        return { ok: false, reason: "rollbackFailed", rolledBack: false };
+      }
+    }
+
+    return { ok: true, apCost };
+  }, ship);
+}
+
+/**
+ * Reserve a Sensors Power Core and Auxiliary Power together, then resolve the
+ * action's primary effect before releasing either ship-level mutation queue.
+ */
+export async function executeSensorCoreAction({ actionId, targetTokenId = null } = {}) {
+  if (!game.user.isGM) return { ok: false, reason: "notGM" };
+  const ship = this.ship;
+  const entry = AUGUR_CORE_ACTIONS.find(action => action.id === actionId);
+  if (!ship || !entry) return { ok: false, reason: "invalidAction" };
+
+  // Keep the same allocation → Power Core lock order used by Captain card
+  // grants so concurrent station actions cannot deadlock each other.
+  return this.withAllocationTransaction(
+    () => this.withPowerCoreTransaction(async () => {
+      const data = this.getData(ship) ?? {};
+      if (entry.targeted) {
+        const targetToken = targetTokenId ? canvas?.tokens?.get(targetTokenId) : null;
+        const targetDistance = _distanceSquaresToTarget(targetTokenId, ship);
+        if (!targetToken
+          || !isTargetableContactToken(targetToken, ship, { requireVisible: false })
+          || this.getEffectiveLockTier(targetTokenId, targetDistance) < 1) {
+          return { ok: false, reason: "invalidTarget" };
+        }
+      }
+      if (actionId === "combatTelemetry" && _sensorBlindBlocksTier(data, 4)) {
+        return { ok: false, reason: "sensorBlind" };
+      }
+      if (actionId === "combatTelemetry") {
+        if (!this.hasEffectiveLock({ belowTier: 4 })) return { ok: false, reason: "noLock" };
+      }
+
+      const apMultiplier = this.getSensorStats(ship)?.apCostMultiplier ?? 1;
+      const baseApCost = Math.ceil(entry.ap * apMultiplier);
+      const hasBuoy = (data.resources?.sensors?.payload ?? "") === "sensorBuoy";
+      const apCost = hasBuoy ? Math.ceil(baseApCost * 0.8) : baseApCost;
+      const auxiliaryPower = data.resources?.engineer?.auxiliaryPower ?? 0;
+      if (auxiliaryPower < apCost) {
+        return { ok: false, reason: "insufficientAP", apCost, auxiliaryPower };
+      }
+
+      const coreCount = getPowerCoreCount(data, "sensors");
+      if (coreCount <= 0) return { ok: false, reason: "noPowerCore" };
+      const corePoolRole = getPowerCorePoolRole(data, "sensors");
+      const priorActions = [...(data.resources?.sensors?.coreActionsPlayed ?? [])];
+
+      try {
+        await this.update({
+          [`resources.${corePoolRole}.coreCount`]: coreCount - 1,
+          "resources.engineer.auxiliaryPower": auxiliaryPower - apCost,
+          "resources.sensors.coreActionsPlayed": [...priorActions, actionId],
+        }, ship);
+      } catch (error) {
+        console.error(`${MODULE_ID} | Sensors Core reservation failed`, error);
+        return { ok: false, reason: "reservationFailed" };
+      }
+
+      try {
+        const targetActor = targetTokenId
+          ? canvas?.tokens?.get(targetTokenId)?.document?.actor ?? null
+          : null;
+        const effectResult = actionId === "combatTelemetry"
+          ? await this.upgradeAllLocks({ tier: 4 })
+          : await this.withActorActionTransaction(
+              targetActor,
+              () => this.stripQuadrantShields({ targetTokenId }),
+            );
+        if (!effectResult) throw new Error("Primary Sensors Core effect was rejected");
+      } catch (error) {
+        console.error(`${MODULE_ID} | Sensors Core effect failed; rolling back reservation`, error);
+        try {
+          await this.update({
+            [`resources.${corePoolRole}.coreCount`]: coreCount,
+            "resources.engineer.auxiliaryPower": auxiliaryPower,
+            "resources.sensors.coreActionsPlayed": priorActions,
+          }, ship);
+          return { ok: false, reason: "effectFailed", rolledBack: true };
+        } catch (rollbackError) {
+          console.error(`${MODULE_ID} | Sensors Core reservation rollback failed`, rollbackError);
+          return { ok: false, reason: "rollbackFailed", rolledBack: false };
+        }
+      }
+
+      if (targetTokenId) {
+        try {
+          const effectStored = await this.addSensorEffect({
+            actionId,
+            targetTokenId,
+            roundsRemaining: entry.duration ?? 1,
+          });
+          if (effectStored === false) throw new Error("Sensors Core visualization effect was rejected");
+        } catch (error) {
+          // Signal Inversion's shield removal is the primary mechanical effect;
+          // a failed source-ship marker must not refund an already-applied hit.
+          console.error(`${MODULE_ID} | Sensors Core effect marker failed`, error);
+          return { ok: true, apCost, warning: "effectMarkerFailed" };
+        }
+      }
+
+      return { ok: true, apCost };
+    }, ship),
+    ship,
+  );
 }
 
 /**
@@ -162,6 +387,7 @@ export async function stripQuadrantShields({ targetTokenId }) {
  * tier  -  the new lock tier (1-4).
  */
 export async function upgradeLock({ targetTokenId, tier }) {
+  if (!targetTokenId || !canvas?.tokens?.get(targetTokenId)) return false;
   const data = this.getData();
   if (_sensorBlindBlocksTier(data, tier)) {
     _warnSensorBlind();
@@ -278,18 +504,29 @@ export async function setRecommendedTarget({ targetTokenId } = {}) {
   });
 }
 
-/** Clear targeting references when their token leaves the scene. */
+/** Clear every targeting reference when its token leaves the scene. */
 export async function clearTargetReferences(targetTokenId) {
-  if (!targetTokenId) return;
-  const data = this.getData();
-  const updates = {};
-  if (data.resources?.sensors?.recommendedTargetId === targetTokenId) {
-    updates["resources.sensors.recommendedTargetId"] = null;
-  }
-  if (data.resources?.captain?.priorityTargetId === targetTokenId) {
-    updates["resources.captain.priorityTargetId"] = null;
-  }
-  if (Object.keys(updates).length > 0) return this.update(updates);
+  if (!targetTokenId || !this.ship) return false;
+  return this.withAllocationTransaction(async () => {
+    const updates = buildTargetReferenceCleanup(this.getData(), [targetTokenId]);
+    if (Object.keys(updates).length === 0) return true;
+    await this.update(updates);
+    return true;
+  }, this.ship);
+}
+
+/** Remove persisted targeting references whose Tokens are absent from the world. */
+export async function pruneTargetReferences(validTargetTokenIds = []) {
+  if (!this.ship) return false;
+  const valid = new Set(validTargetTokenIds);
+  return this.withAllocationTransaction(async () => {
+    const data = this.getData();
+    const stale = [...collectTargetReferenceIds(data)].filter(targetTokenId => !valid.has(targetTokenId));
+    const updates = buildTargetReferenceCleanup(data, stale);
+    if (Object.keys(updates).length === 0) return true;
+    await this.update(updates);
+    return true;
+  }, this.ship);
 }
 
 /**
@@ -450,6 +687,40 @@ export async function completeBDA({ attackId, messageId, messageContent }) {
   if (!attack) return;
   await _updateBDAChatMessage(attack, messageId ?? attack.messageId ?? null, messageContent);
   return this.update({ [`resources.sensors.bdaAttacks.-=${attackId}`]: null });
+}
+
+/** Apply a BDA correction and retire its attack record in one ship update. */
+export async function applyBdaCorrection({ attackId, correctionId, messageId, messageContent } = {}) {
+  if (!attackId || !BDA_CORRECTIONS.some(correction => correction.id === correctionId)) {
+    return { ok: false, reason: "invalidCorrection" };
+  }
+  const ship = this.ship;
+  if (!ship) return { ok: false, reason: "noShip" };
+
+  return this.withAllocationTransaction(async () => {
+    const data = this.getData(ship) ?? {};
+    const attack = data.resources?.sensors?.bdaAttacks?.[attackId];
+    if (!attack || attack.status !== "correction") return { ok: false, reason: "notFound" };
+
+    await _updateBDAChatMessage(attack, messageId ?? attack.messageId ?? null, messageContent);
+    const updates = { [`resources.sensors.bdaAttacks.-=${attackId}`]: null };
+    if (correctionId === "ceaseFireSwitch") {
+      const maxAP = this.getReactorStats(ship).auxPowerCapacity ?? 0;
+      const currentAP = data.resources?.engineer?.auxiliaryPower ?? 0;
+      updates["resources.engineer.auxiliaryPower"] = Math.min(maxAP, currentAP + Math.floor(maxAP * 0.2));
+      updates["resources.sensors.locks"] = (data.resources?.sensors?.locks ?? [])
+        .filter(lock => lock.targetTokenId !== attack.targetTokenId);
+    } else {
+      updates["resources.sensors.fireCorrection"] = {
+        type: correctionId,
+        targetTokenId: attack.targetTokenId ?? null,
+        weaponId: null,
+        sl: attack.sl ?? 0,
+      };
+    }
+    await this.update(updates, ship);
+    return { ok: true };
+  }, ship);
 }
 
 /**

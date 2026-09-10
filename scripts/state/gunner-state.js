@@ -36,12 +36,15 @@ export function allocateBdaAttackId(existingAttacks = {}) {
  */
 export async function fireWeapon({ weaponId, actorId, fireMode, targetToken, hitQuadrant, accuracy, isAutoHit, zone, salvoSize, isOvercharged, fireCorrection }) {
   const ship = this.ship;
-  if (!ship) return;
+  if (!ship) return false;
 
   // Resolve weapon: NPC fire provides actorId of the firing NPC actor
   const firingActor = actorId ? (game.actors.get(actorId) ?? ship) : ship;
   const weapon = firingActor.items.get(weaponId);
-  if (!weapon) return;
+  if (!weapon) return false;
+  const targetTok = canvas.tokens.get(targetToken);
+  const targetActor = targetTok?.document?.actor ?? null;
+  if (!targetActor) return false;
 
   const isNpcFire = firingActor.type === `${MODULE_ID}.npcShip`;
   // NPC fire reads from the NPC actor's own system; player fire reads from the player ship
@@ -84,9 +87,9 @@ export async function fireWeapon({ weaponId, actorId, fireMode, targetToken, hit
     // ── Player ship resource consumption ──
     if (resourceType === "ammo") {
       const tier = MACRO_FIRE_TIERS.find(t => t.id === fireMode);
-      if (!tier) return;
+      if (!tier) return false;
       const ammo = gunnerRes.ammo ?? 0;
-      if (ammo < tier.ammo) return;
+      if (ammo < tier.ammo) return false;
       updates["resources.gunner.ammo"] = ammo - tier.ammo;
       resourceCost = `${tier.ammo} ${game.i18n.localize("SHIPCOMBAT.Gunner.Ammo")}`;
     } else if (resourceType === "heat") {
@@ -122,9 +125,9 @@ export async function fireWeapon({ weaponId, actorId, fireMode, targetToken, hit
     const npcUpdates = {};
     if (resourceType === "ammo") {
       const tier = MACRO_FIRE_TIERS.find(t => t.id === fireMode);
-      if (!tier) return;
+      if (!tier) return false;
       const ammo = gunnerRes.ammo ?? 0;
-      if (ammo < tier.ammo) return;
+      if (ammo < tier.ammo) return false;
       npcUpdates["system.resources.gunner.ammo"] = ammo - tier.ammo;
       resourceCost = `${tier.ammo} ${game.i18n.localize("SHIPCOMBAT.Gunner.Ammo")}`;
     } else if (resourceType === "heat") {
@@ -158,7 +161,6 @@ export async function fireWeapon({ weaponId, actorId, fireMode, targetToken, hit
     lanceTierLabel = game.i18n.localize(_lTier?.label ?? "SHIPCOMBAT.Gunner.LanceFire");
   }
 
-  const targetTok  = canvas.tokens.get(targetToken);
   const targetRealName = targetTok?.document?.name ?? "Unknown";
   let targetDisplayTier = this.getLockTier(targetToken);
   const ownToken = this.ship?.getActiveTokens?.()?.[0];
@@ -176,9 +178,7 @@ export async function fireWeapon({ weaponId, actorId, fireMode, targetToken, hit
         currentTier: targetDisplayTier,
         realName: targetRealName,
       });
-  // Resolve the target actor to apply damage/crits to the correct ship
-  const targetActor = targetTok?.document?.actor ?? null;
-  const targetSys   = SystemAdapter.current.getShipData(targetActor) ?? sys;
+  const targetSys = SystemAdapter.current.getShipData(targetActor);
 
   // ── 1. Salvo Resolution (all shots roll individually) ──
   const scatterShieldBurn = (gunnerRes.payload === "scatterShot") ? 1 : 0;
@@ -283,7 +283,7 @@ export async function fireWeapon({ weaponId, actorId, fireMode, targetToken, hit
       bdaTargetTokenId: targetToken,
       bdaOriginalLockTier,
     });
-    return;
+    return { totalHits: 0, totalSalvo };
   }
 
   // ── Ordnance targets (torpedo / strike craft): 1 HP per hit, skip shields / armour ──
@@ -322,7 +322,7 @@ export async function fireWeapon({ weaponId, actorId, fireMode, targetToken, hit
       bdaTargetTokenId: targetToken,
       bdaOriginalLockTier,
     });
-    return;
+    return { totalHits, totalSalvo };
   }
 
   const _weaponDamageType = weapon.system.damageType || "";
@@ -452,16 +452,7 @@ export async function fireWeapon({ weaponId, actorId, fireMode, targetToken, hit
   const targetUpdates = buildDefenseUpdates(resolution, hitQuadrant);
 
   if (Object.keys(targetUpdates).length > 0) {
-    if (targetActor) {
-      await targetActor.update(targetUpdates);
-    } else {
-      // No target token on canvas  -  fall back to player ship
-      const fallback = {};
-      for (const [k, v] of Object.entries(targetUpdates)) {
-        fallback[k.replace(/^system\./, "")] = v;
-      }
-      await this.update(fallback);
-    }
+    await targetActor.update(targetUpdates);
   }
 
   // ── 6. Crit check ──
@@ -488,7 +479,7 @@ export async function fireWeapon({ weaponId, actorId, fireMode, targetToken, hit
     await this.update({
       "resources.sensors.fireCorrection": {
         type: "rangingFireBonus",
-        targetTokenId: targetToken.id,
+        targetTokenId: targetToken,
         persistent: true,
       },
     });

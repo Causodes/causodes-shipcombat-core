@@ -7,7 +7,7 @@
  */
 import { MODULE_ID, CORE_MODULE_ID }
   from "../constants.js";
-import { emitToGM }
+import { createActionRequester }
   from "../socket.js";
 import { ShipCombatState }
   from "../state/ShipCombatState.js";
@@ -25,6 +25,8 @@ import { _drawArrow, _makeArrowContainer, _destroyContainer }
   from "./StrikeCraftPopups.js";
 import { getAttackStanceModifier }
   from "../stances.js";
+
+const requestGM = createActionRequester(context => context.craftActor);
 
 // ── StrikeCraftAttackPopupV1 ─────────────────────────────────────────────────
 
@@ -91,6 +93,9 @@ export class StrikeCraftAttackPopupV1 extends foundry.appv1.api.Application {
       canvas.tokens.get(parentShipTokenId)?.document?.actor,
     ) ?? {};
     const parentShipActor = canvas.tokens.get(parentShipTokenId)?.document?.actor ?? null;
+    const parentState = parentShipActor
+      ? ShipCombatState.forShip(parentShipActor)
+      : ShipCombatState;
 
     const candidates = canvas.tokens.placeables.filter(t => {
       if (!shipTypes.includes(t.document.actor?.type) && !(isFighter && isOrdnance(t.document.actor))) return false;
@@ -102,7 +107,7 @@ export class StrikeCraftAttackPopupV1 extends foundry.appv1.api.Application {
     });
 
     const targets = [];
-    const contactData = ShipCombatState.getData();
+    const contactData = parentState.getData();
     const sortedContactIds = candidates.map(target => target.id).filter(Boolean).sort();
     for (const candidate of candidates) {
       const cW = candidate.document.width  * gs;
@@ -126,7 +131,7 @@ export class StrikeCraftAttackPopupV1 extends foundry.appv1.api.Application {
       const zone = classifyZone(distSquares, weaponRange, sensor);
       if (!zone) continue;
 
-      const lockTier = ShipCombatState.getEffectiveLockTier(candidate.id, distSquares);
+      const lockTier = parentState.getEffectiveLockTier(candidate.id, distSquares);
       if (lockTier < 1) continue;
 
       const adapter      = SystemAdapter.current;
@@ -270,9 +275,7 @@ export class StrikeCraftAttackPopupV1 extends foundry.appv1.api.Application {
     const flightSize = Math.max(0, _scIsHP ? (sys.hull?.value ?? 0) : (sys.hull?.max ?? 0) - (sys.hull?.value ?? 0));
     const damage     = sys.payloadDamage ?? 0;
     const salvoSize  = (sys.payloadCount ?? 1) * flightSize;
-
-    emitToGM("strikeCraftAttack", {
-      craftActorId:    this.craftActor.id,
+    const resolved = await requestGM(this, "strikeCraftAttack", {
       craftName:       this.craftActor.name,
       craftImg:        this.craftActor.img,
       targetTokenId:   tokenId,
@@ -285,13 +288,7 @@ export class StrikeCraftAttackPopupV1 extends foundry.appv1.api.Application {
       traits:          sys.traits,
       salvoSize,
     });
-
-    await this.craftActor.update({
-      [SystemAdapter.current.systemPath("ammo.value")]: Math.max(0, (sys.ammo?.value ?? 0) - 1),
-    });
-
-    const prev = this.craftActor.getFlag(MODULE_ID, "attackedThisTurn") ?? [];
-    await this.craftActor.setFlag(MODULE_ID, "attackedThisTurn", [...prev, tokenId]);
+    if (!resolved?.ok) return;
 
     this.close();
   }

@@ -435,30 +435,58 @@
   gap: 0.5rem;
 }
 
-/* ── NPC Ordnance launch row (count input + launch button) ──────────────────── */
+/* ── NPC Ordnance launch controls ──────────────────────────────────────────── */
 .shipcombat-npc-launch-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.35rem;
+  padding: 0.45rem 0.5rem;
+  border-top: 1px solid rgba(255,255,255,0.07);
+}
+.shipcombat-npc-launch-controls {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.3rem 0.5rem;
-  border-top: 1px solid rgba(255,255,255,0.07);
+  min-width: 0;
 }
 .shipcombat-npc-launch-label {
+  flex: 1 1 auto;
+  min-width: 0;
   font-size: 0.7rem;
   opacity: 0.6;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  white-space: nowrap;
+}
+.shipcombat-npc-launch-template {
+  display: block;
+  width: 100% !important;
+  max-width: 100%;
+  min-width: 0;
+  height: 1.75rem;
+  padding: 0 0.35rem;
 }
 .shipcombat-npc-launch-count {
-  width: 2.6rem;
+  flex: 0 0 2.6rem;
+  width: 2.6rem !important;
+  height: 1.75rem;
   text-align: center;
   font-weight: bold;
   padding: 0.2rem 0.1rem;
   font-size: 0.85rem;
 }
-.shipcombat-npc-launch-row .shipcombat-battery-fire-btn {
+.shipcombat-npc-launch-btn {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: auto !important;
+  min-width: 0;
+  height: 1.75rem !important;
+  min-height: 0 !important;
   margin-left: auto;
+  padding: 0.2rem 0.55rem !important;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 

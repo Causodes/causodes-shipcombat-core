@@ -6,7 +6,7 @@
  */
 import { MODULE_ID, CORE_MODULE_ID }
   from "../constants.js";
-import { emitToGM }
+import { createActionRequester }
   from "../socket.js";
 import { ShipCombatState }
   from "../state/ShipCombatState.js";
@@ -22,6 +22,8 @@ import { SystemAdapter }
   from "../systems/SystemAdapter.js";
 import { calculateRawRamDamage }
   from "../state/ram-damage.js";
+
+const requestGM = createActionRequester(context => context.ship);
 
 // ── RamTargetPopupV1 ─────────────────────────────────────────────────────────
 
@@ -79,6 +81,7 @@ export class RamTargetPopupV1 extends foundry.appv1.api.Application {
     const ship = this.ship;
     if (!ship) return { ...context, targets: [], noTargets: true };
 
+    const state = ShipCombatState.forShip(ship);
     const tokens = ship.getActiveTokens?.() ?? [];
     if (!tokens.length) return { ...context, targets: [], noTargets: true };
 
@@ -135,7 +138,7 @@ export class RamTargetPopupV1 extends foundry.appv1.api.Application {
       );
       const lockTier = ship.type === `${MODULE_ID}.npcShip`
         ? 3
-        : ShipCombatState.getEffectiveLockTier(candidate.id, distSquares);
+        : state.getEffectiveLockTier(candidate.id, distSquares);
       if (lockTier < 1) continue;
 
       const attackAngle    = Math.atan2(ty - cy, tx - cx);
@@ -361,7 +364,7 @@ export class RamTargetPopupV1 extends foundry.appv1.api.Application {
       if (sheet?._helmState) sheet._helmState.carryPct = 100;
     }
 
-    const committed = await emitToGM("pilotRam", {
+    const committed = await requestGM(this, "pilotRam", {
       userId:         game.user.id,
       targetTokenId:  tokenId,
       fuelUsed:       this.fuelBurned + target.selectedThrustPct,
@@ -373,7 +376,6 @@ export class RamTargetPopupV1 extends foundry.appv1.api.Application {
       waypoints,
       attackAngle:    target.attackAngle,
       powerMax:       this.powerMax,
-      rammingActorId: this.ship?.id ?? null,
       maxBearingDeg:  this.maxBearingDeg,
     });
     if (committed === false) return;

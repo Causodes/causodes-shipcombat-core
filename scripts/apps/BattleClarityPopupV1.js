@@ -6,13 +6,15 @@
  */
 import { CORE_MODULE_ID }
   from "../constants.js";
-import { emitToGM }
+import { createActionRequester }
   from "../socket.js";
 import { ShipCombatState }
   from "../state/ShipCombatState.js";
 import { SystemAdapter }
   from "../systems/SystemAdapter.js";
 import { getContactDisplayName, isTargetableContactToken } from "../targeting/contact-intelligence.js";
+
+const requestGM = createActionRequester(context => context.shipActor);
 
 // ── Shared ───────────────────────────────────────────────────────────────────
 // Lock tier colour palette used by BattleClarityPopupV1 (mirrors Core).
@@ -116,11 +118,15 @@ export class BattleClarityPopupV1 extends foundry.appv1.api.Application {
     }
 
     html.querySelectorAll("[data-action='confirmDesignate']").forEach(btn => {
-      btn.addEventListener("click", ev => {
+      btn.addEventListener("click", async ev => {
         ev.preventDefault();
         const tokenId = btn.dataset.tokenId;
         if (!tokenId) return;
-        emitToGM("captainCoreAction", { actionId: "battleClarity", tokenId, shipActorId: this.shipActor?.id });
+        const committed = await requestGM(this, "captainCoreAction", {
+          actionId: "battleClarity",
+          tokenId,
+        });
+        if (committed === false) return;
         this.close();
       });
     });

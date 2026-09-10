@@ -29,15 +29,23 @@
         </div>
         {{#if torpedoTemplates.length}}
         <div class="shipcombat-npc-launch-row">
-            <span class="shipcombat-npc-launch-label">{{localize "SHIPCOMBAT.NpcShip.TorpedoCount"}}</span>
-            <input type="number" class="shipcombat-npc-launch-count"
-                   data-config="torpedoCount"
-                   data-template-id="{{torpedoTemplates.[0].id}}"
-                   value="{{torpedoTemplates.[0].torpedoCount}}"
-                   min="1">
-            <button type="button" class="shipcombat-battery-fire-btn" data-action="npcLaunchTorpedo">
-                <i class="fa-solid fa-rocket"></i> {{localize "SHIPCOMBAT.NpcShip.LaunchTorpedo"}}
-            </button>
+            <select class="shipcombat-npc-launch-template"
+                    aria-label="{{localize 'SHIPCOMBAT.NpcShip.TorpedoTemplates'}}">
+                {{#each torpedoTemplates}}
+                <option value="{{id}}" data-launch-size="{{torpedoCount}}" {{#if selected}}selected{{/if}}>{{name}}</option>
+                {{/each}}
+            </select>
+            <div class="shipcombat-npc-launch-controls">
+                <span class="shipcombat-npc-launch-label">{{localize "SHIPCOMBAT.NpcShip.TorpedoCount"}}</span>
+                <input type="number" class="shipcombat-npc-launch-count"
+                       data-config="torpedoCount"
+                       data-template-id="{{selectedTorpedoTemplate.id}}"
+                       value="{{selectedTorpedoTemplate.torpedoCount}}"
+                       min="1">
+                <button type="button" class="shipcombat-npc-action-btn shipcombat-npc-launch-btn" data-action="npcLaunchTorpedo">
+                    <i class="fa-solid fa-rocket"></i> {{localize "SHIPCOMBAT.NpcShip.LaunchTorpedo"}}
+                </button>
+            </div>
         </div>
         {{/if}}
     </div>
@@ -71,15 +79,23 @@
         </div>
         {{#if craftTemplates.length}}
         <div class="shipcombat-npc-launch-row">
-            <span class="shipcombat-npc-launch-label">{{localize "SHIPCOMBAT.NpcShip.SquadronSize"}}</span>
-            <input type="number" class="shipcombat-npc-launch-count"
-                   data-config="squadronSize"
-                   data-template-id="{{craftTemplates.[0].id}}"
-                   value="{{craftTemplates.[0].squadronSize}}"
-                   min="1">
-            <button type="button" class="shipcombat-battery-fire-btn" data-action="npcLaunchStrikeCraft">
-                <i class="fa-solid fa-jet-fighter"></i> {{localize "SHIPCOMBAT.NpcShip.LaunchStrikeCraft"}}
-            </button>
+            <select class="shipcombat-npc-launch-template"
+                    aria-label="{{localize 'SHIPCOMBAT.NpcShip.StrikeCraftTemplates'}}">
+                {{#each craftTemplates}}
+                <option value="{{id}}" data-launch-size="{{squadronSize}}" {{#if selected}}selected{{/if}}>{{name}}</option>
+                {{/each}}
+            </select>
+            <div class="shipcombat-npc-launch-controls">
+                <span class="shipcombat-npc-launch-label">{{localize "SHIPCOMBAT.NpcShip.SquadronSize"}}</span>
+                <input type="number" class="shipcombat-npc-launch-count"
+                       data-config="squadronSize"
+                       data-template-id="{{selectedCraftTemplate.id}}"
+                       value="{{selectedCraftTemplate.squadronSize}}"
+                       min="1">
+                <button type="button" class="shipcombat-npc-action-btn shipcombat-npc-launch-btn" data-action="npcLaunchStrikeCraft">
+                    <i class="fa-solid fa-jet-fighter"></i> {{localize "SHIPCOMBAT.NpcShip.LaunchStrikeCraft"}}
+                </button>
+            </div>
         </div>
         {{/if}}
     </div>

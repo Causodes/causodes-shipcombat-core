@@ -26,6 +26,7 @@ import { npcCoreBlocksPowerGeneration } from "../../state/npc-condition-effects.
 import { getDisabledWeaponSectionId } from "../../state/weapon-section.js";
 import { SystemAdapter } from "../../systems/SystemAdapter.js";
 import { SHARED_ACTIONS } from "../../roles/shared.js";
+import { buildNpcOrdnanceTemplateContext, selectNpcOrdnanceTemplate } from "./npc-ordnance-selection.js";
 
 async function _animateTokenPath(token, waypoints, projected) {
   const canvasToken = token.object ?? token;
@@ -218,6 +219,10 @@ export const NpcShipSheetMixin = (BaseClass) => {
         const shipToken = _sheetToken(this)?.document;
         const parentShipTokenId = shipToken?.id ?? null;
         const allTokens = parentShipTokenId ? [...(canvas.scene.tokens ?? [])] : [];
+        const ordnanceTemplateContext = buildNpcOrdnanceTemplateContext(
+          sys.ordnanceActors,
+          this._npcOrdnanceTemplateIds,
+        );
         const deployedTorpedoes = allTokens.filter(t =>
           isTorpedo(t.actor) &&
           t.actor?.system?.parentShipTokenId === parentShipTokenId,
@@ -227,14 +232,7 @@ export const NpcShipSheetMixin = (BaseClass) => {
           t.actor?.system?.parentShipTokenId === parentShipTokenId,
         );
         Object.assign(context, {
-          torpedoTemplates: (sys.ordnanceActors?.torpedo ?? []).map(t => ({
-            ...t,
-            torpedoCount: t.actorData?.system?.hull?.max ?? 1,
-          })),
-          craftTemplates:   (sys.ordnanceActors?.strikeCraft ?? []).map(t => ({
-            ...t,
-            squadronSize:  t.actorData?.system?.hull?.max ?? 1,
-          })),
+          ...ordnanceTemplateContext,
           deployedTorpedoes: deployedTorpedoes.map(t => ({
             tokenId:      t.id, name: t.name, img: t.actor?.img,
             turnComplete: t.actor?.system?.turnComplete ?? false,
@@ -1327,7 +1325,19 @@ async function _persistNpcLaunchSize(sheet, input) {
 }
 
 function _wireNpcLaunchSizeInputs(sheet, root) {
-  root?.querySelectorAll?.(".shipcombat-npc-launch-count").forEach(input => {
+  root?.querySelectorAll?.(".shipcombat-npc-launch-row").forEach(row => {
+    const input = row.querySelector(".shipcombat-npc-launch-count");
+    const selector = row.querySelector(".shipcombat-npc-launch-template");
+    if (!input) return;
+    selector?.addEventListener("change", event => {
+      event.stopPropagation();
+      const option = selector.selectedOptions?.[0];
+      const slotKey = input.dataset.config === "squadronSize" ? "strikeCraft" : "torpedo";
+      sheet._npcOrdnanceTemplateIds ??= {};
+      sheet._npcOrdnanceTemplateIds[slotKey] = selector.value;
+      input.dataset.templateId = selector.value;
+      input.value = String(_npcLaunchSize({ value: option?.dataset?.launchSize }));
+    });
     input.addEventListener("change", () => _persistNpcLaunchSize(sheet, input));
   });
 }
@@ -1335,8 +1345,10 @@ function _wireNpcLaunchSizeInputs(sheet, root) {
 async function _npcLaunchOrdnance(type, target) {
   const slotKey   = type === "strikeCraft" ? "strikeCraft" : "torpedo";
   const templates = SystemAdapter.current.getShipData(this.actor).ordnanceActors?.[slotKey] ?? [];
-  const tmpl      = templates[0];
-  const sizeInput = target?.closest?.(".shipcombat-npc-launch-row")?.querySelector?.(".shipcombat-npc-launch-count");
+  const launchRow = target?.closest?.(".shipcombat-npc-launch-row");
+  const templateId = launchRow?.querySelector?.(".shipcombat-npc-launch-template")?.value ?? null;
+  const tmpl = selectNpcOrdnanceTemplate(templates, templateId);
+  const sizeInput = launchRow?.querySelector?.(".shipcombat-npc-launch-count");
   const launchSize = sizeInput ? _npcLaunchSize(sizeInput) : null;
   if (SystemAdapter.current.getShipData(this.actor).resources?.pilot?.prowGunLocked) {
     return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Ram.BowLaunchLocked"));
@@ -1544,6 +1556,10 @@ export const NpcShipSheetV1Mixin = (BaseClass) => {
       const shipToken         = _sheetToken(this)?.document;
       const parentShipTokenId = shipToken?.id ?? null;
       const allTokens         = parentShipTokenId ? [...(canvas.scene.tokens ?? [])] : [];
+      const ordnanceTemplateContext = buildNpcOrdnanceTemplateContext(
+        sys.ordnanceActors,
+        this._npcOrdnanceTemplateIds,
+      );
       const deployedTorpedoes = allTokens.filter(t =>
         isTorpedo(t.actor) && t.actor?.system?.parentShipTokenId === parentShipTokenId);
       const deployedCraft     = allTokens.filter(t =>
@@ -1593,12 +1609,7 @@ export const NpcShipSheetV1Mixin = (BaseClass) => {
         hasAnyCondition:     CRIT_LOCATIONS.some(loc => !!(sys.conditions?.[loc.id]?.tier)),
         shipClassifications: SHIP_CLASSIFICATIONS,
         useStrikeCraft:      true,
-        torpedoTemplates: (sys.ordnanceActors?.torpedo ?? []).map(t => ({
-          ...t, torpedoCount: t.actorData?.system?.hull?.max ?? 1,
-        })),
-        craftTemplates: (sys.ordnanceActors?.strikeCraft ?? []).map(t => ({
-          ...t, squadronSize: t.actorData?.system?.hull?.max ?? 1,
-        })),
+        ...ordnanceTemplateContext,
         deployedTorpedoes: deployedTorpedoes.map(t => ({
           tokenId:      t.id,
           name:         t.name,

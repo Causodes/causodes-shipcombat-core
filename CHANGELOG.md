@@ -1,3 +1,41 @@
+## v2.5.0
+### Bug Fixes
+- Keep newly overclocked Power Cores in their rightmost display position when staged
+- Remove all persisted targeting state that references deleted world Tokens, serializing cleanup with contact registration, recommendations, BDA resolution, and Manual Override without discarding locks during scene changes
+- Allow NPC ships to choose between multiple torpedo or strike-craft templates before launch
+- Restore Engineer Power Core staging by including the initiating ship in role allocation requests
+- Scope weapon, ram, strike-craft, shield-display, critical-hit, and deployed-ordnance ownership data to the ship that initiated each workflow
+- Apply reroll synchronization and combat-turn lifecycle processing to the matching player ship instead of the first player ship in the tracker
+- Bind ram resolution, End Combat, and per-sheet sensor-range calculations to the ship that initiated them
+- Resolve strike-craft damage, ammunition spending, and per-target turn tracking as one GM-side action, serializing both attacker and target and refunding pre-resolution failures
+- Validate and serialize gunner fire against its live target, preserving failed shots and Ranging Fire target IDs
+- Serialize Signal Inversion with other mutations to the target's defenses
+- Validate ram targets before committing movement and serialize both ships through confirmed socket resolution
+- Await the GM's final waypoint commit and suppress movement animations when the authoritative Helm action is rejected
+- Validate and resolve standard Sensors actions in one serialized GM-side operation, preserving AP-based multi-action turns and rolling back AP and prior action telemetry together when an effect fails
+- Match Sensors global-action controls to authoritative explicit and Auto-Scan lock requirements
+- Treat a cancelled Ordnance allocation warning as cancellation instead of an action failure
+- Reserve Sensors Core Action Power Cores and AP together on the GM, serialize every AP writer, require an applicable lock, await effects, and roll back both costs if the primary effect fails
+- Apply Captain Core effects, Power Core spending, and action telemetry in one serialized actor update
+- Serialize all Engineer Power Core staging and commitment mutations, plus generic ship resource writes, through their shared queues
+- Reject duplicate or invalid Engineer Power Core staging requests, and prevent Flux conversion from spending when Auxiliary Power cannot increase
+- Keep Engineer fire suppression and hull-repair staging resets in the same update as their action results
+- Validate, spawn, and commit ordnance launches in one GM-side operation, enforcing craft capacity and ram lockout while cleaning up failed provisional tokens without recording false losses
+- Preserve every destroyed-flight count when multiple strike-craft tokens are removed together
+- Apply each BDA correction and retire its attack record in one retry-safe GM update
+- Confirm torpedo damage and blast resolution before deleting the detonating torpedo, while serializing shared target damage
+- Make retried multi-target detonations idempotent so partial failures cannot damage an already-resolved target twice
+- Require torpedo, blast, and strike-craft damage requests to match their ordnance actor's parent ship
+- Reserve craft recovery, remove its token, and grant recovery credit through one compensating GM workflow
+- Resolve global canvas state to the player ship assigned to the current user and clear deleted-target references from every player ship
+- Scope deployed-ordnance deletion, RTB, power-boost, and turn controls to their parent ship, and update turn controls only after GM confirmation
+- Limit Full Reset ordnance cleanup to the initiating ship and use per-deletion suppression instead of shared global state
+### Improvements
+- Route core and companion GM requests through actor-bound factories backed by one declarative scope contract, with tests preventing raw request bypasses and undeclared handlers
+- Validate ship identity before socket dispatch, bind every ship-scoped handler to that actor, and match ordnance spawns to their parent ship
+- Register GM request handlers from one action catalog, default new requests to player-ship scope, and normalize simple handler results to socket-safe booleans
+- Catalog client broadcasts alongside GM actions, reject dispatch before socket readiness, and audit companion API handshakes and exported capabilities
+
 ## v2.4.1
 ### Bug Fixes
 - Fix player-ship shield arc adjustments failing because the shared helper referenced an unbound sheet context

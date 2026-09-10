@@ -25,11 +25,13 @@
  * Core bank: unused cores at end of turn bank (capped by reactor's bankCapacity).
  * Banked cores (Auxiliary Power) can ONLY be spent on Heat Management and Fire Suppression.
  */
-import { emitToGM } from "../socket.js";
+import { createActionRequester } from "../socket.js";
 import { heatColor } from "../theme.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
 import { MODULE_ID, hullDisplay } from "../constants.js";
 import { resolveStationOperatorActor } from "./crew-operators.js";
+
+const requestGM = createActionRequester(context => context.actor);
 
 function _getHeatCapacity(shipActor) {
   const reactor = shipActor?.items?.find(i => i.type === `${MODULE_ID}.component` && i.system.slot === "reactor");
@@ -69,7 +71,7 @@ async function _onSelectAction(event, target) {
   const current = sys.resources?.engineer?.actionChoices ?? [];
   if (current.includes(actionType)) return; // already selected
   const updated = [...current, actionType];
-  await emitToGM("updateResource", { roleId: "engineer", key: "actionChoices", value: updated, shipActorId: this.actor.id });
+  await requestGM(this, "updateResource", { roleId: "engineer", key: "actionChoices", value: updated });
 }
 
 /**
@@ -116,8 +118,7 @@ async function _onOverclock() {
   if (succeeded) {
     adjustments.push({ roleId: "engineer", key: "powerCores", delta: 1 });
   }
-  await emitToGM("adjustResources", {
-    shipActorId: this.actor.id,
+  await requestGM(this, "adjustResources", {
     requirements: [{ roleId: "engineer", key: "heat", max: heatMax - 1 }],
     adjustments,
   });
@@ -125,27 +126,27 @@ async function _onOverclock() {
 
 /** Dispatch staged cores into receiving-operator pools and record the Engineer ledger. */
 async function _onDispatchCores() {
-  emitToGM("dispatchStagedCores", { shipActorId: this.actor.id });
+  requestGM(this, "dispatchStagedCores");
 }
 
 /** Commit one core to shields. */
 async function _onCommitShieldCore() {
-  emitToGM("commitShieldCores", { count: 1, shipActorId: this.actor.id });
+  requestGM(this, "commitShieldCores", { count: 1 });
 }
 
 /** Remove one committed shield core back to available pool. */
 async function _onUncommitShieldCore() {
-  emitToGM("uncommitShieldCore", { shipActorId: this.actor.id });
+  requestGM(this, "uncommitShieldCore");
 }
 
 /** Commit one core to auxiliary power. */
 async function _onCommitAuxCore() {
-  emitToGM("commitAuxCore", { shipActorId: this.actor.id });
+  requestGM(this, "commitAuxCore");
 }
 
 /** Remove one staged auxiliary power core. */
 async function _onUncommitAuxCore() {
-  emitToGM("uncommitAuxCore", { shipActorId: this.actor.id });
+  requestGM(this, "uncommitAuxCore");
 }
 
 /**
@@ -169,7 +170,7 @@ async function _onManageHeat() {
   if (!test2) return;
 
   const sl = Math.max(0, test2.SL);
-  await emitToGM("manageHeat", { auxiliaryPowerSpent: coresStaged, sl, shipActorId: this.actor.id });
+  await requestGM(this, "manageHeat", { auxiliaryPowerSpent: coresStaged, sl });
 }
 
 /**
@@ -187,7 +188,7 @@ async function _onEmergencyVent() {
   });
   if (!ok) return;
 
-  emitToGM("emergencyVent", { shipActorId: this.actor.id });
+  requestGM(this, "emergencyVent");
 }
 
 /**
@@ -222,9 +223,7 @@ async function _onSuppressFire() {
   const sl = Math.max(0, test3.SL);
   const totalReduction = coresSpent + sl;
 
-  await emitToGM("reduceInternalFire", { amount: totalReduction, auxiliaryPowerSpent: coresSpent, shipActorId: this.actor.id });
-  // Reset staged value
-  await emitToGM("updateResource", { roleId: "engineer", key: "fireCoresStaged", value: 1, shipActorId: this.actor.id });
+  await requestGM(this, "reduceInternalFire", { amount: totalReduction, auxiliaryPowerSpent: coresSpent });
 }
 
 /** Adjust heatCoresStaged by delta, clamped to available Auxiliary Power. */
@@ -235,7 +234,7 @@ async function _onAdjustHeatCores(event, target) {
   const heat = sys.resources?.engineer?.heat ?? 0;
   const current = sys.resources?.engineer?.heatCoresStaged ?? 1;
   const next = Math.max(1, Math.min(bank, heat, current + delta));
-  await emitToGM("updateResource", { roleId: "engineer", key: "heatCoresStaged", value: next, shipActorId: this.actor.id });
+  await requestGM(this, "updateResource", { roleId: "engineer", key: "heatCoresStaged", value: next });
 }
 
 /** Adjust fireCoresStaged by delta, clamped to Auxiliary Power and internal fire. */
@@ -247,7 +246,7 @@ async function _onAdjustFireCores(event, target) {
   const maxSpend = Math.min(bank, fire);
   const current = sys.resources?.engineer?.fireCoresStaged ?? 1;
   const next = Math.max(1, Math.min(maxSpend, current + delta));
-  await emitToGM("updateResource", { roleId: "engineer", key: "fireCoresStaged", value: next, shipActorId: this.actor.id });
+  await requestGM(this, "updateResource", { roleId: "engineer", key: "fireCoresStaged", value: next });
 }
 
 /** Adjust repairAuxPowerStaged by delta, clamped to available Auxiliary Power. */
@@ -257,7 +256,7 @@ async function _onAdjustRepairAuxPower(event, target) {
   const bank = sys.resources?.engineer?.auxiliaryPower ?? 0;
   const current = sys.resources?.engineer?.repairAuxPowerStaged ?? 1;
   const next = Math.max(1, Math.min(bank, current + delta));
-  await emitToGM("updateResource", { roleId: "engineer", key: "repairAuxPowerStaged", value: next, shipActorId: this.actor.id });
+  await requestGM(this, "updateResource", { roleId: "engineer", key: "repairAuxPowerStaged", value: next });
 }
 
 /**
@@ -302,17 +301,14 @@ async function _onRepairHull() {
   if (!result) return;
 
   const sl = Math.max(0, result.SL);
-  await emitToGM("repairHull", { auxiliaryPowerSpent, sl, shipActorId: this.actor.id });
-
-  // Reset staged value
-  await emitToGM("updateResource", { roleId: "engineer", key: "repairAuxPowerStaged", value: 1, shipActorId: this.actor.id });
+  await requestGM(this, "repairHull", { auxiliaryPowerSpent, sl });
 }
 
 /** Convert 1 voidshield flux into 1 Auxiliary Power. */
 async function _onFluxToCharge() {
   const pool = SystemAdapter.current.getShipData(this.actor).shieldPool?.current ?? 0;
   if (pool <= 0) return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.NpcShip.NoFluxRemaining"));
-  emitToGM("fluxToCharge", { shipActorId: this.actor.id });
+  requestGM(this, "fluxToCharge");
 }
 
 // ── Exported action map ────────────────────────────────────────────────────

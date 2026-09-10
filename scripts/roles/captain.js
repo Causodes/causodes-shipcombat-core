@@ -8,13 +8,15 @@
  */
 
 import { CAPTAIN_CARDS, CAPTAIN_CORE_ACTIONS, CRIT_CONDITIONS, ROLES } from "../constants.js";
-import { emitToGM }                               from "../socket.js";
+import { createActionRequester }                  from "../socket.js";
 import { SystemAdapter }                          from "../systems/SystemAdapter.js";
 import { BattleClarityPopup }                     from "../apps/BattleClarityPopup.js";
 import { DeadReckoningPopup }                     from "../apps/DeadReckoningPopup.js";
 import { EmergencySalvagePopup }                  from "../apps/EmergencySalvagePopup.js";
 import { getPowerCoreCount, resolveStationOperatorActor } from "./crew-operators.js";
 import { normalizeCaptainZone, projectCaptainHandCount } from "../captain/card-instances.js";
+
+const requestGM = createActionRequester(context => context.actor);
 
 // Card definition lookup map (built once)
 const CARD_DEFS = Object.fromEntries(CAPTAIN_CARDS.map(c => [c.id, c]));
@@ -257,7 +259,7 @@ function _cardIcon(category) {
 async function _onTriage(event, target) {
   const locId = target.dataset.locId;
   if (!locId) return;
-  emitToGM("triageCondition", { locId, shipActorId: this.actor.id });
+  requestGM(this, "triageCondition", { locId });
 }
 
 async function _onPlayCard(event, target) {
@@ -286,11 +288,11 @@ async function _onPlayCard(event, target) {
       d.render(true);
     });
     if (!sector || sector === "cancel") return;
-    emitToGM("playCard", { cardId, cardInstanceId, sector, shipActorId: this.actor.id });
+    requestGM(this, "playCard", { cardId, cardInstanceId, sector });
     return;
   }
 
-  emitToGM("playCard", { cardId, cardInstanceId, shipActorId: this.actor.id });
+  requestGM(this, "playCard", { cardId, cardInstanceId });
 }
 
 async function _onDiscardCard(event, target) {
@@ -298,7 +300,7 @@ async function _onDiscardCard(event, target) {
   const cardId = card?.dataset?.cardId;
   const cardInstanceId = card?.dataset?.cardInstanceId;
   if (!cardId) return;
-  emitToGM("discardCard", { cardId, cardInstanceId, shipActorId: this.actor.id });
+  requestGM(this, "discardCard", { cardId, cardInstanceId });
 }
 
 async function _onMulligan(event, target) {
@@ -306,7 +308,7 @@ async function _onMulligan(event, target) {
   const cardId = card?.dataset?.cardId;
   const cardInstanceId = card?.dataset?.cardInstanceId;
   if (!cardId) return;
-  await emitToGM("mulligan", { cardId, cardInstanceId, shipActorId: this.actor.id });
+  await requestGM(this, "mulligan", { cardId, cardInstanceId });
 }
 
 /**
@@ -330,7 +332,7 @@ async function _onRollInitiative() {
     },
   );
 
-  await emitToGM("updateResource", { roleId: "captain", key: "initiativeTotal", value: total, shipActorId: this.actor.id });
+  await requestGM(this, "updateResource", { roleId: "captain", key: "initiativeTotal", value: total });
 }
 
 /** Roll Presence (Leadership) to generate the SL pool for inspire/resolve/initiative allocation. */
@@ -367,7 +369,7 @@ async function _onRollLeadershipSL() {
       { roleId: "ordnance", key: "allocExpedience", value: 0 },
     );
   }
-  await emitToGM("updateResources", { shipActorId: this.actor.id, updates });
+  await requestGM(this, "updateResources", { updates });
 }
 
 /**
@@ -400,9 +402,9 @@ async function _onAllocLeadershipSL(event, target) {
 
   if (newInspire + newResolve + newInitiative > leadershipSL) return;
 
-  if (stat === "inspire")    await emitToGM("updateResource", { roleId: "captain", key: "allocInspire",    value: newInspire,    shipActorId: this.actor.id });
-  if (stat === "resolve")    await emitToGM("updateResource", { roleId: "captain", key: "allocResolve",    value: newResolve,    shipActorId: this.actor.id });
-  if (stat === "initiative") await emitToGM("updateResource", { roleId: "captain", key: "allocInitiative", value: newInitiative, shipActorId: this.actor.id });
+  if (stat === "inspire")    await requestGM(this, "updateResource", { roleId: "captain", key: "allocInspire",    value: newInspire });
+  if (stat === "resolve")    await requestGM(this, "updateResource", { roleId: "captain", key: "allocResolve",    value: newResolve });
+  if (stat === "initiative") await requestGM(this, "updateResource", { roleId: "captain", key: "allocInitiative", value: newInitiative });
 }
 
 // ── Core Action Handlers ─────────────────────────────────────────────────────
@@ -426,7 +428,7 @@ async function _onCaptainCoreAction(event, target) {
       ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Captain.Core.EPNoConditions"));
       return;
     }
-    emitToGM("captainCoreAction", { actionId, shipActorId: this.actor.id });
+    await requestGM(this, "captainCoreAction", { actionId });
     return;
   }
 
@@ -438,7 +440,7 @@ async function _onCaptainCoreAction(event, target) {
       ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Captain.Core.ICNoConditions"));
       return;
     }
-    emitToGM("captainCoreAction", { actionId, shipActorId: this.actor.id });
+    await requestGM(this, "captainCoreAction", { actionId });
     return;
   }
 
@@ -467,7 +469,7 @@ async function _onCaptainCoreAction(event, target) {
       ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Captain.Core.CONoPending"));
       return;
     }
-    emitToGM("captainCoreAction", { actionId, shipActorId: this.actor.id });
+    await requestGM(this, "captainCoreAction", { actionId });
     return;
   }
 
@@ -477,7 +479,7 @@ async function _onCaptainCoreAction(event, target) {
       ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Captain.Core.DREmptyPile"));
       return;
     }
-    const reservation = await emitToGM("beginDeadReckoning", { shipActorId: this.actor.id });
+    const reservation = await requestGM(this, "beginDeadReckoning");
     if (!reservation?.ok) {
       const warningKey = reservation?.reason === "emptyPile"
         ? "SHIPCOMBAT.Captain.Core.DREmptyPile"
@@ -499,7 +501,7 @@ async function _onCaptainCoreAction(event, target) {
 // ── Exports ──────────────────────────────────────────────────────────────────
 
 async function _onFluxToCharge() {
-  emitToGM("fluxToCharge", { shipActorId: this.actor.id });
+  requestGM(this, "fluxToCharge");
 }
 
 async function _onCaptainReorderCard(event, target) {
@@ -520,7 +522,7 @@ async function _onCaptainReorderCard(event, target) {
     return; // already at edge
   }
 
-  await emitToGM("updateResource", { roleId: "captain", key: "hand", value: hand, shipActorId: this.actor.id });
+  await requestGM(this, "updateResource", { roleId: "captain", key: "hand", value: hand });
 }
 
 export const CAPTAIN_ACTIONS = {

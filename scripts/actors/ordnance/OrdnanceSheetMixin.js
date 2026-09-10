@@ -16,10 +16,11 @@ import { TorpedoOverlay } from "../../canvas/TorpedoOverlay.js";
 import { StrikeCraftArcOverlay } from "../../canvas/StrikeCraftArcOverlay.js";
 import { StrikeCraftAttackPopup } from "../../apps/StrikeCraftPopups.js";
 import { coerceEmptyNumberInputs } from "../../sheet-utils.js";
-import { emitToGM, emitToAll } from "../../socket.js";
-import { ShipCombatState } from "../../state/ShipCombatState.js";
+import { createActionRequester, emitToAll } from "../../socket.js";
 import { SystemAdapter } from "../../systems/SystemAdapter.js";
-import { getOrdnanceControllerUserId } from "../../roles/crew-operators.js";
+import { getOrdnanceControllerUserId, resolveOrdnanceParentShipActor } from "../../roles/crew-operators.js";
+
+const requestGM = createActionRequester(context => context.actor);
 
 async function _animateTokenPath(token, waypoints, projected) {
   const canvasToken = token.object ?? token;
@@ -125,10 +126,12 @@ async function _onOrdConfirmHelm() {
 }
 
 async function _onOrdMarkTurnComplete() {
-  const current = SystemAdapter.current.getShipData(this.actor).turnComplete;
+  const sys = SystemAdapter.current.getShipData(this.actor);
+  const current = sys.turnComplete;
   const tokenId = this.actor.token?.id ?? this.actor.getActiveTokens()?.[0]?.id;
   if (!tokenId) return;
-  emitToGM("setOrdnanceTurnDone", { tokenId, done: !current });
+  if (!resolveOrdnanceParentShipActor(this.actor)) return;
+  await requestGM(this, "setOrdnanceTurnDone", { tokenId, done: !current });
 }
 
 async function _onOrdAttack() {
@@ -146,6 +149,7 @@ async function _onOrdDetonate() {
   if (sys.turnComplete || sys.designated) return;
   const token = this.actor.getActiveTokens()?.[0];
   if (!token || !canvas?.ready) return;
+  if (!resolveOrdnanceParentShipActor(this.actor)) return;
 
   const radius      = sys.payloadRadius;
   const baseDmg     = sys.payloadDamage;
@@ -155,7 +159,9 @@ async function _onOrdDetonate() {
     ? hullValue
     : hullMax - hullValue);
   if (warheads <= 0) {
-    return emitToGM("destroyOrdnanceTokens", { tokenIds: [token.document.id] });
+    return requestGM(this, "destroyOrdnanceTokens", {
+      tokenIds: [token.document.id],
+    });
   }
   const gs          = canvas.grid.size;
   const cx          = token.x + (token.document.width * gs) / 2;
@@ -188,6 +194,10 @@ async function _onOrdDetonate() {
   });
   if (!ok) return;
 
+  // Stable for this deployed torpedo, so a partially failed blast cannot
+  // damage an already-resolved target twice when deletion is retried.
+  const detonationId = token.document.uuid ?? token.document.id;
+  const resolutionRequests = [];
   for (const t of targets) {
     const dist = _closestEdgeDist(cx, cy, t, gs);
     const innerRadius = gs;
@@ -225,8 +235,7 @@ async function _onOrdDetonate() {
     else if (deg >= 45 && deg < 135)   hitQuadrant = "starboard";
     else if (deg >= -135 && deg < -45) hitQuadrant = "port";
     else                               hitQuadrant = "stern";
-    emitToGM("torpedoDamage", {
-      torpedoActorId: this.actor.id,
+    resolutionRequests.push(requestGM(this, "torpedoDamage", {
       targetTokenId: t.document.id,
       targetActorId: t.document.actorId,
       torName: this.actor.name,
@@ -238,7 +247,8 @@ async function _onOrdDetonate() {
       warheadCount,
       damageMultiplier: decayMult,
       payloadDamageType: sys.payloadDamageType ?? null,
-    });
+      detonationId,
+    }));
   }
 
   if (torpedoTargets.length > 0 || craftTargets.length > 0) {
@@ -257,11 +267,12 @@ async function _onOrdDetonate() {
         damageMultiplier: decay,
       };
     });
-    emitToGM("blastOrdnance", {
+    resolutionRequests.push(requestGM(this, "blastOrdnance", {
       torpedoTokenIds: torpedoTargets.map(t => t.document.id),
       craftDamages,
       torName: this.actor.name,
-    });
+      detonationId,
+    }));
   }
 
   TorpedoOverlay.hide();
@@ -277,8 +288,17 @@ async function _onOrdDetonate() {
     blastRadius:  sys.payloadRadius ?? 1,
   });
   if (token._animation) await CanvasAnimation.terminateAnimation(token._animation);
-  await new Promise(r => setTimeout(r, 2000));
-  await emitToGM("deleteOrdnanceTokens", { tokenIds: [tokenDoc.id] });
+  const [resolutionResults] = await Promise.all([
+    Promise.allSettled(resolutionRequests),
+    new Promise(r => setTimeout(r, 2000)),
+  ]);
+  if (resolutionResults.some(result => result.status === "rejected" || result.value?.ok !== true)) {
+    ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Ordnance.ActionFailed"));
+    return;
+  }
+  await requestGM(this, "deleteOrdnanceTokens", {
+    tokenIds: [tokenDoc.id],
+  });
 }
 
 export const OrdnanceSheetMixin = (BaseClass) => {
@@ -325,7 +345,8 @@ export const OrdnanceSheetMixin = (BaseClass) => {
       // crews have no "ordnance" role at all. Stat editing is still protected:
       // the config tab, which holds all stat fields, renders for GMs only.
       if (this.actor.isOwner) return true;
-      return game.user.id === getOrdnanceControllerUserId(ShipCombatState.ship, ordnanceSubtype(this.actor));
+      const parentShip = resolveOrdnanceParentShipActor(this.actor);
+      return game.user.id === getOrdnanceControllerUserId(parentShip, ordnanceSubtype(this.actor));
     }
 
     _prepareTabs() {
@@ -725,7 +746,8 @@ export const OrdnanceSheetV1Mixin = (BaseClass) => {
       // the config tab, which holds all stat fields, renders for GMs only
       // (canConfigure below).
       if (this.actor.isOwner) return true;
-      return game.user.id === getOrdnanceControllerUserId(ShipCombatState.ship, ordnanceSubtype(this.actor));
+      const parentShip = resolveOrdnanceParentShipActor(this.actor);
+      return game.user.id === getOrdnanceControllerUserId(parentShip, ordnanceSubtype(this.actor));
     }
 
     async getData(options = {}) {

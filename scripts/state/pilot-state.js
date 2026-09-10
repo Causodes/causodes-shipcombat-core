@@ -27,14 +27,15 @@ export async function consumePilotCore(userId, actionId) {
  * In Realistic mode, cancels up to retroValue VU of velocity along the current heading.
  */
 export async function pilotRetrograde(userId, retroValue, newX, newY, newRotation, waypoints) {
+  const token = this.ship?.getActiveTokens()?.[0];
+  if (!token) return false;
   const consumed = await this.consumePilotCore(userId, "retro");
-  if (!consumed) return;
+  if (!consumed) return false;
 
   const data = this.getData();
   const isRealistic = game.settings.get(MODULE_ID, "movementMode") === "realistic";
 
   if (isRealistic) {
-    const token = this.ship?.getActiveTokens()?.[0];
     const vx = data.resources?.pilot?.velocityX ?? 0;
     const vy = data.resources?.pilot?.velocityY ?? 0;
     const vmag = Math.hypot(vx, vy);
@@ -56,13 +57,14 @@ export async function pilotRetrograde(userId, retroValue, newX, newY, newRotatio
         await token.document.update({ x: newX, y: newY, rotation: newRotation }, { animate: true });
       }
     }
-    return;
+    return true;
   }
 
   const prevMove   = data.resources?.pilot?.prevTurnMove ?? 0;
   const currentMin = Math.ceil(prevMove / 2);
   const newMin     = Math.max(0, currentMin - retroValue);
   await this.update({ "resources.pilot.prevTurnMove": newMin * 2 });
+  return true;
 }
 
 /**
@@ -71,8 +73,9 @@ export async function pilotRetrograde(userId, retroValue, newX, newY, newRotatio
  */
 export async function pilotOverdrive(userId) {
   const consumed = await this.consumePilotCore(userId, "overdrive");
-  if (!consumed) return;
+  if (!consumed) return false;
   await this.update({ "resources.pilot.overdrive": true });
+  return true;
 }
 
 /**
@@ -80,8 +83,9 @@ export async function pilotOverdrive(userId) {
  * In Realistic mode, also adds the lateral delta to the velocity vector.
  */
 export async function pilotStrafe(userId, newX, newY, newRotation, dist, waypoints) {
+  if (!this.ship?.getActiveTokens()?.[0]) return false;
   const consumed = await this.consumePilotCore(userId, "strafe");
-  if (!consumed) return;
+  if (!consumed) return false;
   const data = this.getData();
   const isRealistic = game.settings.get(MODULE_ID, "movementMode") === "realistic";
   let velocityX, velocityY;
@@ -102,7 +106,7 @@ export async function pilotStrafe(userId, newX, newY, newRotation, dist, waypoin
       velocityY = vy + Math.sin(perpAngle) * signedDist;
     }
   }
-  await this.confirmMovement({
+  const moved = await this.confirmMovement({
     fuelUsed: data.resources?.pilot?.fuelBurned ?? 0,
     newX, newY, newRotation,
     gridSquaresMoved: dist,
@@ -110,6 +114,7 @@ export async function pilotStrafe(userId, newX, newY, newRotation, dist, waypoin
     velocityX,
     velocityY,
   });
+  return moved !== false;
 }
 
 /**
@@ -117,12 +122,13 @@ export async function pilotStrafe(userId, newX, newY, newRotation, dist, waypoin
  * effective speed. Requires ≥50% power remaining; consumes 50% power and one Core.
  */
 export async function pilotFlipAndBurn(userId, halfSpeedUnits, newX, newY, newRotation, waypoints) {
+  if (!this.ship?.getActiveTokens()?.[0]) return false;
   const consumed = await this.consumePilotCore(userId, "flipBurn");
-  if (!consumed) return;
+  if (!consumed) return false;
   const data       = this.getData();
   const fuelBurned = data.resources?.pilot?.fuelBurned ?? 0;
   const isRealistic = game.settings.get(MODULE_ID, "movementMode") === "realistic";
-  await this.confirmMovement({
+  const moved = await this.confirmMovement({
     fuelUsed:         fuelBurned + 50,
     newX,
     newY,
@@ -133,6 +139,7 @@ export async function pilotFlipAndBurn(userId, halfSpeedUnits, newX, newY, newRo
     velocityX: isRealistic ? 0 : undefined,
     velocityY: isRealistic ? 0 : undefined,
   });
+  return moved !== false;
 }
 
 /**
@@ -142,12 +149,13 @@ export async function pilotFlipAndBurn(userId, halfSpeedUnits, newX, newY, newRo
 export async function apToThrust(userId) {
   const data = this.getData();
   const ap = data.resources?.engineer?.auxiliaryPower ?? 0;
-  if (ap <= 0) return;
+  if (ap <= 0) return false;
 
   const engine = this.ship?.items.find(i => i.type === `${MODULE_ID}.component` && i.system.slot === "engine");
   const powerPerAP = engine?.system?.powerPerAP ?? 0;
   if (powerPerAP <= 0) {
-    return ui.notifications.warn("Engine has no Power Per AP rating configured.");
+    ui.notifications.warn("Engine has no Power Per AP rating configured.");
+    return false;
   }
 
   const current = data.resources?.pilot?.apThrustBonus ?? 0;
@@ -155,6 +163,7 @@ export async function apToThrust(userId) {
     "resources.engineer.auxiliaryPower": Math.max(0, ap - 1),
     "resources.pilot.apThrustBonus": current + powerPerAP,
   });
+  return true;
 }
 
 /**
@@ -162,6 +171,8 @@ export async function apToThrust(userId) {
  * In Realistic mode, also stores the new velocity vector.
  */
 export async function confirmMovement({ fuelUsed, driftUsed = 0, speed, newX, newY, newRotation, gridSquaresMoved, waypoints, velocityX, velocityY, bearingDelta, momentumUsed }) {
+  const token = this.ship?.getActiveTokens()?.[0];
+  if (!token) return false;
   const data = this.getData();
   const stanceSpeed = getStanceMovementModifiers(data).speed;
   const effectiveSpeed = speed
@@ -194,9 +205,9 @@ export async function confirmMovement({ fuelUsed, driftUsed = 0, speed, newX, ne
   await this.update(updates);
 
   if (!waypoints?.length) {
-    const token = this.ship?.getActiveTokens()?.[0];
-    if (token) await token.document.update({ x: newX, y: newY, rotation: newRotation }, { animate: true });
+    await token.document.update({ x: newX, y: newY, rotation: newRotation }, { animate: true });
   }
+  return true;
 }
 
 /**
@@ -239,13 +250,21 @@ export async function pilotRam(
   const RAM_VELOCITY_RETENTION = 0.20;
 
   // ── Resolve the ramming actor ──────────────────────────────────────────────
-  // If rammingActorId points to an NPC actor, operate on it directly.
-  // If null (or the player ship), use the normal ShipCombatState path.
-  const isNpcRam = rammingActorId && rammingActorId !== this.ship?.id;
-  const rammingActor = isNpcRam
+  // Resolve the explicit attacker first.  Comparing its id to `this.ship`
+  // misclassifies a second player ship when an unscoped state object leaks in.
+  const rammingActor = rammingActorId
     ? (game.actors?.get(rammingActorId) ?? null)
     : this.ship;
-  if (!rammingActor) return;
+  const isNpcRam = rammingActor?.type === `${MODULE_ID}.npcShip`;
+  if (!rammingActor) return false;
+
+  // Resolve the target before movement or fuel is committed. The public state
+  // wrapper also locks both actors, but this guard keeps direct callers safe.
+  const rammedToken = canvas?.tokens?.get(targetTokenId)
+    ?? canvas?.tokens?.placeables?.find(token => token.document?.id === targetTokenId)
+    ?? null;
+  const rammedActor = rammedToken?.document?.actor ?? rammedToken?.actor ?? null;
+  if (!rammedActor) return false;
 
   const currentData = SystemAdapter.current.getShipData(rammingActor) ?? {};
   const pilotData = currentData.resources?.pilot ?? {};
@@ -277,7 +296,7 @@ export async function pilotRam(
     }
   } else {
     // Player ship path: delegate to ShipCombatState helpers
-    await this.confirmMovement({ fuelUsed, driftUsed, speed, newX, newY, newRotation, waypoints });
+    await confirmMovement.call(this, { fuelUsed, driftUsed, speed, newX, newY, newRotation, waypoints });
     await this.update({
       "resources.pilot.prowGunLocked":  true,
       "resources.pilot.ramAllocLocked": true,
@@ -287,19 +306,6 @@ export async function pilotRam(
   // ── 3. Find rammed actor ───────────────────────────────────────────────────
   const rammingSys  = rammingActor.system;
 
-  // Search canvas tokens first (scene-linked), then world actors as fallback
-  let rammedToken = canvas?.tokens?.placeables?.find(t => t.id === targetTokenId)
-    ?? canvas?.tokens?.placeables?.find(t => t.document?.id === targetTokenId);
-  let rammedActor = rammedToken?.document?.actor ?? rammedToken?.actor;
-  if (!rammedActor) {
-    // Fallback: look in scene tokens
-    const tokenDoc = canvas?.scene?.tokens?.find(t => t.id === targetTokenId);
-    rammedActor = tokenDoc?.actor ?? null;
-  }
-  if (!rammedActor) {
-    console.warn("SHIPCOMBAT | pilotRam: could not find rammed actor for token", targetTokenId);
-    return;
-  }
   const rammedSys = rammedActor.system;
 
   // ── 4. Compute thrust multiplier ──────────────────────────────────────────

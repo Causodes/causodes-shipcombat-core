@@ -11,7 +11,8 @@
  *
  * Usage in companion modules:
  *
- *   const { SystemAdapter, emitToGM } = globalThis.ShipCombat._api;
+ *   const { SystemAdapter, createActionRequester } = globalThis.ShipCombat._api;
+ *   const requestGM = createActionRequester(context => context.actor);
  *   export class MyAdapter extends SystemAdapter { ... }
  *
  * Core evaluates before any companion (Foundry dependency order), so
@@ -19,7 +20,7 @@
  */
 
 export { SystemAdapter }                                     from "./systems/SystemAdapter.js";
-export { emitToGM }                                          from "./socket.js";
+export { createActionRequester, emitToGM }                   from "./socket.js";
 export { ShipCombatState }                                   from "./state/ShipCombatState.js";
 export { recordPlayerShipInitiative }                        from "./initiative.js";
 export { THEME, pixi }                                       from "./theme.js";
@@ -44,6 +45,7 @@ export { ShipComponentSheetMixin, ShipComponentSheetV1Mixin } from "./items/Ship
 export { CORE_MODULE_ID, MACRO_FIRE_TIERS, buildChargeTiers, SHIP_CLASSIFICATIONS } from "./constants.js";
 export { hullDisplay }                                       from "./constants.js";
 export { getAttackStanceModifier, getStanceMovementModifiers, hasDevastationProtocol } from "./stances.js";
+export { calculateRawRamDamage }                            from "./state/ram-damage.js";
 export {
   getContactDisplayName,
   getContactDesignation,
@@ -63,4 +65,5 @@ export {
   userOperatesStation,
   getOrdnanceControllerRole,
   getOrdnanceControllerUserId,
+  resolveOrdnanceParentShipActor,
 } from "./roles/crew-operators.js";

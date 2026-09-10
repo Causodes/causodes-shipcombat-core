@@ -1,5 +1,7 @@
 import { CORE_MODULE_ID } from "../constants.js";
-import { emitToGM } from "../socket.js";
+import { createActionRequester } from "../socket.js";
+
+const requestGM = createActionRequester(context => context.shipActorId);
 
 /** Full-effect discard browser for Emergency Salvage. */
 export class EmergencySalvagePopup extends foundry.appv1.api.Application {
@@ -29,11 +31,15 @@ export class EmergencySalvagePopup extends foundry.appv1.api.Application {
   activateListeners($html) {
     super.activateListeners($html);
     $html[0].querySelectorAll("[data-action='salvageCard']").forEach(button => {
-      button.addEventListener("click", event => {
+      button.addEventListener("click", async event => {
         event.preventDefault();
         const cardInstanceId = button.dataset.cardInstanceId;
         if (!cardInstanceId) return;
-        emitToGM("captainCoreAction", { actionId: "emergencySalvage", cardInstanceId, shipActorId: this.shipActorId });
+        const committed = await requestGM(this, "captainCoreAction", {
+          actionId: "emergencySalvage",
+          cardInstanceId,
+        });
+        if (committed === false) return;
         this.close();
       });
     });

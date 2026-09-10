@@ -10,7 +10,7 @@
  *   2. Lock tier ≥ 1 (NPC ships default to lock 3)
  */
 import { MODULE_ID, CORE_MODULE_ID } from "../constants.js";
-import { emitToGM }  from "../socket.js";
+import { createActionRequester }  from "../socket.js";
 import { ShipCombatState } from "../state/ShipCombatState.js";
 import { HelmPreview } from "../canvas/HelmPreview.js";
 import { getHitQuadrant } from "./TargetingPopup.js";
@@ -18,6 +18,8 @@ import { THEME, pixi } from "../theme.js";
 import { getContactDisplayName, isTargetableContactToken } from "../targeting/contact-intelligence.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
 import { calculateRawRamDamage } from "../state/ram-damage.js";
+
+const requestGM = createActionRequester(context => context.ship);
 
 export class RamTargetPopup extends foundry.applications.api.HandlebarsApplicationMixin(
   foundry.applications.api.ApplicationV2
@@ -86,6 +88,7 @@ export class RamTargetPopup extends foundry.applications.api.HandlebarsApplicati
     const ship    = this.ship;
     if (!ship) return { ...context, targets: [], noTargets: true };
 
+    const state = ShipCombatState.forShip(ship);
     const tokens = ship.getActiveTokens?.() ?? [];
     if (!tokens.length) return { ...context, targets: [], noTargets: true };
 
@@ -143,7 +146,7 @@ export class RamTargetPopup extends foundry.applications.api.HandlebarsApplicati
       );
       const lockTier = ship.type === `${MODULE_ID}.npcShip`
         ? 3
-        : ShipCombatState.getEffectiveLockTier(candidate.id, distSquares);
+        : state.getEffectiveLockTier(candidate.id, distSquares);
       if (lockTier < 1) continue;
 
       const attackAngle = Math.atan2(ty - cy, tx - cx);
@@ -381,7 +384,7 @@ export class RamTargetPopup extends foundry.applications.api.HandlebarsApplicati
       if (sheet?._helmState) sheet._helmState.carryPct = 100;
     }
 
-    const committed = await emitToGM("pilotRam", {
+    const committed = await requestGM(this, "pilotRam", {
       userId:         game.user.id,
       targetTokenId:  tokenId,
       fuelUsed,
@@ -393,7 +396,6 @@ export class RamTargetPopup extends foundry.applications.api.HandlebarsApplicati
       waypoints,
       attackAngle:    target.attackAngle,
       powerMax:       this.powerMax,
-      rammingActorId: this.ship?.id ?? null,
       maxBearingDeg:  this.maxBearingDeg,
     });
     if (committed === false) return;

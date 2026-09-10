@@ -461,12 +461,19 @@ export async function captainPayloadActivate({ payloadId } = {}) {
 // captainCoreAction({ actionId, ...payload })
 // Runs on GM. Validates, applies the effect, marks core spent.
 // ─────────────────────────────────────────────────────────────────────────────
-export async function captainCoreAction({ actionId, tokenId, cardInstanceId } = {}) {
+export async function captainCoreAction(payload = {}) {
+  return this.withAllocationTransaction(
+    () => this.withPowerCoreTransaction(() => _captainCoreAction.call(this, payload)),
+  );
+}
+
+async function _captainCoreAction({ actionId, tokenId, cardInstanceId } = {}) {
   const sys     = this.getData();
   const captain = sys.resources?.captain ?? {};
 
-  const hasCoreAvail = getPowerCoreCount(sys, "captain") > 0;
-  if (!hasCoreAvail) return;
+  const poolRole = getPowerCorePoolRole(sys, "captain");
+  const coreCount = getPowerCoreCount(sys, "captain");
+  if (coreCount <= 0) return false;
 
   const TIER_ORDER = ["low", "medium", "high"];
   const updates    = {};
@@ -512,14 +519,14 @@ export async function captainCoreAction({ actionId, tokenId, cardInstanceId } = 
 
   // ── Priority Target: mark one target; +10 acc, pierce 2 shields ──
   else if (actionId === "battleClarity") {
-    if (!tokenId) return;
+    if (!tokenId) return false;
     const target = canvas?.tokens?.get(tokenId);
-    if (!isTargetableContactToken(target, this.ship)) return;
+    if (!isTargetableContactToken(target, this.ship)) return false;
     const lockTier = this.getEffectiveLockTier(
       tokenId,
       _distanceSquaresToTarget(target, this.ship),
     );
-    if (lockTier < 1) return;
+    if (lockTier < 1) return false;
     updates[SystemAdapter.current.systemPath("resources.captain.priorityTargetId")] = tokenId;
     const ensured = ensureContactRecord(sys, tokenId, {
       tier: lockTier,
@@ -531,11 +538,11 @@ export async function captainCoreAction({ actionId, tokenId, cardInstanceId } = 
 
   // ── Emergency Salvage: retrieve one card from discard to hand ──
   else if (actionId === "emergencySalvage") {
-    if (!cardInstanceId) return;
+    if (!cardInstanceId) return false;
     const hand    = normalizeCaptainZone(captain.hand, "hand");
     const discard = normalizeCaptainZone(captain.discardPile, "discard");
     const idx = discard.findIndex(card => card.instanceId === cardInstanceId);
-    if (idx === -1) return;
+    if (idx === -1) return false;
     const [salvagedCard] = discard.splice(idx, 1);
     hand.push({ ...salvagedCard, salvaged: true });
     const drawPile = shuffleCaptainCards([
@@ -550,21 +557,28 @@ export async function captainCoreAction({ actionId, tokenId, cardInstanceId } = 
   // ── Command Override: promote pendingStance immediately ──
   else if (actionId === "commandOverride") {
     const pending = captain.pendingStance;
-    if (!pending) return;
+    if (!pending) return false;
     updates[SystemAdapter.current.systemPath("resources.captain.stance")]        = pending;
     updates[SystemAdapter.current.systemPath("resources.captain.pendingStance")] = "";
   }
 
-  else return; // unknown actionId
+  else return false; // unknown actionId
 
-  // Reserve the shared pool before applying the prepared effect. Competing
-  // Captain/Sensors/Ordnance actions can no longer authorize the same core.
-  if (!(await this.consumePowerCore("captain"))) return;
+  updates[SystemAdapter.current.systemPath(`resources.${poolRole}.coreCount`)] = coreCount - 1;
+  updates[SystemAdapter.current.systemPath("resources.captain.coreActionsPlayed")] = [
+    ...(captain.coreActionsPlayed ?? []),
+    actionId,
+  ];
 
+  // The effect, shared-pool spend, and telemetry are one mechanical commit.
   await this.ship.update(updates);
 
-  // Chat notification
-  await _announceCoreAction.call(this, actionId);
+  try {
+    await _announceCoreAction.call(this, actionId);
+  } catch (error) {
+    console.error(`${MODULE_ID} | Captain Core action chat failed after commit`, error);
+  }
+  return true;
 }
 
 /** Spend Dead Reckoning's core before disclosing its authoritative preview. */
@@ -596,7 +610,11 @@ export async function beginDeadReckoning() {
       shipId,
       cardInstanceIds: cards.map(card => card.instanceId),
     });
-    await _announceCoreAction.call(this, "deadReckoning");
+    try {
+      await _announceCoreAction.call(this, "deadReckoning");
+    } catch (error) {
+      console.error(`${MODULE_ID} | Dead Reckoning chat failed after commit`, error);
+    }
 
     return {
       ok: true,

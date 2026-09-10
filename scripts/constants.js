@@ -209,6 +209,21 @@ export const AUGUR_LOCK_COSTS = {
   targetingSolution: 10,  // Lock Tier 4
 };
 
+export const AUGUR_LOCK_ACTIONS = [
+  { id: "activePing",        cost: AUGUR_LOCK_COSTS.activePing,        label: "SHIPCOMBAT.Sensors.ActivePing",        desc: "SHIPCOMBAT.Sensors.ActivePingDesc",        setsTier: 1, requiresTier: 0 },
+  { id: "breachAnalysis",    cost: AUGUR_LOCK_COSTS.breachAnalysis,    label: "SHIPCOMBAT.Sensors.BreachAnalysis",    desc: "SHIPCOMBAT.Sensors.BreachAnalysisDesc",    setsTier: 2, requiresTier: 1 },
+  { id: "deepScan",          cost: AUGUR_LOCK_COSTS.deepScan,          label: "SHIPCOMBAT.Sensors.DeepScan",          desc: "SHIPCOMBAT.Sensors.DeepScanDesc",          setsTier: 3, requiresTier: 2 },
+  { id: "targetingSolution", cost: AUGUR_LOCK_COSTS.targetingSolution, label: "SHIPCOMBAT.Sensors.TargetingSolution", desc: "SHIPCOMBAT.Sensors.TargetingSolutionDesc", setsTier: 4, requiresTier: 2 },
+];
+
+export const AUGUR_UTILITY_ACTIONS = [
+  { id: "sensorDisruption", cost: 12, label: "SHIPCOMBAT.Sensors.SensorDisruption", desc: "SHIPCOMBAT.Sensors.SensorDisruptionDesc", targeted: true, duration: 1, requiresTier: 1 },
+  { id: "lockHarmonics",    cost: 6,  label: "SHIPCOMBAT.Sensors.LockHarmonics",    desc: "SHIPCOMBAT.Sensors.LockHarmonicsDesc",    targeted: false, duration: 1, requiresAnyLock: true },
+  { id: "sensorOvercharge", cost: 16, label: "SHIPCOMBAT.Sensors.SensorOvercharge", desc: "SHIPCOMBAT.Sensors.SensorOverchargeDesc", targeted: true, duration: 2, requiresTier: 1 },
+  { id: "rangeAmplifier",   cost: 24, label: "SHIPCOMBAT.Sensors.RangeAmplifier",   desc: "SHIPCOMBAT.Sensors.RangeAmplifierDesc",   targeted: false, duration: 2 },
+  { id: "designateTorpedo", cost: 20, label: "SHIPCOMBAT.Sensors.DesignateTorpedo", desc: "SHIPCOMBAT.Sensors.DesignateTorpedoDesc", targeted: true, duration: 0 },
+];
+
 // ─── Augur Core Actions (require Power Core + AP) ────────────────────────────
 
 export const AUGUR_CORE_ACTIONS = [

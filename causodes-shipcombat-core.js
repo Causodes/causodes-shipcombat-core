@@ -31,9 +31,10 @@ import { SystemAdapter } from "./scripts/systems/SystemAdapter.js";
 import { registerSettings } from "./scripts/settings.js";
 import { registerLangSubstitution } from "./scripts/lang.js";
 import { BDAPopup, launchBDAFromChat } from "./scripts/apps/BDAPopup.js";
-import { getOrdnanceControllerUserId, resolveStationOperatorActor } from "./scripts/roles/crew-operators.js";
+import { getOrdnanceControllerUserId, resolveOrdnanceParentShipActor, resolveStationOperatorActor } from "./scripts/roles/crew-operators.js";
 import { registerAnimations } from "./scripts/animations.js";
 import { getStanceMovementModifiers } from "./scripts/stances.js";
+import { collectExistingTargetTokenIds } from "./scripts/state/target-references.js";
 import { PartialRegistry, CORE_PARTIAL_DEFAULTS, loadAllTemplates } from "./scripts/templates.js";
 import { TargetingPopupV1 }
   from "./scripts/apps/TargetingPopupV1.js";
@@ -201,7 +202,7 @@ Hooks.once("init", async () => {
   TokenCls.prototype._canControl = function (user, event) {
     if (isOrdnance(this.document.actor)) {
       if (user.isGM) return true;
-      const ship = ShipCombatState.ship;
+      const ship = resolveOrdnanceParentShipActor(this.document.actor);
       return this.document.actor?.testUserPermission?.(user, "OWNER")
         || user.id === getOrdnanceControllerUserId(ship, ordnanceSubtype(this.document.actor));
     }
@@ -343,6 +344,17 @@ Hooks.on("preUpdateActor", (actor, changes) => {
   foundry.utils.setProperty(changes, "system.hull.value", isHP ? payloadCount : 0);
 });
 
+function pruneSceneTargetReferences() {
+  if (!game.user.isGM || !canvas?.scene) return Promise.resolve([]);
+  // A GM changing scenes must not erase a still-valid combat lock. Token IDs
+  // predate scene-qualified references, so preserve IDs found in any world Scene.
+  const validTargetTokenIds = collectExistingTargetTokenIds(game.scenes);
+  const playerShips = game.actors.filter(actor => actor.type === `${MODULE_ID}.ship`);
+  return Promise.allSettled(
+    playerShips.map(ship => ShipCombatState.forShip(ship).pruneTargetReferences(validTargetTokenIds)),
+  );
+}
+
 // ── Shield Arc Overlay ───────────────────────────────────────────────────────
 
 Hooks.on("canvasReady", () => {
@@ -353,6 +365,8 @@ Hooks.on("canvasReady", () => {
   // Auto-link any existing unlinked ship tokens so that world-actor data
   // and token-actor data stay in sync (role assignments, combat state, etc.).
   if (game.user.isGM && canvas?.scene) {
+    void pruneSceneTargetReferences();
+
     const shipTypes = [`${MODULE_ID}.ship`, `${MODULE_ID}.npcShip`];
     const unlinked = canvas.scene.tokens.filter(
       t => shipTypes.includes(t.actor?.type) && !t.actorLink
@@ -362,6 +376,13 @@ Hooks.on("canvasReady", () => {
       td.update({ actorLink: true });
     }
   }
+});
+
+// World Actor deletion can remove or invalidate scene Tokens without delivering
+// deleteToken hooks in a stable order. Reconcile after the deletion lifecycle.
+Hooks.on("deleteActor", () => {
+  if (!game.user.isGM || !canvas?.scene) return;
+  setTimeout(() => void pruneSceneTargetReferences(), 0);
 });
 
 Hooks.on("updateActor", (actor, changed, options) => {
@@ -407,30 +428,46 @@ Hooks.on("updateToken", (tokenDoc, changes) => {
 });
 
 // When a token is deleted, destroy its shield overlay immediately.
-Hooks.on("deleteToken", (tokenDoc) => {
+Hooks.on("deleteToken", (tokenDoc, options = {}) => {
   ShieldArcOverlay._destroyToken(tokenDoc.id);
   TargetDesignationOverlay._destroyToken(tokenDoc.id);
   WeaponArcOverlay.destroyAll();
-  if (game.user.isGM) ShipCombatState.clearTargetReferences(tokenDoc.id);
+  if (game.user.isGM) {
+    const playerShips = game.actors.filter(actor => actor.type === `${MODULE_ID}.ship`);
+    void Promise.allSettled(
+      playerShips.map(ship => ShipCombatState.forShip(ship).clearTargetReferences(tokenDoc.id)),
+    );
+  }
 
   // Auto-delete world actors spawned by ordnance launch
   if (game.user.isGM && tokenDoc.actor?.flags?.[MODULE_ID]?.fromOrdnanceMaster) {
     // Track destroyed strike craft (does not come back during the fight)
     // Skip if craft is being recovered (not destroyed)
-    if (isStrikeCraft(tokenDoc.actor) && !tokenDoc.actor?.flags?.[MODULE_ID]?.recovering && !ShipCombatState._suppressDestroyTracking) {
+    if (isStrikeCraft(tokenDoc.actor)
+      && !tokenDoc.actor?.flags?.[MODULE_ID]?.recovering
+      && options.shipCombatSuppressDestroyTracking !== true) {
       const parentTokenId = tokenDoc.actor?.system?.parentShipTokenId;
       if (parentTokenId) {
         const parentToken = canvas?.scene?.tokens.get(parentTokenId);
         const ship = parentToken?.actor;
         if (ship) {
-          const current = ship.system?.resources?.ordnance?.craftDestroyed ?? 0;
-          ship.update({ "system.resources.ordnance.craftDestroyed": current + 1 });
+          ShipCombatState.forShip(ship).adjustResources([
+            { roleId: "ordnance", key: "craftDestroyed", delta: 1, min: 0 },
+          ]);
         }
       }
     }
-    const actorId = tokenDoc.actorId;
-    const actor = game.actors.get(actorId);
-    if (actor) actor.delete();
+    // Structured ordnance cleanup deletes the generated Actor itself after all
+    // of its Tokens are gone. Manual Token deletion still needs hook cleanup.
+    if (options.shipCombatHandlesActorCleanup !== true) {
+      const actorId = tokenDoc.actorId;
+      const actor = game.actors.get(actorId);
+      if (actor) {
+        void actor.delete().catch(error => {
+          console.error(`${MODULE_ID} | Failed to delete generated ordnance Actor`, error);
+        });
+      }
+    }
   }
 
   // Re-render any open ship sheets so Deployed Ordnance list updates live
@@ -486,29 +523,31 @@ Hooks.on("updateChatMessage", (message, changes) => {
   // Only the GM should write back to the ship actor
   if (!game.user.isGM) return;
 
-  const ship = ShipCombatState.ship;
+  const ship = game.actors.find(actor =>
+    actor.type === `${MODULE_ID}.ship`
+    && SystemAdapter.current.getShipData(actor)?.resources?.pilot?.pilotingMessageId === message.id
+  );
   if (!ship) return;
 
-  const trackedId = ship.system.resources?.pilot?.pilotingMessageId;
-  if (!trackedId || message.id !== trackedId) return;
+  const shipData = SystemAdapter.current.getShipData(ship) ?? {};
 
   // The message's system data may have been updated by a reroll
   const newSL = SystemAdapter.current.parseRollResultFromMessage(message).SL;
   if (newSL == null) return;
 
   const clampedSL = Math.max(0, newSL);
-  const currentSL = ship.system.resources?.pilot?.pilotingSL ?? 0;
+  const currentSL = shipData.resources?.pilot?.pilotingSL ?? 0;
   if (clampedSL === currentSL) return;
 
   // Update SL and reset allocations if they exceed the new pool
-  const allocSpeed = ship.system.resources?.pilot?.allocSpeed ?? 0;
-  const allocMano  = ship.system.resources?.pilot?.allocMano  ?? 0;
+  const allocSpeed = shipData.resources?.pilot?.allocSpeed ?? 0;
+  const allocMano  = shipData.resources?.pilot?.allocMano  ?? 0;
   const updates = { "resources.pilot.pilotingSL": clampedSL };
   if (allocSpeed + allocMano > clampedSL) {
     updates["resources.pilot.allocSpeed"] = 0;
     updates["resources.pilot.allocMano"]  = 0;
   }
-  ShipCombatState.update(updates);
+  ShipCombatState.update(updates, ship);
 });
 
 // ── Sync helm reset with Foundry combat tracker turn/round advancement ────
@@ -521,23 +560,21 @@ Hooks.on("updateCombat", async (combat, changes) => {
   if (!game.user.isGM) return;
   if (!("round" in changes) && !("turn" in changes)) return;
 
-  const ship = ShipCombatState.ship;
-  if (!ship) return;
-
-  const shipCombatant = combat.combatants.find(c => c.actor?.id === ship.id);
-  if (!shipCombatant) return;
-
   const prevCombatantId    = combat.previous?.combatantId;
   const currentCombatantId = combat.combatant?.id;
+  const prevCombatant      = prevCombatantId ? combat.combatants.get(prevCombatantId) : null;
+  const currentCombatant   = currentCombatantId ? combat.combatants.get(currentCombatantId) : null;
 
   // ── Ship's turn ENDED: auto-move at minimum speed if the ship didn't move ──
-  if (prevCombatantId === shipCombatant.id) {
-    const fuelBurned  = ship.system.resources?.pilot?.fuelBurned ?? 0;
+  if (prevCombatant?.actor?.type === `${MODULE_ID}.ship`) {
+    const ship        = prevCombatant.actor;
+    const state       = ShipCombatState.forShip(ship);
+    const shipData    = SystemAdapter.current.getShipData(ship) ?? {};
+    const fuelBurned  = shipData.resources?.pilot?.fuelBurned ?? 0;
     const token       = ship.getActiveTokens()?.[0];
     const isRealistic = game.settings.get(MODULE_ID, "movementMode") === "realistic";
 
     if (token) {
-      const shipData = SystemAdapter.current.getShipData(ship) ?? {};
       const stanceSpeed = getStanceMovementModifiers(shipData).speed;
       const speed = (shipData.movement?.speed ?? 6)
                   + (shipData.resources?.pilot?.allocSpeed ?? 0)
@@ -546,9 +583,9 @@ Hooks.on("updateCombat", async (combat, changes) => {
       if (isRealistic) {
         // Realistic: always auto-drift the remaining uncarried portion of velocity,
         // regardless of whether the pilot used thrust this turn.
-        const vx = ship.system.resources?.pilot?.velocityX ?? 0;
-        const vy = ship.system.resources?.pilot?.velocityY ?? 0;
-        const momentumUsed   = ship.system.resources?.pilot?.momentumUsed ?? 0;
+        const vx = shipData.resources?.pilot?.velocityX ?? 0;
+        const vy = shipData.resources?.pilot?.velocityY ?? 0;
+        const momentumUsed   = shipData.resources?.pilot?.momentumUsed ?? 0;
         const remainFraction = Math.max(0, 1 - momentumUsed / 100);
         const velMag = Math.floor(Math.hypot(vx, vy) * remainFraction);
         if (velMag > 0) {
@@ -559,7 +596,7 @@ Hooks.on("updateCombat", async (combat, changes) => {
           const cy       = token.document.y + tokenH / 2;
           const newCx    = cx + vx * gridSize * remainFraction;
           const newCy    = cy + vy * gridSize * remainFraction;
-          await ShipCombatState.confirmMovement({
+          await state.confirmMovement({
             fuelUsed:         0,
             driftUsed:        0,
             speed,
@@ -573,16 +610,16 @@ Hooks.on("updateCombat", async (combat, changes) => {
         }
       } else if (fuelBurned === 0) {
         // Simplified: auto-move at minimum speed straight ahead only if no thrust used.
-        const prevTurnMove = ship.system.resources?.pilot?.prevTurnMove ?? 0;
+        const prevTurnMove = shipData.resources?.pilot?.prevTurnMove ?? 0;
         const minMove      = Math.ceil(prevTurnMove / 2);
-        const bearing      = ship.system.resources?.pilot?.bearing ?? 0;
+        const bearing      = shipData.resources?.pilot?.bearing ?? 0;
 
         if (minMove > 0) {
           const autoMinMovePct = Math.round(minMove / (minMove + speed) * 100);
           const projected = HelmPreview.projectPosition(token, bearing, autoMinMovePct, speed, minMove);
           if (projected) {
             const driftWaypoints = HelmPreview.projectWaypoints(token, bearing, autoMinMovePct, speed, minMove);
-            await ShipCombatState.confirmMovement({
+            await state.confirmMovement({
               fuelUsed:         autoMinMovePct,
               driftUsed:        0,
               speed:            speed + minMove,
@@ -610,12 +647,11 @@ Hooks.on("updateCombat", async (combat, changes) => {
     // Process ordnance lifecycle (drift, fuel burn, detonation) at the end of
     // the parent ship's turn so it happens simultaneously with the ship's own
     // turn-end auto-drift — not at the start of the following turn.
-    await ShipCombatState.processOrdnanceLifecycle();
+    await state.processOrdnanceLifecycle(ship);
   }
 
   // ── NPC ship's turn ENDED: auto-drift at minimum speed if no thrust used ──
   if (prevCombatantId && canvas?.scene) {
-    const prevCombatant = combat.combatants.get(prevCombatantId);
     if (prevCombatant?.actor?.type === `${MODULE_ID}.npcShip`) {
       const npcActor      = prevCombatant.actor;
       const npcSys        = npcActor.system;
@@ -657,19 +693,22 @@ Hooks.on("updateCombat", async (combat, changes) => {
   }
 
   // ── Ship's turn STARTED: apply effects and reset all allocations ───────────
-  if (currentCombatantId === shipCombatant.id) {
+  if (currentCombatant?.actor?.type === `${MODULE_ID}.ship`) {
+    const ship     = currentCombatant.actor;
+    const state    = ShipCombatState.forShip(ship);
+    const shipData = SystemAdapter.current.getShipData(ship) ?? {};
     // 1. prevTurnMove was set correctly by confirmMovement and persists through resetHelmState.
 
     // 2. Per-round condition effects  -  capture fire BEFORE updates so Hull High
     //    doesn't also apply the new fire as hull damage in the same tick
-    const fireBefore   = ship.system.internalFire ?? 0;
-    const sysConds     = ship.system.conditions ?? {};
+    const fireBefore   = shipData.internalFire ?? 0;
+    const sysConds     = shipData.conditions ?? {};
     const condHullTier = sysConds.hull?.tier;
     const condUp       = {};
     if (condHullTier) {
       const dmgMap = { low: 1, medium: 2, high: 3 };
-      const hullVal = ship.system.hull?.value ?? 0;
-      const hullMax = ship.system.hull?.max   ?? 40;
+      const hullVal = shipData.hull?.value ?? 0;
+      const hullMax = shipData.hull?.max   ?? 40;
       const hullBreachDmg = dmgMap[condHullTier] ?? 0;
       condUp["hull.value"] = SystemAdapter.current.hullDisplayMode === "hpRemaining"
         ? Math.max(0, hullVal - hullBreachDmg)
@@ -679,30 +718,30 @@ Hooks.on("updateCombat", async (combat, changes) => {
       }
     }
     if (sysConds.coreSystems?.tier === "high") {
-      condUp["resources.engineer.heat"] = (ship.system.resources?.engineer?.heat ?? 0) + 5;
+      condUp["resources.engineer.heat"] = (shipData.resources?.engineer?.heat ?? 0) + 5;
     }
     if (Object.keys(condUp).length > 0) {
-      await ShipCombatState.update(condUp);
+      await state.update(condUp);
     }
 
     // 3. Internal Fire (pre-condition snapshot) → Hull Damage
     if (fireBefore > 0) {
-      const curDamage = ship.system.hull?.value ?? 0;
-      const maxDamage = ship.system.hull?.max   ?? 40;
+      const refreshedData = SystemAdapter.current.getShipData(ship) ?? shipData;
+      const curDamage = refreshedData.hull?.value ?? 0;
+      const maxDamage = refreshedData.hull?.max   ?? 40;
       const newDamage = SystemAdapter.current.hullDisplayMode === "hpRemaining"
         ? Math.max(0, curDamage - fireBefore)
         : Math.min(maxDamage, curDamage + fireBefore);
-      await ShipCombatState.update({ "hull.value": newDamage });
+      await state.update({ "hull.value": newDamage });
     }
 
     // 4. Reset helm state and all allocations for the new turn
-    await ShipCombatState.resetHelmState();
-    await ShipCombatState.resetActions();
+    await state.resetHelmState();
+    await state.resetActions();
   }
 
   // ── NPC ship turn STARTED: condition effects, internal fire, flux reset ───
   if (currentCombatantId && canvas?.scene) {
-    const currentCombatant = combat.combatants.get(currentCombatantId);
     if (currentCombatant?.actor?.type === `${MODULE_ID}.npcShip`) {
       const npcActor = currentCombatant.actor;
       const npcSys   = npcActor.system;

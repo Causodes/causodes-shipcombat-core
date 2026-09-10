@@ -1,5 +1,5 @@
 import { SystemAdapter } from "../systems/SystemAdapter.js";
-import { getPowerCoreCount, getPowerCorePoolRole } from "../roles/crew-operators.js";
+import { POWER_CORE_STATION_ROLES, getPowerCoreCount, getPowerCorePoolRole } from "../roles/crew-operators.js";
 /**
  * engineer-state.js – Power cores, heat, fire, shields, core bank, hull repair
  * extracted from ShipCombatState.
@@ -12,33 +12,39 @@ import { getPowerCoreCount, getPowerCorePoolRole } from "../roles/crew-operators
 
 export async function stagePowerCore(targetRoleId) {
   const data = this.getData();
+  if (!POWER_CORE_STATION_ROLES.includes(targetRoleId)
+    || data.resources?.engineer?.stagedCores?.[targetRoleId]) return false;
   if (data.assignedCores?.[targetRoleId]) {
     ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.CoreAlreadyConsumed"));
-    return;
+    return false;
   }
   // Power Fluctuation (any Core Systems tier): staging and dispatch both blocked
   if (data.conditions?.coreSystems?.tier) {
     ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.PowerFluctuation"));
-    return;
+    return false;
   }
   const available = data.resources?.engineer?.powerCores ?? 0;
   if (available <= 0) {
     ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoPowerCores"));
-    return;
+    return false;
   }
-  return this.update({
+  await this.update({
     [`resources.engineer.stagedCores.${targetRoleId}`]: true,
     "resources.engineer.powerCores": available - 1,
   });
+  return true;
 }
 
 export async function unstagePowerCore(targetRoleId) {
   const data = this.getData();
+  if (!POWER_CORE_STATION_ROLES.includes(targetRoleId)
+    || !data.resources?.engineer?.stagedCores?.[targetRoleId]) return false;
   const available = data.resources?.engineer?.powerCores ?? 0;
-  return this.update({
+  await this.update({
     [`resources.engineer.stagedCores.${targetRoleId}`]: false,
     "resources.engineer.powerCores": available + 1,
   });
+  return true;
 }
 
 export async function dispatchStagedCores() {
@@ -50,14 +56,14 @@ async function _dispatchStagedCores() {
   // Power Fluctuation: Core Systems Low+ blocks all core distribution
   if (data.conditions?.coreSystems?.tier) {
     ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.PowerFluctuation"));
-    return;
+    return false;
   }
   const staged = data.resources?.engineer?.stagedCores ?? {};
   const stagedShield = data.resources?.engineer?.stagedShieldCores ?? 0;
   const stagedAux    = data.resources?.engineer?.stagedAuxCores ?? 0;
   const committedAux = data.resources?.engineer?.committedAuxCores ?? 0;
   const currentCommitted = data.shieldPool?.committed ?? 0;
-  if (!Object.values(staged).some(Boolean) && stagedShield === 0 && stagedAux === 0) return;
+  if (!Object.values(staged).some(Boolean) && stagedShield === 0 && stagedAux === 0) return false;
   const updates = {};
   for (const [uid, val] of Object.entries(staged)) {
     if (val) {
@@ -78,7 +84,8 @@ async function _dispatchStagedCores() {
     updates["resources.engineer.committedAuxCores"] = committedAux + stagedAux;
     updates["resources.engineer.stagedAuxCores"] = 0;
   }
-  return this.update(updates);
+  await this.update(updates);
+  return true;
 }
 
 export function hasPowerCore(roleId) {
@@ -90,13 +97,14 @@ export function hasPowerCore(roleId) {
 
 export async function emergencyVent() {
   const heat = this.getData().resources?.engineer?.heat ?? 0;
-  if (heat <= 0) return;
+  if (heat <= 0) return false;
   const currentFire = SystemAdapter.current.getShipData(this.ship)?.internalFire ?? 0;
   await this.update({
     "resources.engineer.heat": 0,
     internalFire: currentFire + heat,
     ventPending: true,
   });
+  return true;
 }
 
 export async function reduceInternalFire(amount, auxiliaryPowerSpent = 0) {
@@ -107,7 +115,9 @@ export async function reduceInternalFire(amount, auxiliaryPowerSpent = 0) {
   await this.update({
     internalFire: Math.max(0, current - Math.max(0, amount - auxiliaryPowerSpent + spent)),
     "resources.engineer.auxiliaryPower": auxiliaryPower - spent,
+    "resources.engineer.fireCoresStaged": 1,
   });
+  return true;
 }
 
 export async function manageHeat(auxiliaryPowerSpent, sl) {
@@ -126,6 +136,7 @@ export async function manageHeat(auxiliaryPowerSpent, sl) {
 
 export async function setInternalFire(value) {
   await this.update({ internalFire: Math.max(0, Math.floor(value)) });
+  return true;
 }
 
 // ── Auxiliary Power spending ──────────────────────────────────────────────
@@ -154,22 +165,24 @@ export async function commitShieldCores(count) {
     ? Math.ceil(shieldCfg.maxVoidFlux / reactorStats.shieldStrengthPerCore)
     : 0;
   const toStage = Math.min(count, available, Math.max(0, maxShieldCores - currentStaged));
-  if (toStage <= 0) return;
+  if (toStage <= 0) return false;
   await this.update({
     "resources.engineer.powerCores": available - toStage,
     "resources.engineer.stagedShieldCores": currentStaged + toStage,
   });
+  return true;
 }
 
 export async function uncommitShieldCore() {
   const data = this.getData();
   const staged = data.resources?.engineer?.stagedShieldCores ?? 0;
-  if (staged <= 0) return;
+  if (staged <= 0) return false;
   const available = data.resources?.engineer?.powerCores ?? 0;
   await this.update({
     "resources.engineer.powerCores": available + 1,
     "resources.engineer.stagedShieldCores": staged - 1,
   });
+  return true;
 }
 
 // ── Auxiliary Power core commitment ─────────────────────────────────────
@@ -181,48 +194,52 @@ export async function commitAuxCore() {
     return false;
   }
   const available = data.resources?.engineer?.powerCores ?? 0;
-  if (available <= 0) return;
+  if (available <= 0) return false;
   const currentStaged = data.resources?.engineer?.stagedAuxCores ?? 0;
   await this.update({
     "resources.engineer.powerCores": available - 1,
     "resources.engineer.stagedAuxCores": currentStaged + 1,
   });
+  return true;
 }
 
 export async function uncommitAuxCore() {
   const data = this.getData();
   const staged = data.resources?.engineer?.stagedAuxCores ?? 0;
-  if (staged <= 0) return;
+  if (staged <= 0) return false;
   const available = data.resources?.engineer?.powerCores ?? 0;
   await this.update({
     "resources.engineer.powerCores": available + 1,
     "resources.engineer.stagedAuxCores": staged - 1,
   });
+  return true;
 }
 
 export async function adjustShieldZone(sector, value) {
   const data = this.getData();
+  if (!Object.hasOwn(data.shields ?? {}, sector)) return false;
   const current = data.shields?.[sector] ?? 0;
   const pool = data.shieldPool?.current ?? 0;
   const next = Math.max(0, value);
   const diff = next - current;
-  if (diff > 0 && diff > pool) return;
+  if (diff > 0 && diff > pool) return false;
   await this.update({
     [`shields.${sector}`]: next,
     "shieldPool.current": pool - diff,
   });
+  return true;
 }
 
 // ── Hull Repair ────────────────────────────────────────────────────────────
 
 export async function repairHull(auxiliaryPowerSpent, sl) {
   const sys = SystemAdapter.current.getShipData(this.ship);
-  if (!sys) return;
+  if (!sys) return false;
 
   const internalFire = sys.internalFire ?? 0;
   if (internalFire > 0) {
     ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.RepairBlockedByFire"));
-    return;
+    return false;
   }
 
   const heat = sys.resources?.engineer?.heat ?? 0;
@@ -242,7 +259,7 @@ export async function repairHull(auxiliaryPowerSpent, sl) {
   const repairAmount = Math.min(repairAttempted, heatRoom, repairRoom);
   if (repairAmount <= 0) {
     ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.HullRepairNoRoom"));
-    return;
+    return false;
   }
   const heatCost = repairAmount;
   const newHull  = isHPMode
@@ -252,6 +269,7 @@ export async function repairHull(auxiliaryPowerSpent, sl) {
   await this.update({
     "resources.engineer.auxiliaryPower": auxiliaryPower - spent,
     "resources.engineer.heat": heat + heatCost,
+    "resources.engineer.repairAuxPowerStaged": 1,
     "hull.value": newHull,
   });
   return true;
@@ -262,19 +280,25 @@ export async function repairHull(auxiliaryPowerSpent, sl) {
 /** Convert 1 voidshield flux (shieldPool.current) into 1 Auxiliary Power. */
 export async function fluxToCharge() {
   const sys = SystemAdapter.current.getShipData(this.ship);
-  if (!sys) return;
+  if (!sys) return false;
   const pool = sys.shieldPool?.current ?? 0;
   if (pool <= 0) {
     ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.NpcShip.NoFluxRemaining"));
-    return;
+    return false;
   }
   const ap = sys.resources?.engineer?.auxiliaryPower ?? 0;
   const apCap = this.getReactorStats().auxPowerCapacity;
   const fluxToAPRate = this.getShieldStats().fluxToAPRate ?? 1;
   // AP Shutdown (Core Systems High): AP cannot increase
-  const newAP = this.getData?.()?.conditions?.coreSystems?.tier === "high" ? ap : Math.min(apCap, ap + fluxToAPRate);
+  if (this.getData?.()?.conditions?.coreSystems?.tier === "high") {
+    ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.APShutdown"));
+    return false;
+  }
+  const newAP = Math.min(apCap, ap + fluxToAPRate);
+  if (newAP <= ap) return false;
   await this.update({
     "shieldPool.current": pool - 1,
     "resources.engineer.auxiliaryPower": newAP,
   });
+  return true;
 }

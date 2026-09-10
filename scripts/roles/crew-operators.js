@@ -120,6 +120,15 @@ export function getOrdnanceControllerUserId(shipActor, subtype) {
   return Object.entries(sys?.roles ?? {}).find(([, role]) => role === roleId)?.[0] ?? null;
 }
 
+/** Resolve deployed ordnance back to the ship token that launched it. */
+export function resolveOrdnanceParentShipActor(ordnanceActor) {
+  const parentTokenId = SystemAdapter.current.getShipData(ordnanceActor)?.parentShipTokenId;
+  if (!parentTokenId) return null;
+  return canvas?.scene?.tokens?.get(parentTokenId)?.actor
+    ?? canvas?.tokens?.get(parentTokenId)?.document?.actor
+    ?? null;
+}
+
 // Compatibility names for the BDA call sites.
 export function getSensorsOperatorRole(shipOrData) {
   return getStationOperatorRole(shipOrData, "sensors");

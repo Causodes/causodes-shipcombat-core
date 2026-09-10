@@ -13,7 +13,7 @@
  */
 import { MODULE_ID, CORE_MODULE_ID, LOCK_DECAY_ROUNDS, hullDisplay } from "../constants.js";
 import { ShipCombatState } from "../state/ShipCombatState.js";
-import { emitToGM } from "../socket.js";
+import { createActionRequester } from "../socket.js";
 import { refreshTokenVisibility } from "./TokenVisibility.js";
 import { getContactDisplayName, getEffectiveTokenDisposition, isFriendlyContactToken } from "../targeting/contact-intelligence.js";
 import { SENSORS_ACTIONS } from "../roles/sensors.js";
@@ -27,6 +27,8 @@ import {
   tokenRotationToCanvasHeading,
   worldAngleToRadar,
 } from "./radar-geometry.js";
+
+const requestGM = createActionRequester(ship => ship);
 
 // ── Visual constants ──────────────────────────────────────────────────────
 
@@ -226,7 +228,7 @@ function _paint(el, sheet) {
   Object.assign(_pal, SystemAdapter.current.radarPalette?.() ?? {});
 
   const gridSize = canvas.grid.size;
-  const sensor   = ShipCombatState.getSensorStats();
+  const sensor   = ShipCombatState.getSensorStats(ship);
   const maxBands = (sensor.bandSize > 0 && sensor.rating > 0)
     ? Math.floor(sensor.rating / 10) : 0;
 
@@ -344,7 +346,7 @@ function _paint(el, sheet) {
   });
   if (missingIds.length > 0) {
     for (const tokenId of missingIds) _pendingContactIds.add(tokenId);
-    emitToGM("registerSensorContacts", { targetTokenIds: missingIds, shipActorId: ship.id });
+    requestGM(ship, "registerSensorContacts", { targetTokenIds: missingIds });
     setTimeout(() => {
       for (const tokenId of missingIds) _pendingContactIds.delete(tokenId);
     }, 3000);
@@ -1788,6 +1790,9 @@ function _buildOwnShipPopupHTML(ctx) {
   const utilityActions = ctx.utilityActions ?? [];
   const coreActions    = ctx.coreActions ?? [];
   const hasCoreAssigned = ctx.hasCoreAssigned ?? false;
+  const sensorState = _activeSheet?.actor ? ShipCombatState.forShip(_activeSheet.actor) : null;
+  const hasEffectiveLock = sensorState?.hasEffectiveLock() ?? false;
+  const hasUpgradableLock = sensorState?.hasEffectiveLock({ belowTier: 4 }) ?? false;
   const shipName = _activeSheet?.actor?.name ?? "Your Ship";
 
   let h = `<div class="shipcombat-rpop-header">`;
@@ -1802,8 +1807,12 @@ function _buildOwnShipPopupHTML(ctx) {
       ? coreActions.find(a => a.id === def.id)
       : utilityActions.find(a => a.id === def.id);
     if (!entry) continue;
-    const dis = entry.canAfford ? "" : "disabled";
-    const tip = !hasCoreAssigned && def.action === "sensorCoreAction"
+    const missingRequiredLock = def.id === "lockHarmonics" && !hasEffectiveLock;
+    const missingUpgradableLock = def.id === "combatTelemetry" && !hasUpgradableLock;
+    const dis = entry.canAfford && !missingRequiredLock && !missingUpgradableLock ? "" : "disabled";
+    const tip = missingRequiredLock || missingUpgradableLock
+      ? _esc(game.i18n.localize("SHIPCOMBAT.Sensors.RequiresLock"))
+      : !hasCoreAssigned && def.action === "sensorCoreAction"
       ? "Requires assigned Power Core"
       : _esc(entry.descLocalized ?? '');
     h += `<button class="shipcombat-rpop-btn${def.id === "combatTelemetry" ? " shipcombat-rpop-btn--core" : ""}" `;

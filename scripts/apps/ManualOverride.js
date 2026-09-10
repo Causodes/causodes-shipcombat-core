@@ -7,6 +7,8 @@ import {
 } from "../constants.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
 import { getStationOperatorRole } from "../roles/crew-operators.js";
+import { ShipCombatState } from "../state/ShipCombatState.js";
+import { collectExistingTargetTokenIds } from "../state/target-references.js";
 
 const ROLE_ORDER = ["captain", "engineer", "pilot", "sensors", "gunner", "ordnance"];
 const STANCE_IDS = ["none", "aggressive", "defensive", "redAlert", "devastation"];
@@ -319,13 +321,13 @@ function currentSceneContacts(actor, sys) {
   }
   return [...tokenIds].map(tokenId => {
     const token = canvas?.tokens?.get(tokenId);
+    if (!token?.actor) return null;
     if (token?.actor?.type === `${MODULE_ID}.ship`) return null;
     const lock = locks.find(entry => entry.targetTokenId === tokenId);
     return {
       tokenId,
       name: token?.document?.name ?? contacts[tokenId]?.identifiedName ?? tokenId,
       tier: Number(lock?.tier ?? 0),
-      missing: !token,
     };
   }).filter(Boolean).sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -525,7 +527,11 @@ export class ManualOverride extends foundry.appv1.api.FormApplication {
     }
     const previousLocks = foundry.utils.deepClone(sys.resources?.sensors?.locks ?? []);
     const contactIds = currentSceneContacts(this.actor, sys).map(contact => contact.tokenId);
-    const nextLocks = previousLocks.filter(lock => !contactIds.includes(lock.targetTokenId));
+    const existingTargetIds = new Set(collectExistingTargetTokenIds(game.scenes));
+    const nextLocks = previousLocks.filter(lock =>
+      existingTargetIds.has(lock?.targetTokenId)
+      && !contactIds.includes(lock.targetTokenId)
+    );
     for (const tokenId of contactIds) {
       const tier = Math.max(0, Math.min(4, Number(data[`lock.${tokenId}`]) || 0));
       if (!tier) continue;
@@ -577,7 +583,16 @@ export class ManualOverride extends foundry.appv1.api.FormApplication {
       </div>`);
     if (!confirmed) return;
 
-    await this.actor.update(updates);
+    const state = ShipCombatState.forShip(this.actor);
+    await state.withAllocationTransaction(async () => {
+      const locksPath = SystemAdapter.current.systemPath("resources.sensors.locks");
+      if (Array.isArray(updates[locksPath])) {
+        const validTargetIds = new Set(collectExistingTargetTokenIds(game.scenes));
+        updates[locksPath] = updates[locksPath]
+          .filter(lock => validTargetIds.has(lock?.targetTokenId));
+      }
+      await this.actor.update(updates);
+    }, this.actor);
     ui.notifications.warn(game.i18n.format("SHIPCOMBAT.Override.Applied", { count: trackedPaths.length, ship: this.actor.name }));
     await this.close();
   }

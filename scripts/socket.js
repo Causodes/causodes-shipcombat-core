@@ -2,25 +2,138 @@ import { CORE_MODULE_ID, ORDNANCE_MASTER_ACTIONS, WEAPON_FIRED_HOOK } from "./co
 import { confirmAllocationCommit } from "./apps/allocation-warning.js";
 import { SystemAdapter } from "./systems/SystemAdapter.js";
 import { ShipCombatState } from "./state/ShipCombatState.js";
+import { isOrdnance } from "./actors/ordnance/ordnance-types.js";
 
 let _socket;
 
-const SHIP_SCOPED_ACTIONS = new Set([
-  "assignRole", "consumePowerCore", "toggleTurnDone", "updateResource", "updateResources", "adjustResources",
-  "assignWeapon", "unassignComponent", "assignEquipment", "advanceRound", "endShipTurn",
-  "confirmMovement", "resetHelmState", "fullReset",
-  "emergencyVent", "reduceInternalFire", "manageHeat", "setInternalFire",
-  "stagePowerCore", "unstagePowerCore", "dispatchStagedCores",
-  "pilotRetrograde", "pilotOverdrive", "apToThrust", "pilotStrafe", "pilotFlipAndBurn",
-  "commitShieldCores", "uncommitShieldCore", "commitAuxCore", "uncommitAuxCore", "spendBankedCores",
-  "adjustShieldZone", "fluxToCharge", "repairHull",
-  "addSensorEffect", "setRecommendedTarget", "stripQuadrantShields", "upgradeLock", "upgradeAllLocks",
-  "registerSensorContacts", "removeLock", "resolveBDA", "completeBDA", "setFireCorrection", "spendAP",
-  "commitOrdnanceAction", "cancelOrdnanceCommitment", "completeOrdnanceCommitment",
-  "designateHostileTorpedo",
-  "triageCondition", "playCard", "discardCard", "mulligan", "captainPayloadActivate", "captainCoreAction",
-  "beginDeadReckoning", "completeDeadReckoning", "cancelDeadReckoning",
-]);
+const _shipAction = Object.freeze({ scope: "ship" });
+const _parentShipAction = Object.freeze({ scope: "parentShip" });
+const _sourceAction = sourceKey => Object.freeze({ scope: "source", sourceKey });
+const _ordnanceAction = sourceKey => Object.freeze({ scope: "ordnance", sourceKey });
+
+/** Single authoritative catalog for registration and actor-scope injection. */
+export const ACTION_CONTRACTS = Object.freeze({
+  assignRole: _shipAction,
+  consumePowerCore: _shipAction,
+  toggleTurnDone: _shipAction,
+  updateResource: _shipAction,
+  updateResources: _shipAction,
+  adjustResources: _shipAction,
+  assignWeapon: _shipAction,
+  unassignComponent: _shipAction,
+  assignEquipment: _shipAction,
+  startCombat: _shipAction,
+  endCombat: _shipAction,
+  advanceRound: _shipAction,
+  endShipTurn: _shipAction,
+  confirmMovement: _shipAction,
+  resetHelmState: _shipAction,
+  fullReset: _shipAction,
+  emergencyVent: _shipAction,
+  reduceInternalFire: _shipAction,
+  manageHeat: _shipAction,
+  setInternalFire: _shipAction,
+  stagePowerCore: _shipAction,
+  unstagePowerCore: _shipAction,
+  dispatchStagedCores: _shipAction,
+  pilotRetrograde: _shipAction,
+  pilotOverdrive: _shipAction,
+  pilotStrafe: _shipAction,
+  pilotFlipAndBurn: _shipAction,
+  pilotRam: _sourceAction("rammingActorId"),
+  apToThrust: _shipAction,
+  commitShieldCores: _shipAction,
+  uncommitShieldCore: _shipAction,
+  commitAuxCore: _shipAction,
+  uncommitAuxCore: _shipAction,
+  spendBankedCores: _shipAction,
+  adjustShieldZone: _shipAction,
+  fluxToCharge: _shipAction,
+  fireWeapon: _sourceAction("actorId"),
+  repairHull: _shipAction,
+  executeSensorAction: _shipAction,
+  executeSensorCoreAction: _shipAction,
+  setRecommendedTarget: _shipAction,
+  registerSensorContacts: _shipAction,
+  executeOrdnanceLaunch: _shipAction,
+  executeCraftRecovery: _shipAction,
+  deleteOrdnanceTokens: _parentShipAction,
+  destroyOrdnanceTokens: _parentShipAction,
+  commitOrdnanceAction: _shipAction,
+  cancelOrdnanceCommitment: _shipAction,
+  completeOrdnanceCommitment: _shipAction,
+  setOrdnanceRtb: _parentShipAction,
+  setOrdnanceTurnDone: _parentShipAction,
+  resolveBDA: _shipAction,
+  applyBdaCorrection: _shipAction,
+  torpedoDamage: _ordnanceAction("torpedoActorId"),
+  blastOrdnance: _ordnanceAction("torpedoActorId"),
+  strikeCraftAttack: _ordnanceAction("craftActorId"),
+  triageCondition: _shipAction,
+  playCard: _shipAction,
+  discardCard: _shipAction,
+  mulligan: _shipAction,
+  captainPayloadActivate: _shipAction,
+  captainCoreAction: _shipAction,
+  beginDeadReckoning: _shipAction,
+  completeDeadReckoning: _shipAction,
+  cancelDeadReckoning: _shipAction,
+});
+
+const REQUEST_ACTIONS = Object.freeze(Object.keys(ACTION_CONTRACTS));
+
+/** Single authoritative catalog for broadcasts received by every client. */
+const BROADCAST_HANDLERS = Object.freeze({
+  animateTokenPath: _handleAnimateTokenPath,
+  showGunnerArcs: _handleShowGunnerArcs,
+  playWeaponAnimation: _handlePlayWeaponAnimation,
+});
+
+function _hasValidOutgoingActorScope(action, payload) {
+  const contract = ACTION_CONTRACTS[action];
+  if (!contract || !payload.shipActorId) return false;
+  if (contract.scope === "source") {
+    return payload[contract.sourceKey] === payload.shipActorId;
+  }
+  if (contract.scope === "ordnance") return Boolean(payload[contract.sourceKey]);
+  return contract.scope === "ship" || contract.scope === "parentShip";
+}
+
+function _ordnanceBelongsToShip(ordnanceActor, shipActor) {
+  if (!ordnanceActor || !shipActor || !isOrdnance(ordnanceActor) || !canvas?.scene) return false;
+  const parentShipTokenId = SystemAdapter.current.getShipData(ordnanceActor)?.parentShipTokenId;
+  return canvas.scene.tokens.get(parentShipTokenId)?.actorId === shipActor.id;
+}
+
+function _getOwnedOrdnanceTokenIds(shipActor, tokenIds = []) {
+  if (!shipActor || !canvas?.scene || !Array.isArray(tokenIds)) return [];
+  return [...new Set(tokenIds)].filter(tokenId => {
+    const tokenDoc = canvas.scene.tokens.get(tokenId);
+    if (!tokenDoc?.actor || !isOrdnance(tokenDoc.actor)) return false;
+    const parentShipTokenId = SystemAdapter.current.getShipData(tokenDoc.actor)?.parentShipTokenId;
+    return canvas.scene.tokens.get(parentShipTokenId)?.actorId === shipActor.id;
+  });
+}
+
+async function _broadcastShipTokenPath(state, payload, finalRotation = payload.newRotation) {
+  if (!payload.waypoints?.length) return true;
+  const token = state.ship?.getActiveTokens()?.[0];
+  if (!token) return false;
+  await emitToAll("animateTokenPath", {
+    tokenUuid: token.document.uuid,
+    waypoints: payload.waypoints,
+    finalX: payload.newX,
+    finalY: payload.newY,
+    finalRotation,
+  });
+  return true;
+}
+
+/** Keep socket results small and consistent instead of returning Foundry Documents. */
+async function _booleanActionResult(operation) {
+  const result = await operation;
+  return result !== false && result !== null && result?.ok !== false;
+}
 
 function _confirmAllocationAction(action, payload) {
   const ship = payload.shipActorId ? game.actors.get(payload.shipActorId) : ShipCombatState.ship;
@@ -31,6 +144,8 @@ function _confirmAllocationAction(action, payload) {
     pilotFlipAndBurn: ["pilot", "pilot.flipAndBurn", "SHIPCOMBAT.Action.PilotFlipAndBurn"],
     pilotRam: ["pilot", "pilot.ram", "SHIPCOMBAT.Helm.Ram"],
     commitOrdnanceAction: ["ordnance", "ordnance.commit", ORDNANCE_MASTER_ACTIONS[payload.actionId]?.label],
+    executeOrdnanceLaunch: ["ordnance", "ordnance.commit", ORDNANCE_MASTER_ACTIONS[payload.actionId]?.label],
+    executeCraftRecovery: ["ordnance", "ordnance.commit", ORDNANCE_MASTER_ACTIONS.recallCraft.label],
     mulligan: ["captain", "captain.mulligan", "SHIPCOMBAT.Captain.Mulligan"],
     beginDeadReckoning: ["captain", "captain.deadReckoning", "SHIPCOMBAT.Captain.Core.DeadReckoning.label"],
   };
@@ -56,72 +171,52 @@ function _confirmAllocationAction(action, payload) {
 
 export function setupSocket() {
   _socket = socketlib.registerModule(CORE_MODULE_ID);
-  for (const action of [
-    "assignRole",
-    "consumePowerCore", "toggleTurnDone", "updateResource", "updateResources", "adjustResources",
-    "assignWeapon", "unassignComponent", "assignEquipment",
-    "startCombat", "endCombat", "advanceRound", "endShipTurn",
-    "confirmMovement", "resetHelmState", "fullReset",
-    "emergencyVent", "reduceInternalFire", "manageHeat", "setInternalFire",
-    "stagePowerCore", "unstagePowerCore", "dispatchStagedCores",
-    "pilotRetrograde", "pilotOverdrive", "pilotStrafe", "pilotFlipAndBurn", "pilotRam", "apToThrust",
-    "commitShieldCores", "uncommitShieldCore", "commitAuxCore", "uncommitAuxCore", "spendBankedCores", "adjustShieldZone", "fluxToCharge",
-    "fireWeapon",
-    "repairHull",
-    "addSensorEffect",
-    "setRecommendedTarget",
-    "stripQuadrantShields",
-    "upgradeLock",
-    "upgradeAllLocks",
-    "registerSensorContacts",
-    "spawnOrdnance",
-    "deleteOrdnanceTokens",
-    "destroyOrdnanceTokens",
-    "commitOrdnanceAction",
-    "cancelOrdnanceCommitment",
-    "completeOrdnanceCommitment",
-    "setOrdnanceRtb",
-    "setOrdnanceTurnDone",
-    "designateHostileTorpedo",
-    "torpedoPowerBoost",
-    "consumeLock",
-    "removeLock",
-    "resolveBDA",
-    "completeBDA",
-    "setFireCorrection",
-    "spendAP",
-    "torpedoDamage",
-    "blastOrdnance",
-    "strikeCraftAttack",
-    "triageCondition",
-    "playCard",
-    "discardCard",
-    "mulligan",
-    "captainPayloadActivate",
-    "captainCoreAction",
-    "beginDeadReckoning", "completeDeadReckoning", "cancelDeadReckoning",
-  ]) {
+  for (const action of REQUEST_ACTIONS) {
     _socket.register(action, (payload) => _handleAction(action, payload));
   }
 
-  // Broadcast handler: runs on ALL connected clients simultaneously
-  _socket.register("animateTokenPath", (payload) => _handleAnimateTokenPath(payload));
-  _socket.register("showGunnerArcs", (payload) => _handleShowGunnerArcs(payload));
-  _socket.register("playWeaponAnimation", (payload) => _handlePlayWeaponAnimation(payload));
+  // Broadcast handlers run on ALL connected clients simultaneously.
+  for (const [action, handler] of Object.entries(BROADCAST_HANDLERS)) {
+    _socket.register(action, handler);
+  }
 }
 
 async function _handleAction(action, payload = {}) {
+  const contract = ACTION_CONTRACTS[action];
+  if (!contract) return false;
   const shipActor = payload.shipActorId ? game.actors.get(payload.shipActorId) : null;
-  if (SHIP_SCOPED_ACTIONS.has(action) && shipActor?.type !== `${SystemAdapter.current.moduleId}.ship`) {
+  if (contract.scope === "ship" && shipActor?.type !== `${SystemAdapter.current.moduleId}.ship`) {
     ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoShip"));
-    return null;
+    return false;
   }
-  if (action === "fireWeapon") {
+  if (contract.scope === "parentShip") {
     const allowedTypes = new Set([
       `${SystemAdapter.current.moduleId}.ship`,
       `${SystemAdapter.current.moduleId}.npcShip`,
     ]);
-    if (!shipActor || !allowedTypes.has(shipActor.type) || payload.actorId !== shipActor.id) {
+    if (!shipActor || !allowedTypes.has(shipActor.type)) {
+      ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoShip"));
+      return false;
+    }
+  }
+  if (contract.scope === "ordnance") {
+    const allowedTypes = new Set([
+      `${SystemAdapter.current.moduleId}.ship`,
+      `${SystemAdapter.current.moduleId}.npcShip`,
+    ]);
+    const sourceActorId = payload[contract.sourceKey];
+    const sourceActor = sourceActorId ? game.actors.get(sourceActorId) : null;
+    if (!shipActor || !allowedTypes.has(shipActor.type) || !_ordnanceBelongsToShip(sourceActor, shipActor)) {
+      ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoShip"));
+      return false;
+    }
+  }
+  if (contract.scope === "source") {
+    const allowedTypes = new Set([
+      `${SystemAdapter.current.moduleId}.ship`,
+      `${SystemAdapter.current.moduleId}.npcShip`,
+    ]);
+    if (!shipActor || !allowedTypes.has(shipActor.type) || payload[contract.sourceKey] !== shipActor.id) {
       ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoShip"));
       return false;
     }
@@ -131,221 +226,140 @@ async function _handleAction(action, payload = {}) {
   switch (action) {
 
     case "assignRole": {
-      const shipActor = payload.shipActorId ? game.actors.get(payload.shipActorId) : null;
-      if (payload.shipActorId && shipActor?.type !== `${SystemAdapter.current.moduleId}.ship`) {
-        ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoShip"));
-        return;
-      }
-      await ShipCombatState.assignRole(
+      return _booleanActionResult(state.assignRole(
         payload.userId,
         payload.roleId,
         payload.actorRef ?? null,
-        shipActor,
-      );
-      break;
+      ));
     }
 
-    case "consumePowerCore": {
-      const shipActor = payload.shipActorId ? game.actors.get(payload.shipActorId) : null;
-      if (!payload.shipActorId || shipActor?.type !== `${SystemAdapter.current.moduleId}.ship`) {
-        ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoShip"));
-        return false;
-      }
-      return ShipCombatState.consumePowerCore(payload.roleId, payload.actionId ?? null, shipActor);
-    }
+    case "consumePowerCore":
+      return state.consumePowerCore(payload.roleId, payload.actionId ?? null);
 
     case "toggleTurnDone":
-      await state.toggleTurnDone(payload.roleId);
-      break;
+      return _booleanActionResult(state.toggleTurnDone(payload.roleId));
 
-    case "updateResource": {
-      const shipActor = payload.shipActorId ? game.actors.get(payload.shipActorId) : null;
-      if (!payload.shipActorId || shipActor?.type !== `${SystemAdapter.current.moduleId}.ship`) {
-        ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoShip"));
-        return null;
-      }
-      return ShipCombatState.updateResource(payload.roleId, payload.key, payload.value, shipActor);
-    }
+    case "updateResource":
+      return _booleanActionResult(state.updateResource(payload.roleId, payload.key, payload.value));
 
-    case "updateResources": {
-      const shipActor = payload.shipActorId ? game.actors.get(payload.shipActorId) : null;
-      if (!payload.shipActorId || shipActor?.type !== `${SystemAdapter.current.moduleId}.ship`) {
-        ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoShip"));
-        return null;
-      }
-      return ShipCombatState.updateResources(payload.updates, shipActor);
-    }
+    case "updateResources":
+      return _booleanActionResult(state.updateResources(payload.updates));
 
-    case "adjustResources": {
-      const shipActor = payload.shipActorId ? game.actors.get(payload.shipActorId) : null;
-      if (!payload.shipActorId || shipActor?.type !== `${SystemAdapter.current.moduleId}.ship`) {
-        ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoShip"));
-        return null;
-      }
-      return ShipCombatState.adjustResources(payload.adjustments, payload.requirements, shipActor);
-    }
+    case "adjustResources":
+      return state.adjustResources(payload.adjustments, payload.requirements);
 
     case "assignWeapon":
     case "unassignComponent":
     case "assignEquipment": {
-      const shipActor = payload.shipActorId ? game.actors.get(payload.shipActorId) : null;
-      if (payload.shipActorId && shipActor?.type !== `${SystemAdapter.current.moduleId}.ship`) {
-        ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoShip"));
-        return;
-      }
-      if (action === "assignWeapon") await ShipCombatState.assignWeapon(payload, shipActor);
-      else if (action === "unassignComponent") await ShipCombatState.unassignComponent(payload, shipActor);
-      else await ShipCombatState.assignEquipment(payload, shipActor);
-      break;
+      if (action === "assignWeapon") return _booleanActionResult(state.assignWeapon(payload));
+      if (action === "unassignComponent") return _booleanActionResult(state.unassignComponent(payload));
+      return _booleanActionResult(state.assignEquipment(payload));
     }
 
     case "startCombat":
-      await ShipCombatState.startCombat();
-      break;
+      return _booleanActionResult(state.withAllocationTransaction(() => state.startCombat()));
 
     case "endCombat":
-      await ShipCombatState.endCombat();
-      break;
+      return _booleanActionResult(state.withAllocationTransaction(() => state.endCombat()));
 
     case "advanceRound": {
-      const shipActor = payload.shipActorId ? game.actors.get(payload.shipActorId) : null;
-      if (payload.shipActorId && shipActor?.type !== `${SystemAdapter.current.moduleId}.ship`) {
-        ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoShip"));
-        return null;
-      }
-      await ShipCombatState.advanceRound(shipActor);
-      break;
+      return _booleanActionResult(state.withAllocationTransaction(() => state.advanceRound()));
     }
 
     case "endShipTurn":
-      await state.endShipTurn();
-      break;
+      return _booleanActionResult(state.endShipTurn());
 
 
-    case "confirmMovement":
-      await state.confirmMovement(payload);
-      if (payload.waypoints?.length) {
-        const ship = state.ship;
-        const token = ship?.getActiveTokens()?.[0];
-        if (token) {
-          emitToAll("animateTokenPath", {
-            tokenUuid:     token.document.uuid,
-            waypoints:     payload.waypoints,
-            finalX:        payload.newX,
-            finalY:        payload.newY,
-            finalRotation: payload.newRotation,
-          });
-        }
-      }
-      break;
+    case "confirmMovement": {
+      const result = await state.confirmMovement(payload);
+      if (result === false) return false;
+      if (!(await _broadcastShipTokenPath(state, payload))) return false;
+      return result ?? true;
+    }
 
     case "resetHelmState":
-      await state.resetHelmState();
-      break;
+      return _booleanActionResult(state.resetHelmState());
 
     case "fullReset": {
-      const shipActor = payload.shipActorId ? game.actors.get(payload.shipActorId) : null;
-      if (payload.shipActorId && shipActor?.type !== `${SystemAdapter.current.moduleId}.ship`) {
-        ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoShip"));
-        return;
-      }
-      await ShipCombatState.fullReset(shipActor);
-      break;
+      return _booleanActionResult(state.withAllocationTransaction(() => state.fullReset()));
     }
 
     case "emergencyVent":
-      await state.emergencyVent();
-      break;
+      return _booleanActionResult(state.emergencyVent());
 
     case "reduceInternalFire":
-      await state.reduceInternalFire(payload.amount ?? 0, payload.auxiliaryPowerSpent ?? 0);
-      break;
+      return _booleanActionResult(state.reduceInternalFire(payload.amount ?? 0, payload.auxiliaryPowerSpent ?? 0));
 
     case "manageHeat":
-      await state.manageHeat(payload.auxiliaryPowerSpent ?? 0, payload.sl ?? 0);
-      break;
+      return _booleanActionResult(state.manageHeat(payload.auxiliaryPowerSpent ?? 0, payload.sl ?? 0));
 
     case "setInternalFire":
-      await state.setInternalFire(payload.value ?? 0);
-      break;
+      return _booleanActionResult(state.setInternalFire(payload.value ?? 0));
 
     case "stagePowerCore":
-      await state.stagePowerCore(payload.targetRoleId);
-      break;
+      return _booleanActionResult(state.stagePowerCore(payload.targetRoleId));
 
     case "unstagePowerCore":
-      await state.unstagePowerCore(payload.targetRoleId);
-      break;
+      return _booleanActionResult(state.unstagePowerCore(payload.targetRoleId));
 
     case "dispatchStagedCores":
-      await state.dispatchStagedCores();
-      break;
+      return _booleanActionResult(state.dispatchStagedCores());
 
-    case "pilotRetrograde":
-      await state.pilotRetrograde(payload.userId, payload.retroValue, payload.newX, payload.newY, payload.newRotation, payload.waypoints);
-      if (payload.waypoints?.length) {
-        const ship = state.ship;
-        const token = ship?.getActiveTokens()?.[0];
-        if (token) {
-          emitToAll("animateTokenPath", {
-            tokenUuid:     token.document.uuid,
-            waypoints:     payload.waypoints,
-            finalX:        payload.newX,
-            finalY:        payload.newY,
-            finalRotation: token.document.rotation,
-          });
-        }
-      }
-      break;
+    case "pilotRetrograde": {
+      const result = await state.pilotRetrograde(
+        payload.userId,
+        payload.retroValue,
+        payload.newX,
+        payload.newY,
+        payload.newRotation,
+        payload.waypoints,
+      );
+      if (result === false) return false;
+      const finalRotation = state.ship?.getActiveTokens()?.[0]?.document?.rotation ?? payload.newRotation;
+      if (!(await _broadcastShipTokenPath(state, payload, finalRotation))) return false;
+      return result ?? true;
+    }
 
     case "pilotOverdrive":
-      await state.pilotOverdrive(payload.userId);
-      break;
+      return state.pilotOverdrive(payload.userId);
 
     case "apToThrust":
-      await state.apToThrust(payload.userId);
-      break;
+      return state.apToThrust(payload.userId);
 
-    case "pilotStrafe":
-      await state.pilotStrafe(payload.userId, payload.newX, payload.newY, payload.newRotation, payload.dist, payload.waypoints);
-      if (payload.waypoints?.length) {
-        const ship = state.ship;
-        const token = ship?.getActiveTokens()?.[0];
-        if (token) {
-          emitToAll("animateTokenPath", {
-            tokenUuid:     token.document.uuid,
-            waypoints:     payload.waypoints,
-            finalX:        payload.newX,
-            finalY:        payload.newY,
-            finalRotation: payload.newRotation,
-          });
-        }
-      }
-      break;
+    case "pilotStrafe": {
+      const result = await state.pilotStrafe(
+        payload.userId,
+        payload.newX,
+        payload.newY,
+        payload.newRotation,
+        payload.dist,
+        payload.waypoints,
+      );
+      if (result === false) return false;
+      if (!(await _broadcastShipTokenPath(state, payload))) return false;
+      return result ?? true;
+    }
 
-    case "pilotFlipAndBurn":
-      await state.pilotFlipAndBurn(payload.userId, payload.halfSpeedUnits, payload.newX, payload.newY, payload.newRotation, payload.waypoints);
-      if (payload.waypoints?.length) {
-        const ship = state.ship;
-        const token = ship?.getActiveTokens()?.[0];
-        if (token) {
-          emitToAll("animateTokenPath", {
-            tokenUuid:     token.document.uuid,
-            waypoints:     payload.waypoints,
-            finalX:        payload.newX,
-            finalY:        payload.newY,
-            finalRotation: payload.newRotation,
-          });
-        }
-      }
-      break;
+    case "pilotFlipAndBurn": {
+      const result = await state.pilotFlipAndBurn(
+        payload.userId,
+        payload.halfSpeedUnits,
+        payload.newX,
+        payload.newY,
+        payload.newRotation,
+        payload.waypoints,
+      );
+      if (result === false) return false;
+      if (!(await _broadcastShipTokenPath(state, payload))) return false;
+      return result ?? true;
+    }
 
     case "pilotRam": {
       const impactToken = payload.targetTokenId ? canvas?.tokens?.get(payload.targetTokenId) : null;
       const impactLocation = impactToken
         ? { x: impactToken.center.x, y: impactToken.center.y }
         : null;
-      const ramResult = await ShipCombatState.pilotRam(
+      const ramResult = await state.pilotRam(
         payload.userId,
         payload.targetTokenId,
         payload.fuelUsed,
@@ -360,6 +374,7 @@ async function _handleAction(action, payload = {}) {
         payload.rammingActorId ?? null,
         payload.maxBearingDeg ?? 30,
       );
+      if (ramResult === false) return false;
       const impactDelay = Math.max(0, (payload.waypoints?.length ?? 0) * 50);
       if (ramResult?.rammedTokenId) {
         emitToAll("playWeaponAnimation", {
@@ -385,7 +400,7 @@ async function _handleAction(action, payload = {}) {
         // Animate path for the ramming token (player ship or NPC)
         const rammingActor = payload.rammingActorId
           ? game.actors?.get(payload.rammingActorId)
-          : ShipCombatState.ship;
+          : state.ship;
         const tokenRam = rammingActor?.getActiveTokens?.()?.[0];
         if (tokenRam) {
           const finalX = ramResult?.finalX ?? payload.newX;
@@ -395,7 +410,7 @@ async function _handleAction(action, payload = {}) {
             ...payload.waypoints,
             { x: finalX, y: finalY, rotation: finalRotation },
           ];
-          emitToAll("animateTokenPath", {
+          await emitToAll("animateTokenPath", {
             tokenUuid:     tokenRam.document.uuid,
             waypoints,
             finalX,
@@ -404,38 +419,32 @@ async function _handleAction(action, payload = {}) {
           });
         }
       }
-      break;
+      return ramResult;
     }
 
     case "commitShieldCores":
-      await state.commitShieldCores(payload.count ?? 1);
-      break;
+      return _booleanActionResult(state.commitShieldCores(payload.count ?? 1));
 
     case "uncommitShieldCore":
-      await state.uncommitShieldCore();
-      break;
+      return _booleanActionResult(state.uncommitShieldCore());
 
     case "commitAuxCore":
-      await state.commitAuxCore();
-      break;
+      return _booleanActionResult(state.commitAuxCore());
 
     case "uncommitAuxCore":
-      await state.uncommitAuxCore();
-      break;
+      return _booleanActionResult(state.uncommitAuxCore());
 
     case "spendBankedCores":
-      await state.spendBankedCores(payload.count ?? 1);
-      break;
+      return (await state.spendBankedCores(payload.count ?? 1)) > 0;
 
     case "adjustShieldZone":
-      await state.adjustShieldZone(payload.sector, payload.value);
-      break;
+      return _booleanActionResult(state.adjustShieldZone(payload.sector, payload.value));
     case "fluxToCharge":
-      await state.fluxToCharge();
-      break;
+      return _booleanActionResult(state.fluxToCharge());
 
     case "fireWeapon": {
       const _fwResult = await state.fireWeapon(payload);
+      if (_fwResult === false) return false;
       // Broadcast animation to all clients (including GM) via socket
       const _aActor  = payload.actorId  ? game.actors.get(payload.actorId)  : null;
       const _aWeapon = _aActor?.items.get(payload.weaponId) ?? null;
@@ -450,123 +459,73 @@ async function _handleAction(action, payload = {}) {
           isNpcFire:      payload.isNpcFire ?? false,
         });
       }
-      break;
+      return _fwResult;
     }
 
     case "repairHull":
-      await state.repairHull(payload.auxiliaryPowerSpent, payload.sl);
-      break;
+      return _booleanActionResult(state.repairHull(payload.auxiliaryPowerSpent, payload.sl));
 
-    case "addSensorEffect":
-      await state.addSensorEffect(payload);
-      break;
+    case "executeSensorAction":
+      return state.executeSensorAction(payload);
+
+    case "executeSensorCoreAction":
+      return state.executeSensorCoreAction(payload);
 
     case "setRecommendedTarget":
-      await state.setRecommendedTarget(payload);
-      break;
-
-    case "stripQuadrantShields":
-      await state.stripQuadrantShields(payload);
-      break;
-
-    case "upgradeLock":
-      await state.upgradeLock(payload);
-      break;
-
-    case "upgradeAllLocks":
-      await state.upgradeAllLocks(payload);
-      break;
+      return _booleanActionResult(state.setRecommendedTarget(payload));
 
     case "registerSensorContacts":
-      await state.registerSensorContacts(payload);
-      break;
+      return _booleanActionResult(state.registerSensorContacts(payload));
 
-    case "spawnOrdnance":
-      await ShipCombatState.spawnOrdnance(payload);
-      break;
+    case "executeOrdnanceLaunch":
+      return state.executeOrdnanceLaunch(payload);
 
-    case "deleteOrdnanceTokens":
-      return ShipCombatState.deleteOrdnanceTokens(payload.tokenIds);
-    case "destroyOrdnanceTokens":
-      return ShipCombatState.destroyOrdnanceTokens(payload.tokenIds);
+    case "executeCraftRecovery":
+      return state.executeCraftRecovery(payload);
 
-    case "commitOrdnanceAction": {
-      const shipActor = payload.shipActorId ? game.actors.get(payload.shipActorId) : null;
-      if (payload.shipActorId && shipActor?.type !== `${SystemAdapter.current.moduleId}.ship`) {
-        ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoShip"));
-        return null;
-      }
-      return ShipCombatState.commitOrdnanceAction(payload.actionId, shipActor);
+    case "deleteOrdnanceTokens": {
+      const tokenIds = _getOwnedOrdnanceTokenIds(state.ship, payload.tokenIds);
+      return ShipCombatState.deleteOrdnanceTokens(tokenIds, {
+        suppressDestroyTracking: payload.suppressDestroyTracking === true,
+      });
+    }
+    case "destroyOrdnanceTokens": {
+      const tokenIds = _getOwnedOrdnanceTokenIds(state.ship, payload.tokenIds);
+      return ShipCombatState.destroyOrdnanceTokens(tokenIds);
     }
 
-    case "cancelOrdnanceCommitment": {
-      const shipActor = payload.shipActorId ? game.actors.get(payload.shipActorId) : null;
-      if (payload.shipActorId && shipActor?.type !== `${SystemAdapter.current.moduleId}.ship`) {
-        ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoShip"));
-        return null;
-      }
-      return ShipCombatState.cancelOrdnanceCommitment(payload, shipActor);
-    }
+    case "commitOrdnanceAction":
+      return state.commitOrdnanceAction(payload.actionId);
 
-    case "completeOrdnanceCommitment": {
-      const shipActor = payload.shipActorId ? game.actors.get(payload.shipActorId) : null;
-      if (!payload.shipActorId || shipActor?.type !== `${SystemAdapter.current.moduleId}.ship`) {
-        ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoShip"));
-        return null;
-      }
-      return ShipCombatState.completeOrdnanceCommitment(payload, shipActor);
-    }
+    case "cancelOrdnanceCommitment":
+      return state.cancelOrdnanceCommitment(payload);
+
+    case "completeOrdnanceCommitment":
+      return state.completeOrdnanceCommitment(payload);
 
     case "setOrdnanceRtb":
-      await ShipCombatState.setOrdnanceRtb(payload.tokenId, payload.rtb);
-      break;
+      if (!_getOwnedOrdnanceTokenIds(state.ship, [payload.tokenId]).length) return false;
+      return _booleanActionResult(ShipCombatState.setOrdnanceRtb(payload.tokenId, payload.rtb));
 
     case "setOrdnanceTurnDone":
-      await ShipCombatState.setOrdnanceTurnDone(payload.tokenId, payload.done);
-      break;
-
-    case "designateHostileTorpedo":
-      await state.designateHostileTorpedo(payload.tokenId);
-      break;
-
-    case "torpedoPowerBoost":
-      await ShipCombatState.torpedoPowerBoost(payload.tokenId);
-      break;
-
-    case "consumeLock":
-      await ShipCombatState.consumeLock(payload);
-      break;
-
-    case "removeLock":
-      await state.removeLock(payload.targetTokenId);
-      break;
+      if (!_getOwnedOrdnanceTokenIds(state.ship, [payload.tokenId]).length) return false;
+      return ShipCombatState.setOrdnanceTurnDone(payload.tokenId, payload.done);
 
     case "resolveBDA":
-      await state.resolveBDA(payload);
-      break;
+      return _booleanActionResult(state.resolveBDA(payload));
 
-    case "completeBDA":
-      await state.completeBDA(payload);
-      break;
-
-    case "setFireCorrection":
-      await state.setFireCorrection(payload);
-      break;
-
-    case "spendAP":
-      await state.spendAP(payload.cost);
-      break;
+    case "applyBdaCorrection":
+      return state.applyBdaCorrection(payload);
 
     case "torpedoDamage":
-      await ShipCombatState.torpedoDamage(payload);
-      break;
+      return state.torpedoDamage(payload);
 
     case "blastOrdnance":
-      await ShipCombatState.blastOrdnance(payload);
-      break;
+      return state.blastOrdnance(payload);
 
     case "strikeCraftAttack": {
-      const _scResult = await ShipCombatState.strikeCraftAttack(payload);
+      const _scResult = await state.strikeCraftAttack(payload);
+      if (_scResult === false || _scResult?.ok === false) return _scResult;
       if (payload.craftActorId && payload.targetTokenId) {
         emitToAll("playWeaponAnimation", {
           weaponCategory: "laser_pdc",
@@ -578,32 +537,26 @@ async function _handleAction(action, payload = {}) {
           isNpcFire:      false,
         });
       }
-      break;
+      return _scResult;
     }
 
     case "triageCondition":
-      await state.triageCondition(payload);
-      break;
+      return _booleanActionResult(state.triageCondition(payload));
 
     case "playCard":
-      await state.playCard(payload);
-      break;
+      return _booleanActionResult(state.playCard(payload));
 
     case "discardCard":
-      await state.discardCard(payload);
-      break;
+      return _booleanActionResult(state.discardCard(payload));
 
     case "mulligan":
-      await state.mulligan(payload);
-      break;
+      return _booleanActionResult(state.mulligan(payload));
 
     case "captainPayloadActivate":
-      await state.captainPayloadActivate(payload);
-      break;
+      return _booleanActionResult(state.captainPayloadActivate(payload));
 
     case "captainCoreAction":
-      await state.captainCoreAction(payload);
-      break;
+      return _booleanActionResult(state.captainCoreAction(payload));
 
     case "beginDeadReckoning":
       return state.beginDeadReckoning();
@@ -615,7 +568,8 @@ async function _handleAction(action, payload = {}) {
       return state.cancelDeadReckoning(payload);
 
     default:
-      console.warn(`${MODULE_ID} | Unknown socket action: ${action}`);
+      console.warn(`${CORE_MODULE_ID} | Unknown socket action: ${action}`);
+      return false;
   }
 }
 
@@ -625,15 +579,15 @@ async function _handleAction(action, payload = {}) {
  * The GM commits the final position after the chain completes.
  */
 async function _handleAnimateTokenPath({ tokenUuid, waypoints, finalX, finalY, finalRotation }) {
-  if (!canvas?.ready || !waypoints?.length) return;
+  if (!canvas?.ready || !waypoints?.length) return false;
 
   // Resolve the TokenDocument from its UUID so any client can find it
   let tokenDoc;
   try { tokenDoc = await fromUuid(tokenUuid); }
-  catch { return; }
+  catch { return false; }
 
   const canvasToken = tokenDoc?.object;
-  if (!canvasToken) return;
+  if (!canvasToken) return false;
 
   // Fire all waypoint animations immediately with chain:true.
   // Foundry queues them and plays them back-to-back with no gaps.
@@ -649,7 +603,13 @@ async function _handleAnimateTokenPath({ tokenUuid, waypoints, finalX, finalY, f
   }
 
   // Wait for the full animation chain to finish
-  await promises[promises.length - 1];
+  try {
+    await promises[promises.length - 1];
+  } catch (error) {
+    // Visual interpolation is best-effort. The GM must still commit the
+    // authoritative destination so movement cannot be partially applied.
+    console.error(`${CORE_MODULE_ID} | Token path animation failed`, error);
+  }
 
   // Only the GM commits the authoritative final position
   if (game.user.isGM) {
@@ -658,6 +618,7 @@ async function _handleAnimateTokenPath({ tokenUuid, waypoints, finalX, finalY, f
       { animate: false }
     );
   }
+  return true;
 }
 
 /**
@@ -697,11 +658,62 @@ function _handlePlayWeaponAnimation({ weaponCategory, fireMode, firingActorId, t
   });
 }
 
+function _resolveRequestShipActor(actor, contract) {
+  if (!actor) return null;
+  if (contract.scope !== "ordnance" && !isOrdnance(actor)) return actor;
+  const parentShipTokenId = SystemAdapter.current.getShipData(actor)?.parentShipTokenId;
+  return parentShipTokenId ? canvas?.scene?.tokens.get(parentShipTokenId)?.actor ?? null : null;
+}
+
+/**
+ * Request a GM action using an Actor document as the sole identity source.
+ * Identity fields supplied in payload are overwritten from the contract.
+ */
+function requestGMAction(action, actor, payload = {}) {
+  const contract = ACTION_CONTRACTS[action];
+  if (!contract) {
+    console.error(`${CORE_MODULE_ID} | Unknown GM action contract: ${action}`);
+    return false;
+  }
+  const sourceActor = actor?.actor ?? actor;
+  const actorId = typeof sourceActor === "string" ? sourceActor : sourceActor?.id ?? null;
+  if (typeof sourceActor === "string" && !["ship", "parentShip"].includes(contract.scope)) {
+    console.error(`${CORE_MODULE_ID} | ${action} requires a source Actor document.`);
+    return false;
+  }
+  const shipActor = typeof sourceActor === "string"
+    ? null
+    : _resolveRequestShipActor(sourceActor, contract);
+  const scopedPayload = {
+    ...payload,
+    shipActorId: typeof sourceActor === "string" ? sourceActor : shipActor?.id ?? null,
+  };
+  if (contract.sourceKey) scopedPayload[contract.sourceKey] = actorId;
+  return emitToGM(action, scopedPayload);
+}
+
+/** Create one file-local requester that resolves its Actor from call context. */
+export function createActionRequester(resolveActor) {
+  if (typeof resolveActor !== "function") {
+    throw new TypeError("createActionRequester requires an Actor resolver function.");
+  }
+  return (context, action, payload = {}) => requestGMAction(
+    action,
+    resolveActor(context, action, payload),
+    payload,
+  );
+}
+
 /**
  * Send an action request to the GM.
  * Uses socketlib if available (guaranteed GM execution), otherwise raw socket.
+ * @deprecated Use createActionRequester so actor identity is injected from the contract.
  */
 export function emitToGM(action, payload = {}) {
+  if (!_hasValidOutgoingActorScope(action, payload)) {
+    ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoShip"));
+    return false;
+  }
   const confirmation = _confirmAllocationAction(action, payload);
   if (confirmation) {
     return confirmation.then(proceed => proceed ? _emitToGM(action, payload) : false);
@@ -713,6 +725,10 @@ function _emitToGM(action, payload) {
   if (game.user.isGM) {
     return _handleAction(action, payload);
   }
+  if (!_socket) {
+    console.error(`${CORE_MODULE_ID} | Cannot dispatch ${action}: socket is not ready.`);
+    return false;
+  }
   return _socket.executeAsGM(action, payload);
 }
 
@@ -720,5 +736,13 @@ function _emitToGM(action, payload) {
  * Broadcast an action to ALL connected clients (including the sender).
  */
 export function emitToAll(action, payload = {}) {
-  _socket.executeForEveryone(action, payload);
+  if (!BROADCAST_HANDLERS[action]) {
+    console.error(`${CORE_MODULE_ID} | Unknown broadcast action: ${action}`);
+    return false;
+  }
+  if (!_socket) {
+    console.error(`${CORE_MODULE_ID} | Cannot broadcast ${action}: socket is not ready.`);
+    return false;
+  }
+  return _socket.executeForEveryone(action, payload);
 }

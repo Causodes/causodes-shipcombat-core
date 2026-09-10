@@ -20,7 +20,7 @@ import { HelmPreview } from "../../canvas/HelmPreview.js";
 import { WeaponArcOverlay } from "../../canvas/WeaponArcOverlay.js";
 import { SystemAdapter } from "../../systems/SystemAdapter.js";
 import { MODULE_ID } from "../../constants.js";
-import { emitToGM }  from "../../socket.js";
+import { createActionRequester }  from "../../socket.js";
 import { OVERVIEW_ACTIONS } from "../../roles/overview.js";
 import { SHARED_ACTIONS }   from "../../roles/shared.js";
 import { ENGINEER_ACTIONS } from "../../roles/engineer.js";
@@ -30,6 +30,8 @@ import { GUNNER_ACTIONS }   from "../../roles/gunner.js";
 import { ORDNANCE_ACTIONS } from "../../roles/ordnance.js";
 import { userOperatesStation } from "../../roles/crew-operators.js";
 import { openManualOverride } from "../../apps/ManualOverride.js";
+
+const requestGM = createActionRequester(context => context.actor);
 
 // ── Mixin ─────────────────────────────────────────────────────────────────
 
@@ -177,14 +179,14 @@ export const ShipSheetV1Mixin = (BaseClass) => {
       const row = target.closest("[data-id]");
       const id  = row?.dataset?.id;
       if (!id) return;
-      emitToGM("unassignComponent", { itemId: id, shipActorId: this.actor.id });
+      requestGM(this, "unassignComponent", { itemId: id });
     }
 
     static async _onUnassignEquipment(event, target) {
       const row = target.closest("[data-id]");
       const id  = row?.dataset?.id;
       if (!id) return;
-      emitToGM("unassignComponent", { itemId: id, shipActorId: this.actor.id });
+      requestGM(this, "unassignComponent", { itemId: id });
     }
 
     // ── Data preparation ────────────────────────────────────────────────────
