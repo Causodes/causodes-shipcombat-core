@@ -33,7 +33,7 @@ jobs:
           const manifest = JSON.parse(fs.readFileSync("module.json", "utf8"));
           const tag = process.env.RELEASE_TAG;
           const expectedVersion = tag.replace(/^v/, "");
-          const expectedDownload = `https://github.com/${process.env.GITHUB_REPOSITORY}/archive/refs/tags/${tag}.zip`;
+          const expectedDownload = `https://github.com/${process.env.GITHUB_REPOSITORY}/releases/download/${tag}/${manifest.id}.zip`;
 
           if (manifest.version !== expectedVersion) {
             throw new Error(`module.json version ${manifest.version} does not match release ${tag}`);
@@ -43,13 +43,28 @@ jobs:
           }
           NODE
 
-      - name: Upload the tagged manifest
+      - name: Build runtime-only module package
+        shell: bash
+        run: |
+          module_id="$(node -p "require('./module.json').id")"
+          entrypoints="$(node -p "require('./module.json').esmodules.join(' ')")"
+          mkdir -p dist
+          zip -r "dist/${module_id}.zip" module.json $entrypoints lang scripts styles templates
+
+          if unzip -Z1 "dist/${module_id}.zip" | grep -Eq '(^|/)(tests|\.github|node_modules|package\.json)(/|$)'; then
+            echo "Development-only files leaked into the release package." >&2
+            exit 1
+          fi
+
+      - name: Upload manifest and runtime package
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           for attempt in {1..6}; do
-            if gh release upload "$RELEASE_TAG" module.json --clobber --repo "$GITHUB_REPOSITORY"; then
+            module_id="$(node -p "require('./module.json').id")"
+            if gh release upload "$RELEASE_TAG" "dist/${module_id}.zip" --clobber --repo "$GITHUB_REPOSITORY" \
+              && gh release upload "$RELEASE_TAG" module.json --clobber --repo "$GITHUB_REPOSITORY"; then
               exit 0
             fi
 

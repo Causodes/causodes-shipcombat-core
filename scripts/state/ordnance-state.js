@@ -9,6 +9,7 @@ import { MODULE_ID, ORDNANCE_4MAN_COSTS, ORDNANCE_MASTER_ACTIONS } from "../cons
 import { isStrikeCraft, isTorpedo, ordnanceTypeName } from "../actors/ordnance/ordnance-types.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
 import { getOrdnanceControllerUserId } from "../roles/crew-operators.js";
+import { canSetOrdnanceTurnDone, getOrdnanceLaunchTurnState } from "./ordnance-turn-state.js";
 
 const destroyingOrdnanceTokenIds = new Set();
 
@@ -275,7 +276,6 @@ export async function spawnOrdnance({ type, parentShipTokenId, x, y, rotation, t
       [MODULE_ID]: { fromOrdnanceMaster: true },
     });
     actorData.system.parentShipTokenId = parentShipTokenId;
-    actorData.system.turnComplete = type !== "strikeCraft";  // craft can manoeuvre on launch turn
     actorData.system.hull = { value: hullInitVal, max: hullOverride };
   } else if (templateRef?.uuid) {
     // Legacy UUID reference  -  fetch from world actors
@@ -288,7 +288,6 @@ export async function spawnOrdnance({ type, parentShipTokenId, x, y, rotation, t
         [MODULE_ID]: { fromOrdnanceMaster: true },
       });
       actorData.system.parentShipTokenId = parentShipTokenId;
-      actorData.system.turnComplete = type !== "strikeCraft";
       actorData.system.hull = { value: hullInitVal, max: hullOverride };
     } else {
       actorData = {
@@ -306,6 +305,11 @@ export async function spawnOrdnance({ type, parentShipTokenId, x, y, rotation, t
       system: { subtype, parentShipTokenId, hull: { value: hullInitVal, max: hullOverride } },
     };
   }
+
+  // Apply launch-turn state once after every construction path, including the
+  // no-template fallback. Torpedoes remain locked until lifecycle processing
+  // performs their mandatory launch drift; strike craft can act immediately.
+  Object.assign(actorData.system, getOrdnanceLaunchTurnState(subtype));
 
   // ── Guard: launch with a full tank and magazine ──────────────────────────
   // Fuel/ammo are cloned straight from the template's saved state. A template
@@ -498,6 +502,11 @@ export async function setOrdnanceTurnDone(tokenId, done) {
   if (!game.user.isGM || !canvas?.scene) return false;
   const td = canvas.scene.tokens.get(tokenId);
   if (!td?.actor) return false;
+  const ordnanceData = {
+    ...(SystemAdapter.current.getShipData(td.actor) ?? {}),
+    subtype: isTorpedo(td.actor) ? "torpedo" : "strikeCraft",
+  };
+  if (!canSetOrdnanceTurnDone(ordnanceData, done)) return false;
   await td.actor.update({ [SystemAdapter.current.systemPath("turnComplete")]: !!done });
   return true;
 }

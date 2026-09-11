@@ -78,6 +78,9 @@ export const OrdnanceSchemaMixin = (BaseClass) => class extends BaseClass {
 
     // ── Turn & parent tracking (shared) ──────────────────────────────────
     schema.turnComplete      = new fields.BooleanField({ initial: false });
+    // Separate from turnComplete: a launch-turn torpedo must drift before it
+    // can be unlocked for normal movement.
+    schema.launchDriftPending = new fields.BooleanField({ initial: false });
     schema.parentShipTokenId = new fields.StringField({ initial: "" });
 
     // ── Torpedo-only fields ───────────────────────────────────────────────

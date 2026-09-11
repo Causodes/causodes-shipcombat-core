@@ -1,0 +1,45 @@
+name: Test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Core
+        uses: actions/checkout@v4
+        with:
+          path: modules/causodes-shipcombat-core
+
+      - name: Check out D&D 5e companion
+        uses: actions/checkout@v4
+        with:
+          repository: Causodes/causodes-shipcombat-dnd5e
+          path: modules/causodes-shipcombat-dnd5e
+
+      - name: Check out Imperium Maledictum companion
+        uses: actions/checkout@v4
+        with:
+          repository: Causodes/causodes-shipcombat-impmal
+          path: modules/causodes-shipcombat-impmal
+
+      - name: Check out Starfinder 2e companion
+        uses: actions/checkout@v4
+        with:
+          repository: Causodes/causodes-shipcombat-sf2e
+          path: modules/causodes-shipcombat-sf2e
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Run contract and state-transition tests
+        run: npm test
+        working-directory: modules/causodes-shipcombat-core

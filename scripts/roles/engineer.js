@@ -110,7 +110,11 @@ async function _onOverclock() {
     const coreLabel    = succeeded ? "Core Granted" : "Core Not Granted";
     const outcomeHtml  = `<div class="sc-overclock-result" style="margin-top:0.5rem;padding-top:0.4rem;border-top:1px solid rgba(0,0,0,0.2)"><strong>Overclock DC ${overclockDC}: ${outcomeLabel}</strong><br>${coreLabel} · System Heat Increased</div>`;
     const msg = game.messages.contents.at(-1);
-    if (msg) msg.update({ flavor: `${msg.flavor ?? ""}${outcomeHtml}` });
+    if (msg) {
+      void msg.update({ flavor: `${msg.flavor ?? ""}${outcomeHtml}` }).catch(error => {
+        console.error(`${MODULE_ID} | Failed to annotate Overclock chat message`, error);
+      });
+    }
   }
 
   // Heat always increases regardless of result

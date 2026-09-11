@@ -398,10 +398,55 @@ marked with ★ call an adapter method and may interact with companion code.
 | `updateItem` | Notifies clients that derived ship component values may require reopening the sheet. | — |
 | `deleteItem` | Notifies clients that derived ship component values may require reopening the sheet. | — |
 | `updateChatMessage` | When a piloting roll message is mutated (reroll/fortune), reads the new SL and updates pilot allocation state. | ★ Calls `parseRollResultFromMessage()`. |
-| `updateCombat` | Advances helm state at turn/round boundaries (auto-move, reset allocations, apply internal fire). | — |
+| `updateCombat` | Advances helm and parent-scoped ordnance state at turn/round boundaries (auto-move, drift, reset allocations, apply internal fire). | — |
 | `canvasTearDown` | Hides helm preview and destroys all arc/shield overlays. | — |
 | `renderChatMessageHTML` | Wires BDA-pending chat card buttons. | — |
 | `aa.getRequiredData` | Clears nameless synthetic items from custom ship-combat chat messages to prevent AutoAnimations lookup errors. | — |
+
+---
+
+## Testing
+
+Run the versioned regression suite with:
+
+```sh
+npm test
+```
+
+Socket-contract tests inventory request/handler scope and companion API wiring.
+State-transition tests exercise pure transition functions across their complete
+finite input space, then verify that Foundry-facing launch, hook, and handler
+paths use those functions. Pull requests and pushes to `main` in Core or any
+companion repository run the same cross-module suite in GitHub Actions. An
+adapter workflow checks out its triggering commit alongside the latest `main`
+versions of Core and the other companions.
+
+New persistent gameplay state should be introduced through a pure transition
+function wherever practical, with exhaustive table tests for its legal and
+illegal states. Foundry document integration remains a separate test boundary:
+mocked document tests should verify emitted update payloads, and smoke tests in a
+Foundry world should cover hooks, permissions, linked/unlinked tokens, and scene
+lifecycle behavior.
+
+### Release packaging
+
+Foundry installs the ZIP named by `module.json.download`, not the repository
+source tree. The release workflow builds that ZIP from an explicit runtime
+allowlist and uploads the ZIP before `module.json`.
+
+For a release with no temporary broken `releases/latest/download/module.json`
+window:
+
+1. Commit the version, changelog, download URL, and workflow changes.
+2. Tag that exact commit and create the matching GitHub release as a draft.
+3. Run **Publish release manifest** manually with that tag.
+4. Confirm the draft contains both `<module-id>.zip` and `module.json` and that
+   the workflow passed.
+5. Publish the draft release.
+
+The `published` trigger safely rebuilds the same assets with `--clobber`, so it
+also repairs a normal directly-published release after a short propagation
+window.
 
 ---
 
@@ -431,6 +476,7 @@ causodes-shipcombat-core/
 │   ├── appv1-compact.css         # Tab show/hide rules for AppV1 sheets
 │   └── custom-class-compat.css   # Compat shims for systems that inject CSS classes
 ├── templates/                    # Sheets, partials, chat cards
+├── tests/                        # Contract, pure transition, and wiring tests
 └── lang/en.json                  # Neutral default strings
 ```
 

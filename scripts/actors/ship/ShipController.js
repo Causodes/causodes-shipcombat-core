@@ -950,17 +950,17 @@ export class ShipController {
    */
   onRender(rootEl, context, options) {
     rootEl.querySelectorAll("[data-sector-field]").forEach(input => {
-      input.addEventListener("change", ev => {
+      input.addEventListener("change", async ev => {
         const val = Math.max(0, Number(ev.target.value) || 0);
-        this.actor.update({ [SystemAdapter.current.systemPath(ev.target.dataset.sectorField)]: val });
+        await this.actor.update({ [SystemAdapter.current.systemPath(ev.target.dataset.sectorField)]: val });
       });
     });
 
     rootEl.querySelectorAll("[data-slot-count]").forEach(input => {
-      input.addEventListener("change", ev => {
+      input.addEventListener("change", async ev => {
         const path = ev.target.dataset.slotCount;
         if (path === SystemAdapter.current.systemPath("crewSize")) return;
-        this.actor.update({ [path]: Math.max(0, Number(ev.target.value) || 0) });
+        await this.actor.update({ [path]: Math.max(0, Number(ev.target.value) || 0) });
       });
     });
 
@@ -974,14 +974,14 @@ export class ShipController {
     });
 
     rootEl.querySelectorAll("[data-ship-config='system.useStrikeCraft']").forEach(sel => {
-      sel.addEventListener("change", ev => {
-        this.actor.update({ [SystemAdapter.current.systemPath("useStrikeCraft")]: ev.target.value === "yes" });
+      sel.addEventListener("change", async ev => {
+        await this.actor.update({ [SystemAdapter.current.systemPath("useStrikeCraft")]: ev.target.value === "yes" });
       });
     });
 
     rootEl.querySelectorAll("[data-ship-config='system.crewScale']").forEach(sel => {
-      sel.addEventListener("change", ev => {
-        this.actor.update({ [SystemAdapter.current.systemPath("crewScale")]: ev.target.value });
+      sel.addEventListener("change", async ev => {
+        await this.actor.update({ [SystemAdapter.current.systemPath("crewScale")]: ev.target.value });
       });
     });
 

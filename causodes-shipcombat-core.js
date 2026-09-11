@@ -35,6 +35,8 @@ import { getOrdnanceControllerUserId, resolveOrdnanceParentShipActor, resolveSta
 import { registerAnimations } from "./scripts/animations.js";
 import { getStanceMovementModifiers } from "./scripts/stances.js";
 import { collectExistingTargetTokenIds } from "./scripts/state/target-references.js";
+import { processParentOrdnanceLifecycle } from "./scripts/state/ordnance-turn-state.js";
+import { IdempotencyGate, combatTransitionKey } from "./scripts/state/idempotency.js";
 import { PartialRegistry, CORE_PARTIAL_DEFAULTS, loadAllTemplates } from "./scripts/templates.js";
 import { TargetingPopupV1 }
   from "./scripts/apps/TargetingPopupV1.js";
@@ -357,7 +359,7 @@ function pruneSceneTargetReferences() {
 
 // ── Shield Arc Overlay ───────────────────────────────────────────────────────
 
-Hooks.on("canvasReady", () => {
+Hooks.on("canvasReady", async () => {
   ShieldArcOverlay.refresh();
   refreshTokenVisibility();
   TargetDesignationOverlay.refresh();
@@ -373,7 +375,7 @@ Hooks.on("canvasReady", () => {
     );
     for (const td of unlinked) {
       console.warn(`${MODULE_ID} | Auto-linking unlinked ship token "${td.name}" (${td.id})`);
-      td.update({ actorLink: true });
+      await td.update({ actorLink: true });
     }
   }
 });
@@ -519,7 +521,7 @@ Hooks.on("deleteItem", (item) => {
 
 // ── Reroll detection: if a tracked piloting message is updated, sync new SL ──
 
-Hooks.on("updateChatMessage", (message, changes) => {
+Hooks.on("updateChatMessage", async (message, changes) => {
   // Only the GM should write back to the ship actor
   if (!game.user.isGM) return;
 
@@ -547,7 +549,7 @@ Hooks.on("updateChatMessage", (message, changes) => {
     updates["resources.pilot.allocSpeed"] = 0;
     updates["resources.pilot.allocMano"]  = 0;
   }
-  ShipCombatState.update(updates, ship);
+  await ShipCombatState.update(updates, ship);
 });
 
 // ── Sync helm reset with Foundry combat tracker turn/round advancement ────
@@ -556,7 +558,15 @@ Hooks.on("updateChatMessage", (message, changes) => {
 // When the ship's turn starts: apply Internal Fire → Hull Damage, then reset
 // helm state and all allocations for the new turn.
 
-Hooks.on("updateCombat", async (combat, changes) => {
+const _combatUpdateGate = new IdempotencyGate({ maxEntries: 100 });
+
+Hooks.on("updateCombat", (combat, changes) => {
+  const key = combatTransitionKey(combat, changes);
+  if (!game.user.isGM || !key) return;
+  return _combatUpdateGate.run(key, () => _processCombatUpdate(combat, changes));
+});
+
+async function _processCombatUpdate(combat, changes) {
   if (!game.user.isGM) return;
   if (!("round" in changes) && !("turn" in changes)) return;
 
@@ -644,10 +654,6 @@ Hooks.on("updateCombat", async (combat, changes) => {
         }
       }
     }
-    // Process ordnance lifecycle (drift, fuel burn, detonation) at the end of
-    // the parent ship's turn so it happens simultaneously with the ship's own
-    // turn-end auto-drift — not at the start of the following turn.
-    await state.processOrdnanceLifecycle(ship);
   }
 
   // ── NPC ship's turn ENDED: auto-drift at minimum speed if no thrust used ──
@@ -691,6 +697,14 @@ Hooks.on("updateCombat", async (combat, changes) => {
       }
     }
   }
+
+  // Every actor type that can launch ordnance uses the same parent-scoped
+  // lifecycle dispatch. Keeping this outside the player/NPC movement branches
+  // prevents one parent type from being omitted when those branches change.
+  await processParentOrdnanceLifecycle(prevCombatant?.actor, {
+    moduleId: MODULE_ID,
+    stateClass: ShipCombatState,
+  });
 
   // ── Ship's turn STARTED: apply effects and reset all allocations ───────────
   if (currentCombatant?.actor?.type === `${MODULE_ID}.ship`) {
@@ -808,7 +822,7 @@ Hooks.on("updateCombat", async (combat, changes) => {
       }
     }
   }
-});
+}
 
 // ── BDA-Pending chat card: assigned operator + GM fallback ──────────────────
 

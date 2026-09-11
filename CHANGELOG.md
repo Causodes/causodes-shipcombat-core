@@ -1,3 +1,16 @@
+## v2.5.1
+### Bug Fixes
+- Refresh and drift NPC ordnance at the end of its parent ship's turn, and prevent operators from clearing a newly launched torpedo's mandatory-drift state
+- Await persistent sheet and hook document writes or explicitly handle their failures
+- Deduplicate repeated GM socket requests and combat-turn hook delivery, while leaving failed operations retryable
+- Commit BDA state before refreshing its chat card so a failed ship write cannot display an unapplied correction
+### Improvements
+- Version and continuously run the regression suite across Core, D&D5e, SF2e, and Imperium Maledictum
+- Exhaustively test ordnance turn transitions, authoritative rejection and persistence failure, adapter storage contracts, and mutation-queue concurrency
+- Add failure-injection coverage for launch, recovery, damage, BDA, deletion, and compensation; migration snapshots; duplicate delivery; and AppV1/AppV2 listener lifecycles
+- Run the cross-module regression suite for adapter-only pull requests and pushes, and preserve in-flight idempotent work under cache pressure
+- Publish an allowlisted runtime-only module archive without tests, workflows, package metadata, or other development files
+
 ## v2.5.0
 ### Bug Fixes
 - Keep newly overclocked Power Cores in their rightmost display position when staged

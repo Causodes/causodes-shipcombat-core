@@ -9,6 +9,7 @@ import { createActionRequester }  from "../socket.js";
 import { ShipCombatState } from "../state/ShipCombatState.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
 import { getContactDisplayName, isTargetableContactToken } from "../targeting/contact-intelligence.js";
+import { RenderLifecycle } from "./render-lifecycle.js";
 
 const requestGM = createActionRequester(context => context.shipActor);
 
@@ -39,6 +40,7 @@ export class BattleClarityPopup extends foundry.applications.api.HandlebarsAppli
   constructor({ shipActor = null } = {}, options = {}) {
     super(options);
     this.shipActor = shipActor;
+    this._lifecycle = new RenderLifecycle(this);
   }
 
   static DEFAULT_OPTIONS = {
@@ -109,25 +111,18 @@ export class BattleClarityPopup extends foundry.applications.api.HandlebarsAppli
     // ── Live lock-tier refresh ─────────────────────────────────────────────
     // Re-render when the ship actor updates (lock tiers stored in system data)
     // or when tokens move (changes distances / visibility).
-    if (!this._liveHooks) {
+    if (!this._rerenderFn) {
       const _rerender = foundry.utils.debounce(() => {
         if (this.rendered) this.render();
       }, 100);
-      this._liveHooks = [
-        Hooks.on("updateActor",  _rerender),
-        Hooks.on("updateToken",  _rerender),
-      ];
+      this._lifecycle.watchHooks(["updateActor", "updateToken"], _rerender);
       this._rerenderFn = _rerender;
     }
   }
 
   _onClose(options) {
-    if (this._liveHooks) {
-      Hooks.off("updateActor", this._rerenderFn);
-      Hooks.off("updateToken", this._rerenderFn);
-      this._liveHooks = null;
-      this._rerenderFn = null;
-    }
+    this._lifecycle.close();
+    this._rerenderFn = null;
     super._onClose?.(options);
   }
 

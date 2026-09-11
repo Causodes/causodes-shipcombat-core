@@ -13,6 +13,7 @@ import { ShipCombatState }
 import { SystemAdapter }
   from "../systems/SystemAdapter.js";
 import { getContactDisplayName, isTargetableContactToken } from "../targeting/contact-intelligence.js";
+import { RenderLifecycle } from "./render-lifecycle.js";
 
 const requestGM = createActionRequester(context => context.shipActor);
 
@@ -47,6 +48,7 @@ export class BattleClarityPopupV1 extends foundry.appv1.api.Application {
   constructor({ shipActor = null } = {}) {
     super({});
     this.shipActor = shipActor;
+    this._lifecycle = new RenderLifecycle(this);
   }
 
   static get defaultOptions() {
@@ -105,20 +107,18 @@ export class BattleClarityPopupV1 extends foundry.appv1.api.Application {
   activateListeners($html) {
     super.activateListeners($html);
     const html = $html[0];
+    this._lifecycle.beginRender();
 
-    if (!this._liveHooks) {
+    if (!this._rerenderFn) {
       const _rerender = foundry.utils.debounce(() => {
         if (this.rendered) this.render();
       }, 100);
-      this._liveHooks = [
-        Hooks.on("updateActor", _rerender),
-        Hooks.on("updateToken", _rerender),
-      ];
+      this._lifecycle.watchHooks(["updateActor", "updateToken"], _rerender);
       this._rerenderFn = _rerender;
     }
 
     html.querySelectorAll("[data-action='confirmDesignate']").forEach(btn => {
-      btn.addEventListener("click", async ev => {
+      this._lifecycle.listen(btn, "click", async ev => {
         ev.preventDefault();
         const tokenId = btn.dataset.tokenId;
         if (!tokenId) return;
@@ -133,12 +133,8 @@ export class BattleClarityPopupV1 extends foundry.appv1.api.Application {
   }
 
   async close(options = {}) {
-    if (this._liveHooks) {
-      Hooks.off("updateActor", this._rerenderFn);
-      Hooks.off("updateToken", this._rerenderFn);
-      this._liveHooks  = null;
-      this._rerenderFn = null;
-    }
+    this._lifecycle.close();
+    this._rerenderFn = null;
     return super.close(options);
   }
 }

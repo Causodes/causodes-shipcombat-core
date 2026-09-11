@@ -33,6 +33,8 @@ import { getStanceMovementModifiers, hasDevastationProtocol } from "../stances.j
 import { attackBypassesShields, usesDamagePoolShields } from "./shield-resolution.js";
 import { buildDefenseUpdates, resolveHitsAgainstDefenses } from "./hit-damage-resolution.js";
 import { getNpcRoundConditionEffects } from "./npc-condition-effects.js";
+import { getOrdnanceLifecycleTransition } from "./ordnance-turn-state.js";
+import { mutationQueueKey, runSerializedMutation } from "./mutation-queue.js";
 
 export class ShipCombatState {
 
@@ -185,54 +187,33 @@ export class ShipCombatState {
   static async withPowerCoreTransaction(operation, shipActor = null) {
     if (typeof operation !== "function") throw new TypeError("Power Core transaction requires a function.");
     const ship = shipActor ?? this.ship;
-    const shipKey = ship?.uuid ?? ship?.id ?? "active-ship";
-    const previous = this._powerCoreQueues.get(shipKey) ?? Promise.resolve();
-    const transaction = previous.catch(() => {}).then(operation);
-
-    this._powerCoreQueues.set(shipKey, transaction);
-    try {
-      return await transaction;
-    } finally {
-      if (this._powerCoreQueues.get(shipKey) === transaction) {
-        this._powerCoreQueues.delete(shipKey);
-      }
-    }
+    return runSerializedMutation(
+      this._powerCoreQueues,
+      mutationQueueKey(ship, "active-ship"),
+      operation,
+    );
   }
 
   /** Prevent simultaneous allocation changes from validating against the same stale pool. */
   static async withAllocationTransaction(operation, shipActor = null) {
     if (typeof operation !== "function") throw new TypeError("Allocation transaction requires a function.");
     const ship = shipActor ?? this.ship;
-    const shipKey = ship?.uuid ?? ship?.id ?? "active-ship";
-    const previous = this._allocationQueues.get(shipKey) ?? Promise.resolve();
-    const transaction = previous.catch(() => {}).then(operation);
-
-    this._allocationQueues.set(shipKey, transaction);
-    try {
-      return await transaction;
-    } finally {
-      if (this._allocationQueues.get(shipKey) === transaction) {
-        this._allocationQueues.delete(shipKey);
-      }
-    }
+    return runSerializedMutation(
+      this._allocationQueues,
+      mutationQueueKey(ship, "active-ship"),
+      operation,
+    );
   }
 
   /** Prevent concurrent requests from validating against the same stale actor state. */
   static async withActorActionTransaction(actor, operation) {
     if (!actor) throw new TypeError("Actor action transaction requires an actor.");
     if (typeof operation !== "function") throw new TypeError("Actor action transaction requires a function.");
-    const actorKey = actor.uuid ?? actor.id;
-    const previous = this._actorActionQueues.get(actorKey) ?? Promise.resolve();
-    const transaction = previous.catch(() => {}).then(operation);
-
-    this._actorActionQueues.set(actorKey, transaction);
-    try {
-      return await transaction;
-    } finally {
-      if (this._actorActionQueues.get(actorKey) === transaction) {
-        this._actorActionQueues.delete(actorKey);
-      }
-    }
+    return runSerializedMutation(
+      this._actorActionQueues,
+      mutationQueueKey(actor),
+      operation,
+    );
   }
 
   /**
@@ -956,13 +937,12 @@ export class ShipCombatState {
       if (!isOrdnance(td.actor)) continue;
       if (parentTokenIds && !parentTokenIds.has(SystemAdapter.current.getShipData(td.actor)?.parentShipTokenId)) continue;
 
-      // Capture turnComplete before resetting (needed for launch-turn detection)
-      const wasTurnComplete = SystemAdapter.current.getShipData(td.actor)?.turnComplete ?? false;
-
-      // Reset turn-complete flag for next round
-      if (wasTurnComplete) {
-        await td.actor.update({ [SystemAdapter.current.systemPath("turnComplete")]: false });
-      }
+      const initialOrdnanceData = SystemAdapter.current.getShipData(td.actor) ?? {};
+      const turnTransition = getOrdnanceLifecycleTransition({
+        ...initialOrdnanceData,
+        subtype: isTorpedo(td.actor) ? "torpedo" : "strikeCraft",
+      });
+      const { wasTurnComplete, isLaunchTurn } = turnTransition;
 
       // ── Torpedo fuel & movement lifecycle ──
       if (isTorpedo(td.actor)) {
@@ -975,12 +955,9 @@ export class ShipCombatState {
         const minMovePct = Math.round(minMove / (minMove + speed) * torpedoPowerMax);
         const thrustPct  = tSys.helm?.thrustPct ?? 0;
 
-        // Detect launch turn: torpedo was force-completed on spawn and hasn't moved
-        const isLaunchTurn = wasTurnComplete
-                           && thrustPct === 0
-                           && (tSys.helm?.prevTurnMove ?? 0) === 0;
-
         const tUpdates = {
+          [SystemAdapter.current.systemPath("turnComplete")]:       turnTransition.nextTurnComplete,
+          [SystemAdapter.current.systemPath("launchDriftPending")]: turnTransition.nextLaunchDriftPending,
           [SystemAdapter.current.systemPath("helm.bearing")]:       0,
           [SystemAdapter.current.systemPath("helm.thrustPct")]:     0,
           [SystemAdapter.current.systemPath("helm.prevTurnMove")]:  0,
@@ -1094,6 +1071,8 @@ export class ShipCombatState {
         const storedBearing = cSys.helm?.bearing ?? 0;
 
         const cUpdates = {
+          [SystemAdapter.current.systemPath("turnComplete")]:      turnTransition.nextTurnComplete,
+          [SystemAdapter.current.systemPath("launchDriftPending")]: turnTransition.nextLaunchDriftPending,
           [SystemAdapter.current.systemPath("helm.bearing")]:      0,
           [SystemAdapter.current.systemPath("helm.thrustPct")]:    0,
           [SystemAdapter.current.systemPath("helm.prevTurnMove")]: 0,

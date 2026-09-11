@@ -270,7 +270,7 @@ export const ShipComponentSheetMixin = (BaseClass) => {
           updates[`${traitPath}.${def.key}`] = result[def.key] === true || result[def.key] === "on";
         }
       }
-      this.item.update(updates);
+      await this.item.update(updates);
     }
 
     _processFormData(event, form, formData) {

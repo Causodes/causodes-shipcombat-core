@@ -702,7 +702,6 @@ export async function applyBdaCorrection({ attackId, correctionId, messageId, me
     const attack = data.resources?.sensors?.bdaAttacks?.[attackId];
     if (!attack || attack.status !== "correction") return { ok: false, reason: "notFound" };
 
-    await _updateBDAChatMessage(attack, messageId ?? attack.messageId ?? null, messageContent);
     const updates = { [`resources.sensors.bdaAttacks.-=${attackId}`]: null };
     if (correctionId === "ceaseFireSwitch") {
       const maxAP = this.getReactorStats(ship).auxPowerCapacity ?? 0;
@@ -719,6 +718,12 @@ export async function applyBdaCorrection({ attackId, correctionId, messageId, me
       };
     }
     await this.update(updates, ship);
+    try {
+      await _updateBDAChatMessage(attack, messageId ?? attack.messageId ?? null, messageContent);
+    } catch (error) {
+      console.error(`${MODULE_ID} | BDA chat refresh failed after correction committed`, error);
+      return { ok: true, warning: "chatUpdateFailed" };
+    }
     return { ok: true };
   }, ship);
 }

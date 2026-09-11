@@ -27,6 +27,7 @@ import { getDisabledWeaponSectionId } from "../../state/weapon-section.js";
 import { SystemAdapter } from "../../systems/SystemAdapter.js";
 import { SHARED_ACTIONS } from "../../roles/shared.js";
 import { buildNpcOrdnanceTemplateContext, selectNpcOrdnanceTemplate } from "./npc-ordnance-selection.js";
+import { getOrdnanceLaunchTurnState } from "../../state/ordnance-turn-state.js";
 
 async function _animateTokenPath(token, waypoints, projected) {
   const canvasToken = token.object ?? token;
@@ -259,20 +260,20 @@ export const NpcShipSheetMixin = (BaseClass) => {
       _wireNpcLaunchSizeInputs(this, this.element);
 
       this.element.querySelectorAll(".shipcombat-arc-val[data-sector]").forEach(el => {
-        el.addEventListener("click", ev => {
+        el.addEventListener("click", async ev => {
           ev.preventDefault();
           ev.stopPropagation();
-          _adjustShieldSector(this, el.dataset.sector, 1);
+          await _adjustShieldSector(this, el.dataset.sector, 1);
         });
-        el.addEventListener("contextmenu", ev => {
+        el.addEventListener("contextmenu", async ev => {
           ev.preventDefault();
           ev.stopPropagation();
-          _adjustShieldSector(this, el.dataset.sector, -1);
+          await _adjustShieldSector(this, el.dataset.sector, -1);
         });
-        el.addEventListener("wheel", ev => {
+        el.addEventListener("wheel", async ev => {
           ev.preventDefault();
           ev.stopPropagation();
-          _adjustShieldSector(this, el.dataset.sector, ev.deltaY < 0 ? 1 : -1);
+          await _adjustShieldSector(this, el.dataset.sector, ev.deltaY < 0 ? 1 : -1);
         }, { passive: false });
       });
 
@@ -683,7 +684,9 @@ function _npcHelmOnRender(sheet) {
       sheet._updateHelmPreview();
       clearTimeout(sheet._bearingDebounce);
       sheet._bearingDebounce = setTimeout(() => {
-        sheet.actor.update({ [SystemAdapter.current.systemPath("resources.pilot.bearing")]: val });
+        void sheet.actor.update({ [SystemAdapter.current.systemPath("resources.pilot.bearing")]: val }).catch(error => {
+          console.error(`${MODULE_ID} | Failed to persist NPC bearing`, error);
+        });
       }, 300);
     });
   }
@@ -989,7 +992,7 @@ async function _onNpcFireWeapon(event, target) {
   popup.render(true);
 }
 
-function _adjustShieldSector(sheet, sector, delta) {
+async function _adjustShieldSector(sheet, sector, delta) {
   const sys = SystemAdapter.current.getShipData(sheet.actor);
   const cur = sys.shields?.[sector] ?? 0;
   const newVal = Math.max(0, cur + delta);
@@ -999,7 +1002,7 @@ function _adjustShieldSector(sheet, sector, delta) {
     [SystemAdapter.current.systemPath(`shields.${sector}`)]: newVal,
     [SystemAdapter.current.systemPath("voidshieldFluxRemaining")]: (sys.voidshieldFluxRemaining ?? 0) - actualDelta,
   };
-  sheet.actor.update(updates);
+  await sheet.actor.update(updates);
 }
 
 async function _onNpcStepCondition(event, target) {
@@ -1014,7 +1017,7 @@ async function _onNpcStepCondition(event, target) {
   });
 }
 
-function _onAdjustShield(event, target) {
+async function _onAdjustShield(event, target) {
   const sector = target.dataset.sector;
   const delta  = parseInt(target.dataset.delta) || 0;
   if (!sector || !delta) return;
@@ -1026,7 +1029,7 @@ function _onAdjustShield(event, target) {
   if (actualDelta !== 0) {
     updates[SystemAdapter.current.systemPath("voidshieldFluxRemaining")]   = (sys.voidshieldFluxRemaining ?? 0) - actualDelta;
   }
-  this.actor.update(updates);
+  await this.actor.update(updates);
 }
 
 async function _onSuppressFire() {
@@ -1126,7 +1129,7 @@ async function _onFullReset() {
   }
 }
 
-function _onRefillShields() {
+async function _onRefillShields() {
   const sys = SystemAdapter.current.getShipData(this.actor);
   const updates = {};
   let totalAdded = 0;
@@ -1139,10 +1142,10 @@ function _onRefillShields() {
   if (totalAdded > 0) {
     updates[SystemAdapter.current.systemPath("voidshieldFluxRemaining")]   = (sys.voidshieldFluxRemaining ?? 0) - totalAdded;
   }
-  this.actor.update(updates);
+  await this.actor.update(updates);
 }
 
-function _onFluxToCharge() {
+async function _onFluxToCharge() {
   const sys = SystemAdapter.current.getShipData(this.actor);
   if (npcCoreBlocksPowerGeneration(sys)) {
     return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NpcPowerShutdown"));
@@ -1150,7 +1153,7 @@ function _onFluxToCharge() {
   const flux = sys.voidshieldFluxRemaining ?? 0;
   if (flux <= 0) return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.NpcShip.NoFluxRemaining"));
   const power = sys.resources?.gunner?.power ?? 0;
-  this.actor.update({
+  await this.actor.update({
     [SystemAdapter.current.systemPath("voidshieldFluxRemaining")]:   flux - 1,
     [SystemAdapter.current.systemPath("resources.gunner.power")]:  power + 1,
   });
@@ -1370,7 +1373,8 @@ async function _npcLaunchOrdnance(type, target) {
   delete actorData._id;
   foundry.utils.setProperty(actorData, `flags.${MODULE_ID}.fromOrdnanceMaster`, true);
   foundry.utils.setProperty(actorData, SystemAdapter.current.systemPath("parentShipTokenId"), parentShipTokenId);
-  if (actorData.system) actorData.system.turnComplete = (type === "torpedo");
+  actorData.system ??= {};
+  Object.assign(actorData.system, getOrdnanceLaunchTurnState(slotKey));
   if (actorData.system?.hull) {
     if (launchSize !== null) actorData.system.hull.max = launchSize;
     const _isHP = SystemAdapter.current.hullDisplayMode === "hpRemaining";
@@ -1646,17 +1650,17 @@ export const NpcShipSheetV1Mixin = (BaseClass) => {
 
       // Shield sector click / contextmenu / wheel
       el.querySelectorAll(".shipcombat-arc-val[data-sector]").forEach(arcEl => {
-        arcEl.addEventListener("click", ev => {
+        arcEl.addEventListener("click", async ev => {
           ev.preventDefault(); ev.stopPropagation();
-          _adjustShieldSector(sheet, arcEl.dataset.sector, 1);
+          await _adjustShieldSector(sheet, arcEl.dataset.sector, 1);
         });
-        arcEl.addEventListener("contextmenu", ev => {
+        arcEl.addEventListener("contextmenu", async ev => {
           ev.preventDefault(); ev.stopPropagation();
-          _adjustShieldSector(sheet, arcEl.dataset.sector, -1);
+          await _adjustShieldSector(sheet, arcEl.dataset.sector, -1);
         });
-        arcEl.addEventListener("wheel", ev => {
+        arcEl.addEventListener("wheel", async ev => {
           ev.preventDefault(); ev.stopPropagation();
-          _adjustShieldSector(sheet, arcEl.dataset.sector, ev.deltaY < 0 ? 1 : -1);
+          await _adjustShieldSector(sheet, arcEl.dataset.sector, ev.deltaY < 0 ? 1 : -1);
         }, { passive: false });
       });
 

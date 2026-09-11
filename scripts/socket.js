@@ -3,8 +3,10 @@ import { confirmAllocationCommit } from "./apps/allocation-warning.js";
 import { SystemAdapter } from "./systems/SystemAdapter.js";
 import { ShipCombatState } from "./state/ShipCombatState.js";
 import { isOrdnance } from "./actors/ordnance/ordnance-types.js";
+import { IdempotencyGate } from "./state/idempotency.js";
 
 let _socket;
+const _requestGate = new IdempotencyGate();
 
 const _shipAction = Object.freeze({ scope: "ship" });
 const _parentShipAction = Object.freeze({ scope: "parentShip" });
@@ -172,13 +174,19 @@ function _confirmAllocationAction(action, payload) {
 export function setupSocket() {
   _socket = socketlib.registerModule(CORE_MODULE_ID);
   for (const action of REQUEST_ACTIONS) {
-    _socket.register(action, (payload) => _handleAction(action, payload));
+    _socket.register(action, (payload = {}) => _handleActionOnce(action, payload));
   }
 
   // Broadcast handlers run on ALL connected clients simultaneously.
   for (const [action, handler] of Object.entries(BROADCAST_HANDLERS)) {
     _socket.register(action, handler);
   }
+}
+
+export function _handleActionOnce(action, payload = {}) {
+  const requestId = payload.requestId;
+  const key = requestId ? `${action}:${payload.shipActorId ?? ""}:${requestId}` : null;
+  return _requestGate.run(key, () => _handleAction(action, payload));
 }
 
 async function _handleAction(action, payload = {}) {
@@ -686,6 +694,7 @@ function requestGMAction(action, actor, payload = {}) {
     : _resolveRequestShipActor(sourceActor, contract);
   const scopedPayload = {
     ...payload,
+    requestId: payload.requestId ?? foundry.utils.randomID(),
     shipActorId: typeof sourceActor === "string" ? sourceActor : shipActor?.id ?? null,
   };
   if (contract.sourceKey) scopedPayload[contract.sourceKey] = actorId;
@@ -714,6 +723,7 @@ export function emitToGM(action, payload = {}) {
     ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoShip"));
     return false;
   }
+  payload = { ...payload, requestId: payload.requestId ?? foundry.utils.randomID() };
   const confirmation = _confirmAllocationAction(action, payload);
   if (confirmation) {
     return confirmation.then(proceed => proceed ? _emitToGM(action, payload) : false);
@@ -723,7 +733,7 @@ export function emitToGM(action, payload = {}) {
 
 function _emitToGM(action, payload) {
   if (game.user.isGM) {
-    return _handleAction(action, payload);
+    return _handleActionOnce(action, payload);
   }
   if (!_socket) {
     console.error(`${CORE_MODULE_ID} | Cannot dispatch ${action}: socket is not ready.`);
