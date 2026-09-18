@@ -310,7 +310,6 @@ Hooks.on("preCreateActor", (actor, data) => {
       "prototypeToken.disposition": CONST.TOKEN_DISPOSITIONS.HOSTILE,
       "prototypeToken.lockRotation": false,
       "prototypeToken.actorLink": false,
-      "prototypeToken.hidden": true,
     });
   } else if (isOrdnance(actor)) {
     // Torpedoes and strike craft (legacy types or unified shipOrdnance).
@@ -331,6 +330,14 @@ Hooks.on("preCreateActor", (actor, data) => {
       actor.updateSource({ "system.hull": { value: isHP ? 1 : 0, max: 1 } });
     }
   }
+});
+
+// PrototypeToken does not persist the Scene Token `hidden` field in Foundry 14.
+// Enforce the intended NPC default at the document boundary where that field
+// actually exists.
+Hooks.on("preCreateToken", (token, data) => {
+  const actor = token.actor ?? (data.actorId ? game.actors.get(data.actorId) : null);
+  if (actor?.type === `${MODULE_ID}.npcShip`) token.updateSource({ hidden: true });
 });
 
 // ── Ordnance hull auto-sync: keep hull.max = payloadCount and initialise hull.value ──

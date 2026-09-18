@@ -20,7 +20,7 @@ globalThis.Hooks = {
   },
 };
 
-const { RenderLifecycle } = await import("../scripts/apps/render-lifecycle.js");
+const { RenderLifecycle } = await import("../../scripts/apps/render-lifecycle.js");
 
 class FakeElement {
   handlers = new Map();
@@ -68,7 +68,7 @@ test("rerender detaches stale DOM listeners before attaching the replacement", (
 });
 
 test("representative AppV1 and AppV2 popups share the lifecycle implementation", () => {
-  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
   for (const filename of ["BattleClarityPopup.js", "BattleClarityPopupV1.js"]) {
     const source = fs.readFileSync(path.join(root, "scripts/apps", filename), "utf8");
     assert.match(source, /new RenderLifecycle\(this\)/);
@@ -77,7 +77,7 @@ test("representative AppV1 and AppV2 popups share the lifecycle implementation",
 });
 
 test("every popup live-hook registration has a matching close-time removal", () => {
-  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
   const appRoot = path.join(root, "scripts/apps");
   for (const filename of fs.readdirSync(appRoot).filter(name => name.endsWith(".js"))) {
     const source = fs.readFileSync(path.join(appRoot, filename), "utf8");

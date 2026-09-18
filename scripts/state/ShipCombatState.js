@@ -35,6 +35,7 @@ import { buildDefenseUpdates, resolveHitsAgainstDefenses } from "./hit-damage-re
 import { getNpcRoundConditionEffects } from "./npc-condition-effects.js";
 import { getOrdnanceLifecycleTransition } from "./ordnance-turn-state.js";
 import { mutationQueueKey, runSerializedMutation } from "./mutation-queue.js";
+import { buildRecordDeletionUpdates } from "./target-references.js";
 
 export class ShipCombatState {
 
@@ -1246,7 +1247,6 @@ export class ShipCombatState {
       "resources.ordnance.craftPartialRecovery": 0,
 
       "resources.ordnance.availablePayloads": 0,
-      "resources.ordnance.stagedPayloads": {},
       "resources.ordnance.commitments": [],
       "resources.ordnance.coreActionUsed": false,
       "resources.ordnance.bosunSL": 0,
@@ -1256,12 +1256,10 @@ export class ShipCombatState {
       "resources.sensors.payload": "",
       "resources.sensors.locks": [],
       "resources.sensors.effects": [],
-      "resources.sensors.contacts": {},
       "resources.sensors.nextContactOrdinal": 1,
       "resources.sensors.recommendedTargetId": null,
       "resources.sensors.actionUsed": false,
       "resources.sensors.coreActionUsed": false,
-      "resources.sensors.bdaAttacks": {},
       "resources.sensors.fireCorrection": null,
       "resources.engineer.payload": "",
       internalFire: 0,
@@ -1276,6 +1274,11 @@ export class ShipCombatState {
     for (const sector of ["bow", "stern", "port", "starboard"]) {
       updates[`armourRend.${sector}`] = 0;
     }
+    Object.assign(updates,
+      buildRecordDeletionUpdates("resources.ordnance.stagedPayloads", data.resources?.ordnance?.stagedPayloads),
+      buildRecordDeletionUpdates("resources.sensors.contacts", data.resources?.sensors?.contacts),
+      buildRecordDeletionUpdates("resources.sensors.bdaAttacks", data.resources?.sensors?.bdaAttacks),
+    );
     for (const uid of Object.keys(data.resources?.engineer?.stagedCores ?? {})) {
       updates[`resources.engineer.stagedCores.${uid}`] = false;
     }
@@ -1551,7 +1554,9 @@ export class ShipCombatState {
       "resources.captain.playedCards":           [],
       "resources.captain.priorityTargetId":      null,
     };
-    updates["resources.sensors.contacts"] = {};
+    Object.assign(updates,
+      buildRecordDeletionUpdates("resources.sensors.contacts", data.resources?.sensors?.contacts),
+    );
     updates["resources.sensors.nextContactOrdinal"] = 1;
     updates["resources.sensors.recommendedTargetId"] = null;
     for (const roleId of Object.keys(data.turnDone ?? {})) updates[`turnDone.${roleId}`] = false;

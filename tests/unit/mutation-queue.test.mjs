@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { mutationQueueKey, runSerializedMutation } from "../scripts/state/mutation-queue.js";
+import { mutationQueueKey, runSerializedMutation } from "../../scripts/state/mutation-queue.js";
 
 const deferred = () => {
   let resolve;

@@ -1391,15 +1391,21 @@ async function _npcLaunchOrdnance(type, target) {
   }
   const actor = await Actor.create(actorData);
   if (!actor) return;
+  const disposition = shipToken.document?.disposition
+    ?? shipToken.disposition
+    ?? CONST.TOKEN_DISPOSITIONS.HOSTILE;
   const tokenDoc = await actor.getTokenDocument({
     x:           spawn.x,
     y:           spawn.y,
     rotation:    spawn.rotation,
     hidden:      false,
-    disposition: CONST.TOKEN_DISPOSITIONS.HOSTILE,
+    disposition,
     width:       0.5,
     height:      0.5,
   });
+  // Some systems normalize getTokenDocument overrides from the prototype.
+  // Reassert parent allegiance at the final scene-document boundary.
+  tokenDoc.updateSource({ disposition });
   await canvas.scene.createEmbeddedDocuments("Token", [tokenDoc.toObject()]);
   this.render();
 }

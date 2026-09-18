@@ -1,15 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { setModuleId } from "../scripts/constants.js";
-import { SystemAdapter } from "../scripts/systems/SystemAdapter.js";
+import { setModuleId } from "../../scripts/constants.js";
+import { SystemAdapter } from "../../scripts/systems/SystemAdapter.js";
 import {
   blastOrdnance,
   deleteOrdnanceTokens,
   executeCraftRecovery,
   executeOrdnanceLaunch,
-} from "../scripts/state/ordnance-state.js";
-import { applyBdaCorrection } from "../scripts/state/sensors-state.js";
+} from "../../scripts/state/ordnance-state.js";
+import { applyBdaCorrection } from "../../scripts/state/sensors-state.js";
 import { RecordingDocument } from "./helpers/foundry-state-harness.mjs";
 
 class FoundryCollection extends Map {

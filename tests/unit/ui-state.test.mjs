@@ -4,19 +4,31 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { buildPowerCorePips } from "../scripts/actors/ship/power-core-pips.js";
+import { buildPowerCorePips } from "../../scripts/actors/ship/power-core-pips.js";
 import {
   buildNpcOrdnanceTemplateContext,
   selectNpcOrdnanceTemplate,
-} from "../scripts/actors/npc/npc-ordnance-selection.js";
+} from "../../scripts/actors/npc/npc-ordnance-selection.js";
 import {
+  buildRecordDeletionUpdates,
   buildTargetReferenceCleanup,
   collectExistingTargetTokenIds,
   collectTargetReferenceIds,
-} from "../scripts/state/target-references.js";
+} from "../../scripts/state/target-references.js";
 
 const states = pips => pips.map(pip => pip.state);
-const coreRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const coreRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+
+test("object-valued state is cleared with Foundry deletion operators", () => {
+  assert.deepEqual(buildRecordDeletionUpdates("resources.state", { first: 1, last: 2 }), {
+    "resources.state.-=first": null,
+    "resources.state.-=last": null,
+  });
+  assert.deepEqual(
+    buildRecordDeletionUpdates("resources.state", { keep: 1, remove: 2 }, (_key, value) => value === 2),
+    { "resources.state.-=remove": null },
+  );
+});
 
 test("a newly overclocked core remains the rightmost pip when staged", () => {
   const committed = {
@@ -86,8 +98,8 @@ test("target cleanup removes every persisted reference to a deleted token", () =
     "resources.sensors.fireCorrection": null,
     "resources.sensors.locks": [{ targetTokenId: "kept", tier: 1 }],
     "resources.sensors.effects": [{ targetTokenId: "__self__" }],
-    "resources.sensors.contacts": { kept: { ordinal: 2 } },
-    "resources.sensors.bdaAttacks": { active: { targetTokenId: "kept" } },
+    "resources.sensors.contacts.-=deleted": null,
+    "resources.sensors.bdaAttacks.-=old": null,
   });
 });
 
@@ -113,6 +125,8 @@ test("UI helpers remain wired into both sheet generations and deletion lifecycle
 
   assert.match(controller, /powerCorePips:\s*buildPowerCorePips\(/);
   assert.equal((npcMixin.match(/buildNpcOrdnanceTemplateContext\(/g) ?? []).length, 2);
+  assert.match(npcMixin, /const disposition = shipToken\.document\?\.disposition/);
+  assert.match(npcMixin, /tokenDoc\.updateSource\(\{ disposition \}\)/);
   assert.equal((npcTemplate.match(/class="shipcombat-npc-launch-template"/g) ?? []).length, 2);
   assert.equal((npcTemplate.match(/class="shipcombat-npc-launch-controls"/g) ?? []).length, 2);
   assert.doesNotMatch(npcTemplate, /data-template-id="\{\{(?:torpedo|craft)Templates\.\[0\]/);

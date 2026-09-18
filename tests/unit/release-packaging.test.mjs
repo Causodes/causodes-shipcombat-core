@@ -6,7 +6,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-const coreRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const coreRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const modulesRoot = path.dirname(coreRoot);
 const moduleRoots = fs.readdirSync(modulesRoot, { withFileTypes: true })
   .filter(entry => entry.isDirectory() && entry.name.startsWith("causodes-shipcombat-"))

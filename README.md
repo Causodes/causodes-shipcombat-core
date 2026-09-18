@@ -428,6 +428,27 @@ mocked document tests should verify emitted update payloads, and smoke tests in 
 Foundry world should cover hooks, permissions, linked/unlinked tokens, and scene
 lifecycle behavior.
 
+### Foundry integration CI
+
+Trusted pushes to `main` and manual runs also exercise each companion inside a
+real Foundry 14.367 process with Chromium. The disposable test world verifies
+module and adapter startup, AppV1/AppV2 sheet close-and-rerender behavior, a
+player-to-GM socket request, and duplicate-request idempotency. Companion-only
+pushes call the same reusable workflow for their own adapter.
+
+Configure `FOUNDRY_USERNAME`, `FOUNDRY_PASSWORD`, and `FOUNDRY_LICENSE_KEY` as
+Actions secrets in all four repositories. `FOUNDRY_ADMIN_KEY` is optional. For
+repositories owned by a personal account, run
+`zsh .github/scripts/set-foundry-integration-secrets.zsh`: it prompts once for each
+value and securely copies it to every repository without placing values in
+command arguments or files. Organization-owned repositories may instead use
+organization Actions secrets shared with the four repositories. Until the
+required secrets exist, ordinary integration runs report a clean skip; release
+packaging invokes the harness with credentials required. The runner downloads
+Foundry into an ephemeral container and neither caches nor uploads the
+proprietary application. Only Playwright traces, screenshots, and Foundry logs
+are retained on failure.
+
 ### Release packaging
 
 Foundry installs the ZIP named by `module.json.download`, not the repository
@@ -476,7 +497,9 @@ causodes-shipcombat-core/
 │   ├── appv1-compact.css         # Tab show/hide rules for AppV1 sheets
 │   └── custom-class-compat.css   # Compat shims for systems that inject CSS classes
 ├── templates/                    # Sheets, partials, chat cards
-├── tests/                        # Contract, pure transition, and wiring tests
+├── tests/
+│   ├── unit/                     # Contract, pure transition, and wiring tests
+│   └── integration/              # Foundry fixture builder and Playwright tests
 └── lang/en.json                  # Neutral default strings
 ```
 

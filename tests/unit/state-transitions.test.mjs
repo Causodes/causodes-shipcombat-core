@@ -10,13 +10,13 @@ import {
   getOrdnanceLaunchTurnState,
   getOrdnanceLifecycleTransition,
   processParentOrdnanceLifecycle,
-} from "../scripts/state/ordnance-turn-state.js";
-import { setModuleId } from "../scripts/constants.js";
-import { setOrdnanceTurnDone } from "../scripts/state/ordnance-state.js";
-import { SystemAdapter } from "../scripts/systems/SystemAdapter.js";
+} from "../../scripts/state/ordnance-turn-state.js";
+import { setModuleId } from "../../scripts/constants.js";
+import { setOrdnanceTurnDone } from "../../scripts/state/ordnance-state.js";
+import { SystemAdapter } from "../../scripts/systems/SystemAdapter.js";
 import { installFoundryStateHarness, RecordingDocument } from "./helpers/foundry-state-harness.mjs";
 
-const coreRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const coreRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 class TestAdapter extends SystemAdapter {}
 

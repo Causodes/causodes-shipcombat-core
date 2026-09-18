@@ -27,6 +27,19 @@ export function collectExistingTargetTokenIds(scenes = []) {
   ))];
 }
 
+/**
+ * Build Foundry deletion-operator updates for selected keys in an object field.
+ * Assigning an empty object is not a clear operation because Document updates
+ * recursively merge object values, including when the final key is removed.
+ */
+export function buildRecordDeletionUpdates(path, record = {}, shouldDelete = () => true) {
+  return Object.fromEntries(
+    Object.entries(record)
+      .filter(([key, value]) => shouldDelete(key, value))
+      .map(([key]) => [`${path}.-=${key}`, null]),
+  );
+}
+
 /** Build one atomic update that removes all references to the supplied Token IDs. */
 export function buildTargetReferenceCleanup(data = {}, targetTokenIds = []) {
   const removed = new Set(targetTokenIds);
@@ -55,20 +68,18 @@ export function buildTargetReferenceCleanup(data = {}, targetTokenIds = []) {
   if (nextEffects.length !== effects.length) updates["resources.sensors.effects"] = nextEffects;
 
   const contacts = sensors.contacts ?? {};
-  const nextContacts = Object.fromEntries(
-    Object.entries(contacts).filter(([targetTokenId]) => !removed.has(targetTokenId)),
-  );
-  if (Object.keys(nextContacts).length !== Object.keys(contacts).length) {
-    updates["resources.sensors.contacts"] = nextContacts;
-  }
+  Object.assign(updates, buildRecordDeletionUpdates(
+    "resources.sensors.contacts",
+    contacts,
+    targetTokenId => removed.has(targetTokenId),
+  ));
 
   const bdaAttacks = sensors.bdaAttacks ?? {};
-  const nextBdaAttacks = Object.fromEntries(
-    Object.entries(bdaAttacks).filter(([, attack]) => !removed.has(attack?.targetTokenId)),
-  );
-  if (Object.keys(nextBdaAttacks).length !== Object.keys(bdaAttacks).length) {
-    updates["resources.sensors.bdaAttacks"] = nextBdaAttacks;
-  }
+  Object.assign(updates, buildRecordDeletionUpdates(
+    "resources.sensors.bdaAttacks",
+    bdaAttacks,
+    (_attackId, attack) => removed.has(attack?.targetTokenId),
+  ));
 
   return updates;
 }

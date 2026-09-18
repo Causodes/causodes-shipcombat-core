@@ -1,0 +1,238 @@
+name: Foundry integration
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      adapter:
+        description: Adapter to exercise
+        required: true
+        default: all
+        type: choice
+        options: [all, dnd5e, sf2e, impmal]
+  workflow_call:
+    inputs:
+      adapter:
+        description: Adapter to exercise, or all
+        required: false
+        default: all
+        type: string
+      changed_repository:
+        description: Repository whose triggering revision must be checked out
+        required: false
+        default: ""
+        type: string
+      changed_ref:
+        description: Commit or tag from changed_repository
+        required: false
+        default: ""
+        type: string
+      require_credentials:
+        description: Fail instead of skip when Foundry secrets are unavailable
+        required: false
+        default: false
+        type: boolean
+    secrets:
+      FOUNDRY_USERNAME:
+        required: false
+      FOUNDRY_PASSWORD:
+        required: false
+      FOUNDRY_LICENSE_KEY:
+        required: false
+      FOUNDRY_ADMIN_KEY:
+        required: false
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: foundry-integration-${{ github.repository }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  credentials:
+    runs-on: ubuntu-latest
+    outputs:
+      available: ${{ steps.check.outputs.available }}
+    steps:
+      - id: check
+        name: Check integration credentials
+        env:
+          USERNAME_SET: ${{ secrets.FOUNDRY_USERNAME != '' }}
+          PASSWORD_SET: ${{ secrets.FOUNDRY_PASSWORD != '' }}
+          LICENSE_SET: ${{ secrets.FOUNDRY_LICENSE_KEY != '' }}
+          CREDENTIALS_REQUIRED: ${{ inputs.require_credentials || false }}
+        shell: bash
+        run: |
+          if [[ "$USERNAME_SET" == "true" && "$PASSWORD_SET" == "true" && "$LICENSE_SET" == "true" ]]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          elif [[ "$CREDENTIALS_REQUIRED" == "true" ]]; then
+            echo "Foundry integration secrets are required but not configured." >&2
+            exit 1
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "Foundry integration skipped until repository or organization secrets are configured."
+          fi
+
+  integration:
+    needs: credentials
+    if: needs.credentials.outputs.available == 'true'
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        adapter: ${{ fromJSON((inputs.adapter == 'dnd5e' && '["dnd5e"]') || (inputs.adapter == 'sf2e' && '["sf2e"]') || (inputs.adapter == 'impmal' && '["impmal"]') || '["dnd5e","sf2e","impmal"]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      FOUNDRY_DATA_PATH: ${{ github.workspace }}/foundry-${{ matrix.adapter }}
+      FOUNDRY_DISTRIBUTION_CACHE: ${{ github.workspace }}/foundry-distribution-cache
+      FOUNDRY_BASE_URL: http://127.0.0.1:30000
+      FOUNDRY_VERSION: "14.367"
+      SHIPCOMBAT_ADAPTER: ${{ matrix.adapter }}
+      FOUNDRY_USERNAME: ${{ secrets.FOUNDRY_USERNAME }}
+      FOUNDRY_PASSWORD: ${{ secrets.FOUNDRY_PASSWORD }}
+      FOUNDRY_LICENSE_KEY: ${{ secrets.FOUNDRY_LICENSE_KEY }}
+      FOUNDRY_ADMIN_KEY: ${{ secrets.FOUNDRY_ADMIN_KEY || 'ship-combat-ci-admin' }}
+    steps:
+      - name: Check out Core
+        uses: actions/checkout@v4
+        with:
+          repository: Causodes/causodes-shipcombat-core
+          ref: ${{ (inputs.changed_repository == 'Causodes/causodes-shipcombat-core' && inputs.changed_ref) || (inputs.changed_repository == '' && github.sha) || 'main' }}
+          path: checkouts/causodes-shipcombat-core
+
+      - name: Check out D&D 5e companion
+        if: matrix.adapter == 'dnd5e'
+        uses: actions/checkout@v4
+        with:
+          repository: Causodes/causodes-shipcombat-dnd5e
+          ref: ${{ (inputs.changed_repository == 'Causodes/causodes-shipcombat-dnd5e' && inputs.changed_ref) || 'main' }}
+          path: checkouts/causodes-shipcombat-dnd5e
+
+      - name: Check out Starfinder 2e companion
+        if: matrix.adapter == 'sf2e'
+        uses: actions/checkout@v4
+        with:
+          repository: Causodes/causodes-shipcombat-sf2e
+          ref: ${{ (inputs.changed_repository == 'Causodes/causodes-shipcombat-sf2e' && inputs.changed_ref) || 'main' }}
+          path: checkouts/causodes-shipcombat-sf2e
+
+      - name: Check out Imperium Maledictum companion
+        if: matrix.adapter == 'impmal'
+        uses: actions/checkout@v4
+        with:
+          repository: Causodes/causodes-shipcombat-impmal
+          ref: ${{ (inputs.changed_repository == 'Causodes/causodes-shipcombat-impmal' && inputs.changed_ref) || 'main' }}
+          path: checkouts/causodes-shipcombat-impmal
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - id: foundry-cache
+        name: Restore encrypted Foundry distribution
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.FOUNDRY_DISTRIBUTION_CACHE }}
+          key: foundry-distribution-${{ runner.os }}-${{ env.FOUNDRY_VERSION }}-v1
+
+      - name: Decrypt cached Foundry distribution
+        if: steps.foundry-cache.outputs.cache-hit == 'true'
+        shell: bash
+        run: |
+          mkdir -p "$FOUNDRY_DATA_PATH/container_cache"
+          gpg --batch --yes --pinentry-mode loopback \
+            --passphrase "$FOUNDRY_LICENSE_KEY" \
+            --output "$FOUNDRY_DATA_PATH/container_cache/foundryvtt-${FOUNDRY_VERSION}.zip" \
+            --decrypt "$FOUNDRY_DISTRIBUTION_CACHE/foundryvtt-${FOUNDRY_VERSION}.zip.gpg"
+
+      - name: Install browser test runner
+        working-directory: checkouts/causodes-shipcombat-core
+        run: |
+          npm install --no-package-lock --ignore-scripts
+          npx playwright install --with-deps chromium
+
+      - name: Build disposable Foundry data directory
+        run: |
+          node checkouts/causodes-shipcombat-core/tests/integration/prepare-foundry-data.mjs \
+          "${{ matrix.adapter }}" "$GITHUB_WORKSPACE/checkouts" "$FOUNDRY_DATA_PATH"
+          chmod -R a+rwX "$FOUNDRY_DATA_PATH"
+
+      - name: Start Foundry VTT 14.367
+        shell: bash
+        run: |
+          distribution_args=(--env CONTAINER_CACHE=/data/container_cache)
+          if [[ "${{ steps.foundry-cache.outputs.cache-hit }}" != "true" ]]; then
+            distribution_args+=(--env FOUNDRY_USERNAME --env FOUNDRY_PASSWORD)
+          fi
+
+          for startup_attempt in 1 2 3 4; do
+            docker run --detach --name foundry --hostname shipcombat-ci \
+              --publish 127.0.0.1:30000:30000 \
+              --volume "$FOUNDRY_DATA_PATH:/data" \
+              --env FOUNDRY_LICENSE_KEY \
+              --env FOUNDRY_ADMIN_KEY \
+              --env FOUNDRY_WORLD="shipcombat-integration-${{ matrix.adapter }}" \
+              --env FOUNDRY_TELEMETRY=false \
+              "${distribution_args[@]}" \
+              "ghcr.io/felddy/foundryvtt:${FOUNDRY_VERSION}.0"
+
+            for readiness_attempt in {1..90}; do
+              if curl --fail --silent --show-error "$FOUNDRY_BASE_URL/join" >/dev/null; then
+                exit 0
+              fi
+              if ! docker inspect --format '{{.State.Running}}' foundry | grep -qx true; then
+                break
+              fi
+              sleep 2
+            done
+
+            echo "Foundry startup attempt $startup_attempt failed." >&2
+            docker logs foundry
+            if [[ "$startup_attempt" -lt 4 ]]; then
+              docker rm --force foundry
+              retry_delay=$((startup_attempt * 60))
+              echo "Retrying Foundry startup in ${retry_delay} seconds." >&2
+              sleep "$retry_delay"
+            fi
+          done
+          echo "Foundry did not become ready after four attempts." >&2
+          exit 1
+
+      - name: Encrypt downloaded Foundry distribution
+        if: steps.foundry-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          mkdir -p "$FOUNDRY_DISTRIBUTION_CACHE"
+          gpg --batch --yes --pinentry-mode loopback \
+            --passphrase "$FOUNDRY_LICENSE_KEY" \
+            --symmetric --cipher-algo AES256 \
+            --output "$FOUNDRY_DISTRIBUTION_CACHE/foundryvtt-${FOUNDRY_VERSION}.zip.gpg" \
+            "$FOUNDRY_DATA_PATH/container_cache/foundryvtt-${FOUNDRY_VERSION}.zip"
+
+      - name: Exercise Foundry, the adapter, UI lifecycle, and sockets
+        working-directory: checkouts/causodes-shipcombat-core
+        run: npm run test:foundry
+
+      - name: Capture Foundry log
+        if: failure()
+        run: docker logs foundry > foundry.log 2>&1
+
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: foundry-${{ matrix.adapter }}-failure
+          path: |
+            foundry.log
+            checkouts/causodes-shipcombat-core/tests/integration/test-results
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Stop Foundry
+        if: always()
+        run: docker stop foundry

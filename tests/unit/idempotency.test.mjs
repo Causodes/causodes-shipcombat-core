@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { IdempotencyGate, combatTransitionKey } from "../scripts/state/idempotency.js";
+import { IdempotencyGate, combatTransitionKey } from "../../scripts/state/idempotency.js";
 
 test("duplicate in-flight and completed requests execute one mutation", async () => {
   const gate = new IdempotencyGate();

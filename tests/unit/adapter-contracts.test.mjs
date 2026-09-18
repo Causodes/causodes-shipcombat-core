@@ -4,9 +4,9 @@ import path from "node:path";
 import test from "node:test";
 import { pathToFileURL, fileURLToPath } from "node:url";
 
-import { SystemAdapter } from "../scripts/systems/SystemAdapter.js";
+import { SystemAdapter } from "../../scripts/systems/SystemAdapter.js";
 
-const coreRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const coreRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const modulesRoot = path.dirname(coreRoot);
 
 globalThis.ShipCombat = {

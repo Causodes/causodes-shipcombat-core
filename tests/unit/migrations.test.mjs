@@ -21,7 +21,7 @@ test("ImpMal legacy actor/item snapshots migrate without touching current docume
     { name: "Weapon", type: "weapon", updates: [], async update(u) { apply(this, u); } },
   ];
   globalThis.game = { user: { isGM: true }, actors, items };
-  const { migrateActorTypes, migrateItemTypes } = await import("../../causodes-shipcombat-impmal/scripts/migrations.js");
+  const { migrateActorTypes, migrateItemTypes } = await import("../../../causodes-shipcombat-impmal/scripts/migrations.js");
 
   assert.equal(await migrateActorTypes(), 1);
   assert.equal(await migrateItemTypes(), 1);
@@ -41,7 +41,7 @@ test("ImpMal fractional NPC snapshot normalizes every legacy integer field", asy
     system: {}, updates: [], async update(u) { apply(this, u); },
   };
   globalThis.game = { user: { isGM: true }, actors: [npc], items: [] };
-  const { migrateNpcIntegerFields } = await import("../../causodes-shipcombat-impmal/scripts/migrations.js");
+  const { migrateNpcIntegerFields } = await import("../../../causodes-shipcombat-impmal/scripts/migrations.js");
   assert.equal(await migrateNpcIntegerFields(), 1);
   assert.deepEqual(npc.updates, [{
     "system.hull.value": 10,
@@ -59,7 +59,7 @@ test("D&D5e component migration preserves partial diffs and snapshots legacy AC"
     data: { fields: new Proxy({}, { get: () => Field }) },
   };
   globalThis.ShipCombat = { _api: { ShipComponentSchemaMixin: Base => class extends Base {} } };
-  const { ShipComponentModel } = await import("../../causodes-shipcombat-dnd5e/scripts/items/ShipComponentModel.js");
+  const { ShipComponentModel } = await import("../../../causodes-shipcombat-dnd5e/scripts/items/ShipComponentModel.js");
 
   assert.deepEqual(ShipComponentModel.migrateData({ acContribution: 3 }), {
     acContribution: 3, acContributionArmor: 3, acContributionEngine: 3,
@@ -72,7 +72,7 @@ test("D&D5e component migration preserves partial diffs and snapshots legacy AC"
 
 test("D&D5e unified starship snapshots migrate to each split schema", async () => {
   const { buildLegacyStarshipMigration } = await import(
-    "../../causodes-shipcombat-dnd5e/scripts/migrations.js"
+    "../../../causodes-shipcombat-dnd5e/scripts/migrations.js"
   );
   const prefix = "causodes-shipcombat-dnd5e";
   const keys = {

@@ -1,5 +1,8 @@
 ## v2.5.1
 ### Bug Fixes
+- Preserve an NPC ship's disposition on launched torpedo and strike-craft Tokens across system-specific token normalization
+- Fully remove deleted Tokens from Sensors contacts and BDA records by using Foundry's nested-key deletion semantics
+- Hide newly created NPC ship Tokens by default at the Scene Token boundary, since Foundry 14 does not persist `hidden` on prototype Tokens
 - Refresh and drift NPC ordnance at the end of its parent ship's turn, and prevent operators from clearing a newly launched torpedo's mandatory-drift state
 - Await persistent sheet and hook document writes or explicitly handle their failures
 - Deduplicate repeated GM socket requests and combat-turn hook delivery, while leaving failed operations retryable
