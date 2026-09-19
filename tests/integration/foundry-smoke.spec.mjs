@@ -177,6 +177,15 @@ test("exercises Foundry-only document, application, canvas, combat, and socket b
     });
   }
 
+  await phase("install the cross-version application root resolver", () => page.evaluate(() => {
+    globalThis.__shipCombatAppRoot = application => {
+      const element = application?.element;
+      if (typeof element?.querySelector === "function") return element;
+      const indexed = element?.[0] ?? element?.get?.(0);
+      return typeof indexed?.querySelector === "function" ? indexed : null;
+    };
+  }));
+
   await phase("verify Foundry, system, module, and adapter versions", () => expect.poll(() => page.evaluate(({ adapterModuleId }) => ({
     foundry: game.release.version,
     systemId: game.system.id,
@@ -356,12 +365,12 @@ test("exercises Foundry-only document, application, canvas, combat, and socket b
     expect(fixture.useV1).toBe(adapterId === "sf2e");
     await expect.poll(() => page.evaluate(actorId => {
       const sheet = game.actors.get(actorId).sheet;
-      const element = sheet.element?.[0] ?? sheet.element;
+      const element = globalThis.__shipCombatAppRoot(sheet);
       return sheet.rendered && element?.isConnected === true;
     }, fixture.actorId)).toBe(true);
     await page.evaluate(actorId => {
       const sheet = game.actors.get(actorId).sheet;
-      globalThis.__shipCombatFirstSheetElement = sheet.element?.[0] ?? sheet.element;
+      globalThis.__shipCombatFirstSheetElement = globalThis.__shipCombatAppRoot(sheet);
     }, fixture.actorId);
   });
 
@@ -381,7 +390,7 @@ test("exercises Foundry-only document, application, canvas, combat, and socket b
     }, fixture.actorId);
     await expect.poll(() => page.evaluate(actorId => {
       const sheet = game.actors.get(actorId).sheet;
-      const element = sheet.element?.[0] ?? sheet.element;
+      const element = globalThis.__shipCombatAppRoot(sheet);
       return sheet.rendered
         && element?.isConnected === true
         && element !== globalThis.__shipCombatFirstSheetElement
@@ -405,13 +414,13 @@ test("exercises Foundry-only document, application, canvas, combat, and socket b
         await sheet.render(isV1 ? true : { force: true });
         await new Promise(resolve => {
           const check = () => {
-            const element = sheet.element?.[0] ?? sheet.element;
+            const element = globalThis.__shipCombatAppRoot(sheet);
             if (sheet.rendered && element?.isConnected) resolve();
             else setTimeout(check, 25);
           };
           check();
         });
-        const element = sheet.element?.[0] ?? sheet.element;
+        const element = globalThis.__shipCombatAppRoot(sheet);
         results.push({
           type: document.type,
           isV1,
@@ -682,7 +691,7 @@ test("exercises Foundry-only document, application, canvas, combat, and socket b
       globalThis.__shipCombatIntegrationPopup = app;
       await app.render(useV1 ? true : { force: true });
       const findTarget = () => {
-        const element = app.element?.[0] ?? app.element;
+        const element = globalThis.__shipCombatAppRoot(app);
         return element?.querySelector(`[data-token-id="${npcTokenId}"]`);
       };
       await new Promise(resolve => {
@@ -698,7 +707,7 @@ test("exercises Foundry-only document, application, canvas, combat, and socket b
     }, fixture);
     await expect.poll(() => page.evaluate(npcTokenId => {
       const app = globalThis.__shipCombatIntegrationPopup;
-      const root = app?.element?.[0] ?? app?.element;
+      const root = globalThis.__shipCombatAppRoot(app);
       const freshTarget = root?.querySelector(`[data-token-id="${npcTokenId}"]`);
       return app?.rendered
         && freshTarget?.isConnected === true
@@ -717,7 +726,7 @@ test("exercises Foundry-only document, application, canvas, combat, and socket b
     }, fixture);
     expect(await page.evaluate(() => {
       const app = globalThis.__shipCombatIntegrationPopup;
-      const root = app?.element?.[0] ?? app?.element;
+      const root = globalThis.__shipCombatAppRoot(app);
       return !app?.rendered && !root?.isConnected && globalThis.__shipCombatPopupTarget?.isConnected === false;
     })).toBe(true);
   });
