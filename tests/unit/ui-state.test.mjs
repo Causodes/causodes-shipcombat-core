@@ -125,6 +125,7 @@ test("UI helpers remain wired into both sheet generations and deletion lifecycle
 
   assert.match(controller, /powerCorePips:\s*buildPowerCorePips\(/);
   assert.equal((npcMixin.match(/buildNpcOrdnanceTemplateContext\(/g) ?? []).length, 2);
+  assert.match(npcMixin, /parentAlliance[\s\S]*?details\.alliance/);
   assert.match(npcMixin, /const disposition = shipToken\.document\?\.disposition/);
   assert.match(npcMixin, /tokenDoc\.updateSource\(\{ disposition \}\)/);
   assert.equal((npcTemplate.match(/class="shipcombat-npc-launch-template"/g) ?? []).length, 2);

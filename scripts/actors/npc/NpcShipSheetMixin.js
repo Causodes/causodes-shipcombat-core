@@ -1375,6 +1375,10 @@ async function _npcLaunchOrdnance(type, target) {
   foundry.utils.setProperty(actorData, SystemAdapter.current.systemPath("parentShipTokenId"), parentShipTokenId);
   actorData.system ??= {};
   Object.assign(actorData.system, getOrdnanceLaunchTurnState(slotKey));
+  const parentAlliance = SystemAdapter.current.getShipData(this.actor)?.details?.alliance;
+  if (parentAlliance) {
+    foundry.utils.setProperty(actorData, SystemAdapter.current.systemPath("details.alliance"), parentAlliance);
+  }
   if (actorData.system?.hull) {
     if (launchSize !== null) actorData.system.hull.max = launchSize;
     const _isHP = SystemAdapter.current.hullDisplayMode === "hpRemaining";
