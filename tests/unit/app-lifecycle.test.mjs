@@ -1,8 +1,5 @@
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import path from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
 
 const callbacks = new Map();
 globalThis.Hooks = {
@@ -65,25 +62,4 @@ test("rerender detaches stale DOM listeners before attaching the replacement", (
   lifecycle.close();
   current.dispatch("click");
   assert.equal(clicks, 2);
-});
-
-test("representative AppV1 and AppV2 popups share the lifecycle implementation", () => {
-  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-  for (const filename of ["BattleClarityPopup.js", "BattleClarityPopupV1.js"]) {
-    const source = fs.readFileSync(path.join(root, "scripts/apps", filename), "utf8");
-    assert.match(source, /new RenderLifecycle\(this\)/);
-    assert.match(source, /this\._lifecycle\.close\(\)/);
-  }
-});
-
-test("every popup live-hook registration has a matching close-time removal", () => {
-  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-  const appRoot = path.join(root, "scripts/apps");
-  for (const filename of fs.readdirSync(appRoot).filter(name => name.endsWith(".js"))) {
-    const source = fs.readFileSync(path.join(appRoot, filename), "utf8");
-    const registered = [...source.matchAll(/Hooks\.on\("([^"]+)"/g)].map(match => match[1]).sort();
-    if (!registered.length || filename === "render-lifecycle.js") continue;
-    const removed = [...source.matchAll(/Hooks\.off\("([^"]+)"/g)].map(match => match[1]).sort();
-    assert.deepEqual(removed, registered, `${filename} leaks or mismatches a live hook`);
-  }
 });

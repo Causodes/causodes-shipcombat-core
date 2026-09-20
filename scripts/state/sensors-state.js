@@ -30,6 +30,23 @@ function _warnSensorBlind() {
   ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Crit.SensorBlindDisabled"));
 }
 
+/** Pure AP-cost projection shared by normal and Power Core Sensors actions. */
+export function getSensorActionCost(data, actionId, { apCostMultiplier = 1, core = false } = {}) {
+  const lockEntry = AUGUR_LOCK_ACTIONS.find(action => action.id === actionId);
+  const entry = core
+    ? AUGUR_CORE_ACTIONS.find(action => action.id === actionId)
+    : lockEntry ?? AUGUR_UTILITY_ACTIONS.find(action => action.id === actionId);
+  if (!entry) return null;
+  let baseCost = (core ? entry.ap : entry.cost) * apCostMultiplier;
+  if (!core && lockEntry && data?.resources?.sensors?.sensorPriorityActive && lockEntry.setsTier <= 2) {
+    baseCost *= 0.5;
+  }
+  const roundedCost = Math.ceil(baseCost);
+  return data?.resources?.sensors?.payload === "sensorBuoy"
+    ? Math.ceil(roundedCost * 0.8)
+    : roundedCost;
+}
+
 async function _updateBDAChatMessage(attack, messageId, content) {
   if (!messageId || typeof content !== "string") return;
   if (attack.messageId && messageId !== attack.messageId) return;
@@ -218,15 +235,9 @@ export async function executeSensorAction({ actionId, targetTokenId = null } = {
       return { ok: false, reason: "noLock" };
     }
 
-    const apMultiplier = this.getSensorStats(ship)?.apCostMultiplier ?? 1;
-    let baseCost = entry.cost * apMultiplier;
-    if (lockEntry && (data.resources?.sensors?.sensorPriorityActive ?? false) && lockEntry.setsTier <= 2) {
-      baseCost *= 0.5;
-    }
-    const roundedCost = Math.ceil(baseCost);
-    const apCost = (data.resources?.sensors?.payload ?? "") === "sensorBuoy"
-      ? Math.ceil(roundedCost * 0.8)
-      : roundedCost;
+    const apCost = getSensorActionCost(data, actionId, {
+      apCostMultiplier: this.getSensorStats(ship)?.apCostMultiplier ?? 1,
+    });
     const auxiliaryPower = data.resources?.engineer?.auxiliaryPower ?? 0;
     if (auxiliaryPower < apCost) {
       return { ok: false, reason: "insufficientAP", apCost, auxiliaryPower };
@@ -309,10 +320,10 @@ export async function executeSensorCoreAction({ actionId, targetTokenId = null }
         if (!this.hasEffectiveLock({ belowTier: 4 })) return { ok: false, reason: "noLock" };
       }
 
-      const apMultiplier = this.getSensorStats(ship)?.apCostMultiplier ?? 1;
-      const baseApCost = Math.ceil(entry.ap * apMultiplier);
-      const hasBuoy = (data.resources?.sensors?.payload ?? "") === "sensorBuoy";
-      const apCost = hasBuoy ? Math.ceil(baseApCost * 0.8) : baseApCost;
+      const apCost = getSensorActionCost(data, actionId, {
+        apCostMultiplier: this.getSensorStats(ship)?.apCostMultiplier ?? 1,
+        core: true,
+      });
       const auxiliaryPower = data.resources?.engineer?.auxiliaryPower ?? 0;
       if (auxiliaryPower < apCost) {
         return { ok: false, reason: "insufficientAP", apCost, auxiliaryPower };

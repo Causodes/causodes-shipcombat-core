@@ -28,6 +28,11 @@ import { SystemAdapter } from "../../systems/SystemAdapter.js";
 import { SHARED_ACTIONS } from "../../roles/shared.js";
 import { buildNpcOrdnanceTemplateContext, selectNpcOrdnanceTemplate } from "./npc-ordnance-selection.js";
 import { getOrdnanceLaunchTurnState } from "../../state/ordnance-turn-state.js";
+import {
+  applyComponentSlotToItemData,
+  componentSlotUpdates,
+  npcComponentDropError,
+} from "../ship/component-contracts.js";
 
 async function _animateTokenPath(token, waypoints, projected) {
   const canvasToken = token.object ?? token;
@@ -387,60 +392,20 @@ export const NpcShipSheetMixin = (BaseClass) => {
       const dropZone = event?.target?.closest?.("[data-component-slot]");
       const item = await Item.fromDropData(data);
       if (!item) return;
-
-      if (item.type !== `${MODULE_ID}.component`) {
-        return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.OnlyComponents"));
-      }
-      if (item.system?.slot !== "weapon") {
-        return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NpcWeaponsOnly"));
-      }
-
       const targetSlot     = dropZone?.dataset.componentSlot;
       const targetPosition = dropZone?.dataset.componentPosition;
-
-      // Guard: weapon components may only be dropped into the matching position
-      // slot. Exception: "flank" weapons may go into port or starboard.
-      if (targetSlot === "weapon" && targetPosition) {
-        const itemPos = item.system?.weaponPosition ?? "prow";
-        const isFlank = itemPos === "flank";
-        const positionValid = isFlank
-          ? (targetPosition === "port" || targetPosition === "starboard")
-          : itemPos === targetPosition;
-        if (!positionValid) {
-          return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.WrongWeaponSlot"));
-        }
-      }
+      const error = npcComponentDropError(item, targetSlot, targetPosition);
+      if (error) return ui.notifications.warn(game.i18n.localize(error));
 
       const sameItem = this.actor.items.get(item.id);
       if (sameItem) {
-        if (targetSlot) {
-          const update = { "system.slot": targetSlot };
-          if (targetSlot === "weapon" && targetPosition) {
-            if (targetPosition === "port" || targetPosition === "starboard") {
-              update["system.weaponPosition"] = "flank";
-              update["system.weaponBay"]      = targetPosition;
-            } else {
-              update["system.weaponPosition"] = targetPosition;
-            }
-          }
-          await sameItem.update(update);
-        }
+        if (targetSlot) await sameItem.update(componentSlotUpdates(targetSlot, targetPosition));
         return;
       }
 
       const createData = item.toObject();
       delete createData._id;
-      if (targetSlot) {
-        createData.system.slot = targetSlot;
-        if (targetSlot === "weapon" && targetPosition) {
-          if (targetPosition === "port" || targetPosition === "starboard") {
-            createData.system.weaponPosition = "flank";
-            createData.system.weaponBay      = targetPosition;
-          } else {
-            createData.system.weaponPosition = targetPosition;
-          }
-        }
-      }
+      applyComponentSlotToItemData(createData, targetSlot, targetPosition);
       await this.actor.createEmbeddedDocuments("Item", [createData]);
     }
 
@@ -1801,53 +1766,18 @@ export const NpcShipSheetV1Mixin = (BaseClass) => {
       const dropZone = event?.target?.closest?.("[data-component-slot]");
       const item = await Item.fromDropData(data);
       if (!item) return;
-      if (item.type !== `${MODULE_ID}.component`) {
-        return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.OnlyComponents"));
-      }
-      if (item.system?.slot !== "weapon") {
-        return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NpcWeaponsOnly"));
-      }
       const targetSlot     = dropZone?.dataset.componentSlot;
       const targetPosition = dropZone?.dataset.componentPosition;
-      if (targetSlot === "weapon" && targetPosition) {
-        const itemPos       = item.system?.weaponPosition ?? "prow";
-        const isFlank       = itemPos === "flank";
-        const positionValid = isFlank
-          ? (targetPosition === "port" || targetPosition === "starboard")
-          : itemPos === targetPosition;
-        if (!positionValid) {
-          return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.WrongWeaponSlot"));
-        }
-      }
+      const error = npcComponentDropError(item, targetSlot, targetPosition);
+      if (error) return ui.notifications.warn(game.i18n.localize(error));
       const sameItem = this.actor.items.get(item.id);
       if (sameItem) {
-        if (targetSlot) {
-          const update = { "system.slot": targetSlot };
-          if (targetSlot === "weapon" && targetPosition) {
-            if (targetPosition === "port" || targetPosition === "starboard") {
-              update["system.weaponPosition"] = "flank";
-              update["system.weaponBay"]      = targetPosition;
-            } else {
-              update["system.weaponPosition"] = targetPosition;
-            }
-          }
-          await sameItem.update(update);
-        }
+        if (targetSlot) await sameItem.update(componentSlotUpdates(targetSlot, targetPosition));
         return;
       }
       const createData = item.toObject();
       delete createData._id;
-      if (targetSlot) {
-        createData.system.slot = targetSlot;
-        if (targetSlot === "weapon" && targetPosition) {
-          if (targetPosition === "port" || targetPosition === "starboard") {
-            createData.system.weaponPosition = "flank";
-            createData.system.weaponBay      = targetPosition;
-          } else {
-            createData.system.weaponPosition = targetPosition;
-          }
-        }
-      }
+      applyComponentSlotToItemData(createData, targetSlot, targetPosition);
       await this.actor.createEmbeddedDocuments("Item", [createData]);
     }
 

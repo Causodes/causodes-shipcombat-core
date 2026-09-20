@@ -29,19 +29,6 @@ const requestGM = createActionRequester(context => context?.actor ?? context);
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-async function _reserveGunnerCore(shipActor, actionId) {
-  const consumed = await requestGM(shipActor, "consumePowerCore", { roleId: "gunner", actionId });
-  if (!consumed) ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NeedsPowerCore"));
-  return consumed;
-}
-
-function _getOrdnanceBayCaps(shipActor) {
-  const bay = shipActor?.items?.find(i => i.type === `${MODULE_ID}.component` && i.system.slot === "weaponsBay");
-  return {
-    ammoMax:   bay?.system?.bayAmmoCapacity ?? 0,
-  };
-}
-
 function _getHeatCapacity(shipActor) {
   const reactor = shipActor?.items?.find(i => i.type === `${MODULE_ID}.component` && i.system.slot === "reactor");
   return reactor?.system?.heatCapacity ?? 0;
@@ -133,8 +120,8 @@ async function _onGunnerCoreAction(event, target) {
   }
 
   if (action === "extendRange") {
-    if (!(await _reserveGunnerCore(this.actor, "extendRange"))) return;
-    await requestGM(this, "updateResource", { roleId: "gunner", key: "sensorBandExpanded", value: true });
+    const result = await requestGM(this, "executeGunnerCoreAction", { actionId: action });
+    if (!result?.ok) ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NeedsPowerCore"));
   } else if (action === "chooseCritLoc") {
     // Gunner picks the location NOW (player-side dialog), stores choice for the next crit.
     const buttons = CRIT_LOCATIONS.map(l => ({
@@ -152,21 +139,14 @@ async function _onGunnerCoreAction(event, target) {
       }).render(true);
     });
     if (!locId) return; // cancelled  -  do NOT consume core
-    if (!(await _reserveGunnerCore(this.actor, "chooseCritLoc"))) return;
-    await requestGM(this, "updateResources", {
-      updates: [
-        { roleId: "gunner", key: "chooseCritLocation", value: true },
-        { roleId: "gunner", key: "critLocationChoice", value: locId },
-      ],
+    const result = await requestGM(this, "executeGunnerCoreAction", {
+      actionId: action,
+      critLocationChoice: locId,
     });
+    if (!result?.ok) ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NeedsPowerCore"));
   } else if (action === "emergencyResupply") {
-    // Emergency Resupply: immediately replenish 25% ammo from reserves
-    const caps    = _getOrdnanceBayCaps(this.actor);
-    const current = sys.resources?.gunner?.ammo ?? 0;
-    const gain    = Math.max(1, Math.ceil(caps.ammoMax * 0.25));
-    const next    = Math.min(caps.ammoMax, current + gain);
-    if (!(await _reserveGunnerCore(this.actor, "emergencyResupply"))) return;
-    await requestGM(this, "updateResource", { roleId: "gunner", key: "ammo", value: next });
+    const result = await requestGM(this, "executeGunnerCoreAction", { actionId: action });
+    if (!result?.ok) ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NeedsPowerCore"));
   }
 }
 

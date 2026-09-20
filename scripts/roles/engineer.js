@@ -130,27 +130,27 @@ async function _onOverclock() {
 
 /** Dispatch staged cores into receiving-operator pools and record the Engineer ledger. */
 async function _onDispatchCores() {
-  requestGM(this, "dispatchStagedCores");
+  await requestGM(this, "dispatchStagedCores");
 }
 
 /** Commit one core to shields. */
 async function _onCommitShieldCore() {
-  requestGM(this, "commitShieldCores", { count: 1 });
+  await requestGM(this, "commitShieldCores", { count: 1 });
 }
 
 /** Remove one committed shield core back to available pool. */
 async function _onUncommitShieldCore() {
-  requestGM(this, "uncommitShieldCore");
+  await requestGM(this, "uncommitShieldCore");
 }
 
 /** Commit one core to auxiliary power. */
 async function _onCommitAuxCore() {
-  requestGM(this, "commitAuxCore");
+  await requestGM(this, "commitAuxCore");
 }
 
 /** Remove one staged auxiliary power core. */
 async function _onUncommitAuxCore() {
-  requestGM(this, "uncommitAuxCore");
+  await requestGM(this, "uncommitAuxCore");
 }
 
 /**
@@ -192,7 +192,7 @@ async function _onEmergencyVent() {
   });
   if (!ok) return;
 
-  requestGM(this, "emergencyVent");
+  await requestGM(this, "emergencyVent");
 }
 
 /**
@@ -312,7 +312,7 @@ async function _onRepairHull() {
 async function _onFluxToCharge() {
   const pool = SystemAdapter.current.getShipData(this.actor).shieldPool?.current ?? 0;
   if (pool <= 0) return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.NpcShip.NoFluxRemaining"));
-  requestGM(this, "fluxToCharge");
+  await requestGM(this, "fluxToCharge");
 }
 
 // ── Exported action map ────────────────────────────────────────────────────

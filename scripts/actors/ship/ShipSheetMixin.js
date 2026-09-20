@@ -27,6 +27,7 @@ import { WeaponArcOverlay } from "../../canvas/WeaponArcOverlay.js";
 import { SystemAdapter } from "../../systems/SystemAdapter.js";
 import { SHIP_PARTS, SHIP_TABS } from "./parts.js";
 import { ShipController } from "./ShipController.js";
+import { normalizeDropArguments } from "./drop-contract.js";
 import { normalizeStrikeCraftTemplateHull } from "../ordnance/ordnance-helpers.js";
 import { userOperatesStation } from "../../roles/crew-operators.js";
 import { openManualOverride } from "../../apps/ManualOverride.js";
@@ -204,14 +205,14 @@ export const ShipSheetV2Mixin = (BaseClass) => {
       const row = target.closest("[data-id]");
       const id  = row?.dataset?.id;
       if (!id) return;
-      requestGM(this, "unassignComponent", { itemId: id });
+      await requestGM(this, "unassignComponent", { itemId: id });
     }
 
     static async _onUnassignEquipment(event, target) {
       const row = target.closest("[data-id]");
       const id  = row?.dataset?.id;
       if (!id) return;
-      requestGM(this, "unassignComponent", { itemId: id });
+      await requestGM(this, "unassignComponent", { itemId: id });
     }
 
     // ── Post-render wiring ─────────────────────────────────────────────────
@@ -251,13 +252,18 @@ export const ShipSheetV2Mixin = (BaseClass) => {
 
     // ── Drop handling ──────────────────────────────────────────────────────
 
-    async _onDropActor(event, data) {
+    // AppV2 hosts disagree on their drop contract: warhammer-lib dispatches
+    // (dragData, event), while dnd5e dispatches (event, resolvedDocument).
+    // Normalize at this boundary and preserve the host order for super calls.
+    async _onDropActor(first, second) {
+      const { data, event } = normalizeDropArguments(first, second);
       const result = await this.controller.onDropActor(data, event);
-      if (result === ShipController.DELEGATE_TO_SUPER) return super._onDropActor?.(event, data);
+      if (result === ShipController.DELEGATE_TO_SUPER) return super._onDropActor?.(first, second);
       return result;
     }
 
-    async _onDropItem(event, data) {
+    async _onDropItem(first, second) {
+      const { data, event } = normalizeDropArguments(first, second);
       return this.controller.onDropItem(data, event);
     }
 

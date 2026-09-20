@@ -108,24 +108,29 @@ function _injectAllocationTerms(tree) {
 }
 
 /**
- * Wire token substitution into Foundry's i18n init. Call once during the
- * module's "init" hook.
+ * Wire token substitution into both localization startup and module init.
+ * Call once at module evaluation time so neither hook can be missed.
  */
 export function registerLangSubstitution() {
-  Hooks.once("i18nInit", () => {
-    const tree = game.i18n.translations;
-    if (!tree) return;
-    _injectModifierCopy(tree);
-    _injectAllocationTerms(tree);
-    // Two passes: lets a token resolve to a string that itself contains a
-    // token (one level of indirection is enough for everything we do).
-    _substituteTree(tree, tree);
-    _substituteTree(tree, tree);
+  // Foundry normally emits i18nInit after module evaluation, but system/module
+  // load order has differed across supported releases. Run again at init so a
+  // late adapter configuration or companion translation merge cannot leave
+  // literal {{SHIPCOMBAT.*}} tokens in the UI. Resolution is idempotent.
+  Hooks.once("i18nInit", applyLangSubstitutions);
+  Hooks.once("init", applyLangSubstitutions);
+}
 
-    // Apply American English spelling variants if the active adapter requests it.
-    // Runs after substitution so token-expanded strings are also normalised.
-    if (SystemAdapter._current?.englishVariant === "american") {
-      _applyAmericanEnglish(tree);
-    }
-  });
+/** Resolve all shared localization indirection against the final merged tree. */
+export function applyLangSubstitutions() {
+  const tree = game.i18n.translations;
+  if (!tree) return;
+  _injectModifierCopy(tree);
+  _injectAllocationTerms(tree);
+  // Two passes allow one level of indirection between localization values.
+  _substituteTree(tree, tree);
+  _substituteTree(tree, tree);
+
+  if (SystemAdapter._current?.englishVariant === "american") {
+    _applyAmericanEnglish(tree);
+  }
 }

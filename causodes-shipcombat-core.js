@@ -37,6 +37,10 @@ import { getStanceMovementModifiers } from "./scripts/stances.js";
 import { collectExistingTargetTokenIds } from "./scripts/state/target-references.js";
 import { processParentOrdnanceLifecycle } from "./scripts/state/ordnance-turn-state.js";
 import { IdempotencyGate, combatTransitionKey } from "./scripts/state/idempotency.js";
+import { installCombatInitiativeHandler } from "./scripts/combat-initiative.js";
+import { getShipTokenCreationDefaults } from "./scripts/actor-identity.js";
+import { getNpcTurnResetUpdates, getPlayerTurnConditionUpdates } from "./scripts/state/turn-effects.js";
+import { getNpcRoundConditionEffects } from "./scripts/state/npc-condition-effects.js";
 import { PartialRegistry, CORE_PARTIAL_DEFAULTS, loadAllTemplates } from "./scripts/templates.js";
 import { TargetingPopupV1 }
   from "./scripts/apps/TargetingPopupV1.js";
@@ -211,26 +215,6 @@ Hooks.once("init", async () => {
     return _origCanControl.call(this, user, event);
   };
 
-  // ── Block combat-tracker initiative roll for player ships without a captain ──
-  // When the GM clicks the roll-initiative button in the combat tracker it calls
-  // Combat.prototype.rollInitiative directly, bypassing the captain check on the
-  // ship sheet.  Wrap the method here so the guard runs regardless of origin.
-  const _origRollInitiative = Combat.prototype.rollInitiative;
-  Combat.prototype.rollInitiative = async function (ids, options) {
-    const combatantIds = Array.isArray(ids) ? ids : [ids];
-    for (const id of combatantIds) {
-      const combatant = this.combatants.get(id);
-      const actor = combatant?.actor;
-      if (!actor || actor.type !== `${MODULE_ID}.ship`) continue;
-      // Mirror the captain-lookup logic from _onRollInitiative in captain.js
-      const hasCaptain = !!(await resolveStationOperatorActor(actor, "captain"));
-      if (!hasCaptain) {
-        ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoCaptainAssigned"));
-        return this;
-      }
-    }
-    return _origRollInitiative.call(this, ids, options);
-  };
 });
 
 // ── setup: compile templates ─────────────────────────────────────────────
@@ -238,6 +222,17 @@ Hooks.once("init", async () => {
 // by the system companion module are honoured.
 Hooks.once("setup", async () => {
   if (!_configured) return;
+
+  // Systems may replace their Combat document class during init. Install the
+  // ship initiative boundary only after every system and module init hook has
+  // completed so a late class registration cannot silently remove it.
+  installCombatInitiativeHandler({
+    CombatClass: CONFIG.Combat.documentClass,
+    moduleId: SystemAdapter.current.moduleId,
+    adapter: SystemAdapter.current,
+    resolveCaptain: actor => resolveStationOperatorActor(actor, "captain"),
+  });
+
   await loadAllTemplates(_partialRegistry);
 });
 
@@ -332,12 +327,12 @@ Hooks.on("preCreateActor", (actor, data) => {
   }
 });
 
-// PrototypeToken does not persist the Scene Token `hidden` field in Foundry 14.
-// Enforce the intended NPC default at the document boundary where that field
-// actually exists.
+// Host systems may normalize token-derived actor data, and PrototypeToken does
+// not persist the Scene Token `hidden` field in Foundry 14. Re-project the
+// persisted ship actor's defaults at the document boundary where they apply.
 Hooks.on("preCreateToken", (token, data) => {
-  const actor = token.actor ?? (data.actorId ? game.actors.get(data.actorId) : null);
-  if (actor?.type === `${MODULE_ID}.npcShip`) token.updateSource({ hidden: true });
+  const defaults = getShipTokenCreationDefaults({ token, data, moduleId: MODULE_ID });
+  if (defaults) token.updateSource(defaults);
 });
 
 // ── Ordnance hull auto-sync: keep hull.max = payloadCount and initialise hull.value ──
@@ -371,14 +366,14 @@ Hooks.on("canvasReady", async () => {
   refreshTokenVisibility();
   TargetDesignationOverlay.refresh();
 
-  // Auto-link any existing unlinked ship tokens so that world-actor data
-  // and token-actor data stay in sync (role assignments, combat state, etc.).
+  // Player ships store shared crew and combat state on their world Actor, so
+  // their scene Tokens must remain linked. NPC ships intentionally preserve
+  // Foundry's actorLink choice so multiple Tokens can have independent state.
   if (game.user.isGM && canvas?.scene) {
     void pruneSceneTargetReferences();
 
-    const shipTypes = [`${MODULE_ID}.ship`, `${MODULE_ID}.npcShip`];
     const unlinked = canvas.scene.tokens.filter(
-      t => shipTypes.includes(t.actor?.type) && !t.actorLink
+      t => t.actor?.type === `${MODULE_ID}.ship` && !t.actorLink
     );
     for (const td of unlinked) {
       console.warn(`${MODULE_ID} | Auto-linking unlinked ship token "${td.name}" (${td.id})`);
@@ -720,43 +715,17 @@ async function _processCombatUpdate(combat, changes) {
     const shipData = SystemAdapter.current.getShipData(ship) ?? {};
     // 1. prevTurnMove was set correctly by confirmMovement and persists through resetHelmState.
 
-    // 2. Per-round condition effects  -  capture fire BEFORE updates so Hull High
-    //    doesn't also apply the new fire as hull damage in the same tick
-    const fireBefore   = shipData.internalFire ?? 0;
-    const sysConds     = shipData.conditions ?? {};
-    const condHullTier = sysConds.hull?.tier;
-    const condUp       = {};
-    if (condHullTier) {
-      const dmgMap = { low: 1, medium: 2, high: 3 };
-      const hullVal = shipData.hull?.value ?? 0;
-      const hullMax = shipData.hull?.max   ?? 40;
-      const hullBreachDmg = dmgMap[condHullTier] ?? 0;
-      condUp["hull.value"] = SystemAdapter.current.hullDisplayMode === "hpRemaining"
-        ? Math.max(0, hullVal - hullBreachDmg)
-        : Math.min(hullMax, hullVal + hullBreachDmg);
-      if (condHullTier === "high") {
-        condUp.internalFire = fireBefore + 5;
-      }
-    }
-    if (sysConds.coreSystems?.tier === "high") {
-      condUp["resources.engineer.heat"] = (shipData.resources?.engineer?.heat ?? 0) + 5;
-    }
+    // 2. Apply the same condition/fire projection used by manual advancement.
+    //    Newly-created fire begins damaging hull on the following turn.
+    const condUp = getPlayerTurnConditionUpdates(
+      shipData,
+      SystemAdapter.current.hullDisplayMode,
+    );
     if (Object.keys(condUp).length > 0) {
       await state.update(condUp);
     }
 
-    // 3. Internal Fire (pre-condition snapshot) → Hull Damage
-    if (fireBefore > 0) {
-      const refreshedData = SystemAdapter.current.getShipData(ship) ?? shipData;
-      const curDamage = refreshedData.hull?.value ?? 0;
-      const maxDamage = refreshedData.hull?.max   ?? 40;
-      const newDamage = SystemAdapter.current.hullDisplayMode === "hpRemaining"
-        ? Math.max(0, curDamage - fireBefore)
-        : Math.min(maxDamage, curDamage + fireBefore);
-      await state.update({ "hull.value": newDamage });
-    }
-
-    // 4. Reset helm state and all allocations for the new turn
+    // 3. Reset helm state and all allocations for the new turn
     await state.resetHelmState();
     await state.resetActions();
   }
@@ -768,61 +737,17 @@ async function _processCombatUpdate(combat, changes) {
       const npcSys   = npcActor.system;
       const npcUpd   = {};
 
-      // Voidshield flux: reset remaining to max
-      const fluxMax = npcSys.voidshieldFlux ?? 0;
-      if (fluxMax > 0) {
-        npcUpd["system.voidshieldFluxRemaining"] = fluxMax;
+      const conditionEffects = getNpcRoundConditionEffects(
+        npcSys,
+        SystemAdapter.current.hullDisplayMode,
+      );
+      for (const [path, value] of Object.entries(conditionEffects.updates)) {
+        npcUpd[SystemAdapter.current.systemPath(path)] = value;
       }
 
-      // Hull crit condition: per-round hull damage (Low +1, Medium +2, High +3)
-      const conds    = npcSys.conditions ?? {};
-      const hullTier = conds.hull?.tier;
-      if (hullTier) {
-        const dmgMap = { low: 1, medium: 2, high: 3 };
-        const hullVal = npcSys.hull?.value ?? 0;
-        const hullMax = npcSys.hull?.max   ?? 50;
-        const npcBreachDmg = dmgMap[hullTier] ?? 0;
-        npcUpd["system.hull.value"] = SystemAdapter.current.hullDisplayMode === "hpRemaining"
-          ? Math.max(0, hullVal - npcBreachDmg)
-          : Math.min(hullMax, hullVal + npcBreachDmg);
-        // Critical Breach (High): also +5 internal fire per round
-        if (hullTier === "high") {
-          npcUpd["system.internalFire"] = (npcSys.internalFire ?? 0) + 5;
-        }
+      for (const [path, value] of Object.entries(getNpcTurnResetUpdates(npcSys))) {
+        npcUpd[SystemAdapter.current.systemPath(path)] = value;
       }
-
-      // Reactor Breach (Core Systems High): +5 heat per round
-      if (conds.coreSystems?.tier === "high") {
-        const heatMax = npcSys.heatMax ?? 10;
-        npcUpd["system.heat"] = Math.min(heatMax, (npcSys.heat ?? 0) + 5);
-      }
-
-      // Internal fire → hull damage (uses updated internalFire if just incremented)
-      const fire = npcUpd["system.internalFire"] ?? (npcSys.internalFire ?? 0);
-      if (fire > 0) {
-        const hullVal = npcUpd["system.hull.value"] ?? (npcSys.hull?.value ?? 0);
-        const hullMax = npcSys.hull?.max ?? 50;
-        npcUpd["system.hull.value"] = SystemAdapter.current.hullDisplayMode === "hpRemaining"
-          ? Math.max(0, hullVal - fire)
-          : Math.min(hullMax, hullVal + fire);
-      }
-
-      // Compute prevTurnMove before zeroing — mirrors resetHelmState for the player ship.
-      // Reading fuelBurned BEFORE it is zeroed gives us the last-turn total so that
-      // minMove stays stable for the whole turn, even with piecemeal commits.
-      const npcFuelThisTurn  = npcSys.resources?.pilot?.fuelBurned  ?? 0;
-      const npcPrevTurnMove  = npcSys.resources?.pilot?.prevTurnMove ?? 0;
-      const npcBaseSpeed     = npcSys.movement?.speed ?? 0;
-      const npcAllocSpeed    = npcSys.resources?.pilot?.allocSpeed   ?? 0;
-      const npcEffSpeed      = npcBaseSpeed + npcAllocSpeed;
-      const npcMinMove       = Math.ceil(npcPrevTurnMove / 2);
-      npcUpd[SystemAdapter.current.systemPath("resources.pilot.prevTurnMove")] = npcFuelThisTurn > 0
-        ? Math.round((npcFuelThisTurn / 100) * (npcEffSpeed + npcMinMove))
-        : npcPrevTurnMove;
-
-      // Reset helm state for the new turn (mirrors resetHelmState for the player ship)
-      npcUpd[SystemAdapter.current.systemPath("resources.pilot.fuelBurned")] = 0;
-      npcUpd[SystemAdapter.current.systemPath("resources.pilot.bearing")]    = 0;
 
       if (Object.keys(npcUpd).length > 0) {
         await npcActor.update(npcUpd);

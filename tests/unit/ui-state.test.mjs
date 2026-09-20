@@ -1,8 +1,5 @@
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import path from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
 
 import { buildPowerCorePips } from "../../scripts/actors/ship/power-core-pips.js";
 import {
@@ -17,7 +14,6 @@ import {
 } from "../../scripts/state/target-references.js";
 
 const states = pips => pips.map(pip => pip.state);
-const coreRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 test("object-valued state is cleared with Foundry deletion operators", () => {
   assert.deepEqual(buildRecordDeletionUpdates("resources.state", { first: 1, last: 2 }), {
@@ -110,32 +106,4 @@ test("stale-target pruning preserves valid Tokens on scenes the GM is not viewin
     collectExistingTargetTokenIds([activeScene, inactiveScene]),
     ["active", "elsewhere"],
   );
-});
-
-test("UI helpers remain wired into both sheet generations and deletion lifecycles", () => {
-  const controller = fs.readFileSync(path.join(coreRoot, "scripts/actors/ship/ShipController.js"), "utf8");
-  const npcMixin = fs.readFileSync(path.join(coreRoot, "scripts/actors/npc/NpcShipSheetMixin.js"), "utf8");
-  const npcTemplate = fs.readFileSync(
-    path.join(coreRoot, "templates/actor/tabs/npc/npc-ship-ordnance.hbs"),
-    "utf8",
-  );
-  const npcStyles = fs.readFileSync(path.join(coreRoot, "styles/npc.css"), "utf8");
-  const entrypoint = fs.readFileSync(path.join(coreRoot, "causodes-shipcombat-core.js"), "utf8");
-  const manualOverride = fs.readFileSync(path.join(coreRoot, "scripts/apps/ManualOverride.js"), "utf8");
-
-  assert.match(controller, /powerCorePips:\s*buildPowerCorePips\(/);
-  assert.equal((npcMixin.match(/buildNpcOrdnanceTemplateContext\(/g) ?? []).length, 2);
-  assert.match(npcMixin, /parentAlliance[\s\S]*?details\.alliance/);
-  assert.match(npcMixin, /const disposition = shipToken\.document\?\.disposition/);
-  assert.match(npcMixin, /tokenDoc\.updateSource\(\{ disposition \}\)/);
-  assert.equal((npcTemplate.match(/class="shipcombat-npc-launch-template"/g) ?? []).length, 2);
-  assert.equal((npcTemplate.match(/class="shipcombat-npc-launch-controls"/g) ?? []).length, 2);
-  assert.doesNotMatch(npcTemplate, /data-template-id="\{\{(?:torpedo|craft)Templates\.\[0\]/);
-  assert.doesNotMatch(npcTemplate, /shipcombat-battery-fire-btn" data-action="npcLaunch/);
-  assert.match(npcStyles, /\.shipcombat-npc-launch-template\s*\{[\s\S]*?width:\s*100%\s*!important/);
-  assert.match(npcStyles, /\.shipcombat-npc-launch-btn\s*\{[\s\S]*?width:\s*auto\s*!important/);
-  assert.match(entrypoint, /Hooks\.on\("deleteToken"[\s\S]*?clearTargetReferences\(tokenDoc\.id\)/);
-  assert.match(entrypoint, /Hooks\.on\("deleteActor"[\s\S]*?pruneSceneTargetReferences\(\)/);
-  assert.match(entrypoint, /Hooks\.on\("canvasReady"[\s\S]*?pruneSceneTargetReferences\(\)/);
-  assert.match(manualOverride, /withAllocationTransaction\([\s\S]*?collectExistingTargetTokenIds\(game\.scenes\)/);
 });

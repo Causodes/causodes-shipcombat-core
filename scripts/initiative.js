@@ -16,6 +16,30 @@ export function hasPlayerShipInitiative({ shipActor, combat = game.combat }) {
   return initiative != null && Number.isFinite(Number(initiative));
 }
 
+/**
+ * Persist a tracker initiative value even when a host-system override returns
+ * before its delegated Foundry update has completed.
+ */
+export async function setCombatantInitiative({ combat, combatantId, initiative }) {
+  const value = Number(initiative);
+  if (!combat || !combatantId || !Number.isFinite(value)) return null;
+
+  await combat.setInitiative(combatantId, value);
+  let combatant = combat.combatants.get(combatantId) ?? null;
+  if (Number(combatant?.initiative) !== value) {
+    if (!combatant?.update) {
+      throw new Error(`Combatant ${combatantId} did not persist initiative ${value}.`);
+    }
+    await combatant.update({ initiative: value });
+    combatant = combat.combatants.get(combatantId) ?? combatant;
+  }
+
+  if (Number(combatant?.initiative) !== value) {
+    throw new Error(`Combatant ${combatantId} did not persist initiative ${value}.`);
+  }
+  return value;
+}
+
 export async function applyPlayerShipInitiativeBonus({
   shipActor,
   bonus = 0,
@@ -67,7 +91,13 @@ export async function recordPlayerShipInitiative({
   });
 
   const combatant = getPlayerShipCombatant({ shipActor, combat, combatantId });
-  if (combatant) await combat.setInitiative(combatant.id, trackerInitiative);
+  if (combatant) {
+    await setCombatantInitiative({
+      combat,
+      combatantId: combatant.id,
+      initiative: trackerInitiative,
+    });
+  }
 
   return trackerInitiative;
 }

@@ -11,7 +11,7 @@
  * the same public API  -  callers still use ShipCombatState.fireWeapon(), etc.
  */
 
-import { MODULE_ID, CORE_MODULE_ID, DEFAULT_COMBAT_STATE, LOCK_DECAY_ROUNDS, ORDNANCE_4MAN_COSTS, ORDNANCE_MASTER_ACTIONS, buildCaptainDeck } from "../constants.js";
+import { MODULE_ID, CORE_MODULE_ID, DEFAULT_COMBAT_STATE, LOCK_DECAY_ROUNDS, ORDNANCE_MASTER_ACTIONS, buildCaptainDeck } from "../constants.js";
 import { isOrdnance, isTorpedo, isStrikeCraft } from "../actors/ordnance/ordnance-types.js";
 
 // ── Domain imports ──────────────────────────────────────────────────────────
@@ -22,6 +22,7 @@ import * as SensorsState   from "./sensors-state.js";
 import * as OrdnanceState  from "./ordnance-state.js";
 import * as CritState      from "./crit-state.js";
 import * as CaptainState   from "./captain-state.js";
+import * as StationCoreActions from "./station-core-actions.js";
 import { HelmPreview }     from "../canvas/HelmPreview.js";
 import { SystemAdapter }   from "../systems/SystemAdapter.js";
 import { applyPlayerShipInitiativeBonus, hasPlayerShipInitiative, recordPlayerShipInitiative } from "../initiative.js";
@@ -36,6 +37,17 @@ import { getNpcRoundConditionEffects } from "./npc-condition-effects.js";
 import { getOrdnanceLifecycleTransition } from "./ordnance-turn-state.js";
 import { mutationQueueKey, runSerializedMutation } from "./mutation-queue.js";
 import { buildRecordDeletionUpdates } from "./target-references.js";
+import { getInternalFireManpowerUpdates, getPlayerTurnConditionUpdates } from "./turn-effects.js";
+import { applyOrdnanceCompletionEffect, getOrdnanceReservation } from "./ordnance-reservations.js";
+import {
+  assignEquipmentComponent,
+  assignWeaponComponent,
+  getOrdnanceBayComponentStats,
+  getReactorComponentStats,
+  getSensorComponentStats,
+  getShieldComponentStats,
+  unassignComponent as unassignShipComponent,
+} from "./component-state.js";
 
 export class ShipCombatState {
 
@@ -479,85 +491,27 @@ export class ShipCombatState {
     updates["resources.ordnance.manpower"] = Math.min(manpowerMax, prevMan + manpoolReturn);
 
     // ── Ordnance Master commitment completion side effects ──
+    const completionStats = {
+      ammoCapacity: this.getOrdnanceBayStats(ship).ammoCapacity ?? 0,
+      ...this.getReactorStats(ship),
+      hullDisplayMode: SystemAdapter.current.hullDisplayMode,
+    };
     for (const actionId of completedActions) {
-      if (actionId === "damageControl") {
-        const fire = data.internalFire ?? 0;
-        if (fire > 0) {
-          updates.internalFire = Math.max(0, (updates.internalFire ?? fire) - 1);
-        }
-      }
-      if (actionId === "hullRepairParty") {
-        const hullSys     = SystemAdapter.current.getShipData(ship)?.hull;
-        const hullCurrent = hullSys?.value ?? 0;
-        const hullMax     = hullSys?.max   ?? 0;
-        const isHPMode    = SystemAdapter.current.hullDisplayMode === "hpRemaining";
-        const isDamaged   = isHPMode ? hullCurrent < hullMax : hullCurrent > 0;
-        if (isDamaged) {
-          const repairAmt = 2;
-          const current   = updates["hull.value"] ?? hullCurrent;
-          updates["hull.value"] = isHPMode
-            ? Math.min(hullMax, current + repairAmt)
-            : Math.max(0, current - repairAmt);
-        }
-      }
-      if (actionId === "loadAmmo") {
-        const gunAmmo = data.resources?.gunner?.ammo ?? 0;
-        const ammoCap = this.getOrdnanceBayStats(ship).ammoCapacity ?? 0;
-        const reloadAmt = Math.ceil(ammoCap * 0.2);
-        updates["resources.gunner.ammo"] = Math.min(ammoCap, (updates["resources.gunner.ammo"] ?? gunAmmo) + reloadAmt);
-      }
-      if (actionId === "armTorpedo") {
-        const armed = data.resources?.ordnance?.armedTorpedoes ?? 0;
-        updates["resources.ordnance.armedTorpedoes"] = (updates["resources.ordnance.armedTorpedoes"] ?? armed) + 1;
-      }
-      if (actionId === "armCraft") {
-        const armed = data.resources?.ordnance?.armedCraft ?? 0;
-        updates["resources.ordnance.armedCraft"] = (updates["resources.ordnance.armedCraft"] ?? armed) + 1;
-      }
-      if (actionId === "loadPayload") {
-        const avail = data.resources?.ordnance?.availablePayloads ?? 0;
-        updates["resources.ordnance.availablePayloads"] = (updates["resources.ordnance.availablePayloads"] ?? avail) + 1;
-      }
-      if (actionId === "generatePower") {
-        const reactorStats = this.getReactorStats(ship);
-        const auxCap       = reactorStats.auxPowerCapacity;
-        const currentAux   = data.resources?.engineer?.auxiliaryPower ?? 0;
-        // AP Shutdown (Core Systems High): AP cannot increase
-        if (data.conditions?.coreSystems?.tier !== "high") {
-          updates["resources.engineer.auxiliaryPower"] = Math.min(auxCap, (updates["resources.engineer.auxiliaryPower"] ?? currentAux) + reactorStats.reserveMultiplier);
-        }
-      }
-      if (actionId === "recallCraft") {
-        const recovering = data.resources?.ordnance?.craftRecovering ?? 0;
-        if (recovering > 0) {
-          updates["resources.ordnance.craftRecovering"] = (updates["resources.ordnance.craftRecovering"] ?? recovering) - 1;
-          const armed = data.resources?.ordnance?.armedCraft ?? 0;
-          updates["resources.ordnance.armedCraft"] = (updates["resources.ordnance.armedCraft"] ?? armed) + 1;
-        }
-      }
-      if (actionId === "bayOptimization") {
-        // Accelerate all remaining commitments by 1 extra turn
-        const nextCommitments = updates["resources.ordnance.commitments"] ?? [...(data.resources?.ordnance?.commitments ?? [])];
-        updates["resources.ordnance.commitments"] = nextCommitments.map(c => ({
-          ...c,
-          turnsRemaining: Math.max(0, (c.turnsRemaining ?? 1) - 1),
-        }));
-      }
+      applyOrdnanceCompletionEffect(updates, data, actionId, completionStats);
     }
 
     // ── Crew casualty: internal fire reduces manpower max ──
-    const holdTheLineActive = data.resources?.captain?.holdTheLineActive ?? false;
-    const internalFire = data.internalFire ?? 0;
-    if (internalFire > 0 && !holdTheLineActive) {
-      const currentMax = data.resources?.ordnance?.manpowerMax ?? 0;
-      const newMax = Math.max(0, currentMax - internalFire);
-      updates["resources.ordnance.manpowerMax"] = newMax;
-      // Clamp manpower to the new reduced max
-      const currentManpower = updates["resources.ordnance.manpower"] ?? data.resources?.ordnance?.manpower ?? 0;
-      if (currentManpower > newMax) {
-        updates["resources.ordnance.manpower"] = newMax;
-      }
-    }
+    Object.assign(updates, getInternalFireManpowerUpdates({
+      ...data,
+      resources: {
+        ...data.resources,
+        ordnance: {
+          ...data.resources?.ordnance,
+          manpower: updates["resources.ordnance.manpower"] ?? data.resources?.ordnance?.manpower,
+          manpowerMax: updates["resources.ordnance.manpowerMax"] ?? data.resources?.ordnance?.manpowerMax,
+        },
+      },
+    }));
 
     // ── Lock Stabilizer payload: freeze decay timers ──
     const sensorPayload = data.resources?.sensors?.payload ?? "";
@@ -646,9 +600,7 @@ export class ShipCombatState {
    */
   static async assignWeapon({ itemId, weaponPosition, weaponBay }, shipActor = null) {
     const ship = shipActor ?? this.ship;
-    if (!ship) return;
-    const updates = [{ _id: itemId, "system.equipped": true, "system.weaponPosition": weaponPosition, "system.weaponBay": weaponBay }];
-    return ship.updateEmbeddedDocuments("Item", updates);
+    return assignWeaponComponent(ship, { itemId, weaponPosition, weaponBay });
   }
 
   /**
@@ -657,8 +609,7 @@ export class ShipCombatState {
    */
   static async unassignComponent({ itemId }, shipActor = null) {
     const ship = shipActor ?? this.ship;
-    if (!ship) return;
-    return ship.updateEmbeddedDocuments("Item", [{ _id: itemId, "system.equipped": false }]);
+    return unassignShipComponent(ship, { itemId });
   }
 
   /**
@@ -667,12 +618,7 @@ export class ShipCombatState {
    */
   static async assignEquipment({ slotId, newItemId }, shipActor = null) {
     const ship = shipActor ?? this.ship;
-    if (!ship) return;
-    const allOfType = ship.items.filter(
-      i => i.type === `${MODULE_ID}.component` && i.system.slot === slotId
-    );
-    const updates = allOfType.map(c => ({ _id: c.id, "system.equipped": c.id === newItemId }));
-    if (updates.length) return ship.updateEmbeddedDocuments("Item", updates);
+    return assignEquipmentComponent(ship, { slotId, newItemId });
   }
 
   static async updateResource(roleId, key, value, shipActor = null) {
@@ -800,13 +746,8 @@ export class ShipCombatState {
     return this.withAllocationTransaction(async () => {
       const data = SystemAdapter.current.getShipData(ship) ?? {};
       const ordnance = data.resources?.ordnance ?? {};
-      const override = (data.crewSize ?? 6) <= 4 ? ORDNANCE_4MAN_COSTS[actionId] : null;
-      const baseCrew = override?.crew ?? entry.crew;
-      const baseDuration = override?.duration ?? entry.duration;
-      const crewCost = Math.max(2, baseCrew - Math.max(0, ordnance.allocEfficiency ?? 0));
-      const duration = Math.max(1, baseDuration - Math.max(0, ordnance.allocExpedience ?? 0));
-      const manpower = ordnance.manpower ?? 0;
-      if (manpower < crewCost) return { ok: false, reason: "insufficientCrew", need: crewCost, have: manpower };
+      const { crewCost, duration, manpower, affordable } = getOrdnanceReservation(data, actionId);
+      if (!affordable) return { ok: false, reason: "insufficientCrew", need: crewCost, have: manpower };
       if (["launchTorpedo", "torpedoSalvo"].includes(actionId) && (ordnance.armedTorpedoes ?? 0) < 1) {
         return { ok: false, reason: "noArmedTorpedoes" };
       }
@@ -889,30 +830,15 @@ export class ShipCombatState {
       const [commitment] = commitments.splice(commitmentIndex, 1);
       const manpowerMax = ordnance.manpowerMax ?? this.getOrdnanceBayStats(ship).manpower;
       const updates = {
-        "system.resources.ordnance.commitments": commitments,
-        "system.resources.ordnance.manpower": Math.min(manpowerMax, (ordnance.manpower ?? 0) + (commitment.crewCount ?? 0)),
+        "resources.ordnance.commitments": commitments,
+        "resources.ordnance.manpower": Math.min(manpowerMax, (ordnance.manpower ?? 0) + (commitment.crewCount ?? 0)),
       };
-      const actionId = commitment.action;
-      if (actionId === "damageControl" && (data.internalFire ?? 0) > 0) {
-        updates["system.internalFire"] = Math.max(0, data.internalFire - 1);
-      } else if (actionId === "hullRepairParty") {
-        const hullCurrent = data.hull?.value ?? 0;
-        const hullMax = data.hull?.max ?? 0;
-        updates["system.hull.value"] = SystemAdapter.current.hullDisplayMode === "hpRemaining"
-          ? Math.min(hullMax, hullCurrent + 2)
-          : Math.max(0, hullCurrent - 2);
-      } else if (actionId === "loadAmmo") {
-        const ammoCap = this.getOrdnanceBayStats(ship).ammoCapacity ?? 0;
-        updates["system.resources.gunner.ammo"] = Math.min(ammoCap, (data.resources?.gunner?.ammo ?? 0) + Math.ceil(ammoCap * 0.2));
-      } else if (actionId === "armTorpedo") {
-        updates["system.resources.ordnance.armedTorpedoes"] = (ordnance.armedTorpedoes ?? 0) + 1;
-      } else if (actionId === "armCraft") {
-        updates["system.resources.ordnance.armedCraft"] = (ordnance.armedCraft ?? 0) + 1;
-      } else if (actionId === "loadPayload") {
-        updates["system.resources.ordnance.availablePayloads"] = (ordnance.availablePayloads ?? 0) + 1;
-      }
-
-      await ship.update(updates);
+      applyOrdnanceCompletionEffect(updates, data, commitment.action, {
+        ammoCapacity: this.getOrdnanceBayStats(ship).ammoCapacity ?? 0,
+        ...this.getReactorStats(ship),
+        hullDisplayMode: SystemAdapter.current.hullDisplayMode,
+      });
+      await this.update(updates, ship);
       return { ok: true };
     }, ship);
   }
@@ -1429,46 +1355,14 @@ export class ShipCombatState {
       "resources.pilot.bearing": 0,
     }, ship);
 
-    // ── Per-round condition effects (player ship) ─────────────────────────────
-    const conditions  = data.conditions ?? {};
-    const condUpdates = {};
-    const hullVal     = data.hull?.value ?? 0;
-    const hullMax     = data.hull?.max ?? 50;
-    // Capture fire BEFORE condition updates so Hull High doesn't double-apply this round
-    const fireBefore  = data.internalFire ?? 0;
-
-    const hullTier = conditions.hull?.tier;
-    if (hullTier) {
-      const dmgMap = { low: 1, medium: 2, high: 3 };
-      const hullBreachDmg = dmgMap[hullTier] ?? 0;
-      condUpdates["hull.value"] = SystemAdapter.current.hullDisplayMode === "hpRemaining"
-        ? Math.max(0, hullVal - hullBreachDmg)
-        : Math.min(hullMax, hullVal + hullBreachDmg);
-      if (hullTier === "high") {
-        // Critical Breach: +5 internal fire per round (deals hull damage starting next round)
-        condUpdates.internalFire = fireBefore + 5;
-      }
-    }
-
-    // Heat Surge: +5 heat per round (Core Systems Medium+)
-    if (conditions.coreSystems?.tier === "medium" || conditions.coreSystems?.tier === "high") {
-      const currentHeat = data.resources?.engineer?.heat ?? 0;
-      condUpdates["resources.engineer.heat"] = currentHeat + 5;
-    }
+    // ── Per-round condition effects (shared with Foundry combat advancement) ──
+    const condUpdates = getPlayerTurnConditionUpdates(
+      data,
+      SystemAdapter.current.hullDisplayMode,
+    );
 
     if (Object.keys(condUpdates).length > 0) {
       await this.update(condUpdates, ship);
-    }
-
-    const holdTheLineActive = data.resources?.captain?.holdTheLineActive ?? false;
-    if (fireBefore > 0 && !holdTheLineActive) {
-      const hull    = SystemAdapter.current.getShipData(ship)?.hull ?? {};
-      const hullMax = hull.max ?? 50;
-      const hullVal = hull.value ?? 0;
-      const newHull = SystemAdapter.current.hullDisplayMode === "hpRemaining"
-        ? Math.max(0, hullVal - fireBefore)
-        : Math.min(hullMax, hullVal + fireBefore);
-      await this.update({ "hull.value": newHull }, ship);
     }
 
     await this.processOrdnanceLifecycle(ship);
@@ -1624,82 +1518,22 @@ export class ShipCombatState {
 
   static getReactorStats(shipActor) {
     const ship = shipActor ?? this.ship;
-    if (!ship) return { coreOutput: 0, shieldStrengthPerCore: 0, heatCapacity: 0, auxPowerCapacity: 0, reserveMultiplier: 0 };
-    const reactor = ship.items.find(i => i.type === `${MODULE_ID}.component` && i.system.slot === "reactor" && i.system.equipped !== false);
-    return {
-      coreOutput:            reactor?.system?.rating ?? 0,
-      shieldStrengthPerCore: reactor?.system?.shieldStrengthPerCore ?? 0,
-      heatCapacity:          reactor?.system?.heatCapacity ?? 0,
-      auxPowerCapacity:      reactor?.system?.bankCapacity ?? 0,
-      reserveMultiplier:     reactor?.system?.reserveMultiplier ?? 0,
-    };
+    return getReactorComponentStats(ship);
   }
 
   static getOrdnanceBayStats(shipActor) {
     const ship = shipActor ?? this.ship;
-    if (!ship) return { ammoCapacity: 0, chargeCapacity: 0, manpower: 0, torpedoCapacity: 4, strikeCraftCapacity: 6 };
-    const bay = ship.items.find(i => i.type === `${MODULE_ID}.component` && i.system.slot === "weaponsBay" && i.system.equipped !== false);
-    return {
-      ammoCapacity:          bay?.system?.bayAmmoCapacity ?? 0,
-      chargeCapacity:        bay?.system?.bayChargeCapacity ?? 0,
-      manpower:              bay?.system?.bayManpower ?? 0,
-      torpedoCapacity:       bay?.system?.bayTorpedoCapacity ?? 4,
-      maxFlights:            bay?.system?.bayMaxFlights ?? 2,
-      strikeCraftCapacity:   bay?.system?.bayStrikeCraftCapacity ?? 6,
-    };
+    return getOrdnanceBayComponentStats(ship);
   }
 
   static getShieldStats(shipActor) {
     const ship = shipActor ?? this.ship;
-    const _default = { maxVoidFlux: 20, fluxToAPRate: 1, zoneThresholds: { bow: 8, stern: 8, port: 8, starboard: 8 } };
-    if (!ship) return _default;
-    if (ship.type === `${MODULE_ID}.npcShip`) {
-      const sys = SystemAdapter.current.getShipData(ship) ?? {};
-      return {
-        maxVoidFlux: sys.voidshieldFlux ?? 0,
-        fluxToAPRate: 1,
-        zoneThresholds: {
-          bow:       sys.shieldMax?.bow ?? 0,
-          stern:     sys.shieldMax?.stern ?? 0,
-          port:      sys.shieldMax?.port ?? 0,
-          starboard: sys.shieldMax?.starboard ?? 0,
-        },
-      };
-    }
-    const shield = ship.items.find(i => i.type === `${MODULE_ID}.component` && i.system.slot === "shields" && i.system.equipped !== false);
-    if (!shield) return _default;
-    const zt = shield.system.zoneThresholds;
-    return {
-      maxVoidFlux:    shield.system.maxVoidFlux ?? 0,
-      fluxToAPRate:   shield.system.fluxToAPRate ?? 1,
-      zoneThresholds: {
-        bow:       zt?.bow       ?? 0,
-        stern:     zt?.stern     ?? 0,
-        port:      zt?.port      ?? 0,
-        starboard: zt?.starboard ?? 0,
-      },
-    };
+    return getShieldComponentStats(ship);
   }
 
   static getSensorStats(shipActor) {
     const ship = shipActor ?? this.ship;
-    if (!ship) return { rating: 0, bandSize: 0, autoScanRange: 0, maxRange: 0, apCostMultiplier: 1 };
-    const sys = SystemAdapter.current.getShipData(ship) ?? {};
-    const sensor = ship.type === `${MODULE_ID}.npcShip` ? null : ship.items.find(
-      i => i.type === `${MODULE_ID}.component` && i.system.slot === "sensor" && i.system.equipped !== false
-    );
-    const scanRange = (sensor?.system?.autoScanRange ?? 0) || (sys.autoScanRange ?? 0);
-    const rangeAmpActive = (sys.resources?.sensors?.effects ?? []).some(e => e.actionId === "rangeAmplifier");
-    const effectiveScanRange = rangeAmpActive ? scanRange * 2 : scanRange;
-    const bandExpanded     = !!(SystemAdapter.current.getShipData(ship)?.resources?.gunner?.sensorBandExpanded);
-    const rawBandSize      = sensor?.system?.bandSize ?? sys.sensorBandSize ?? 0;
-    return {
-      rating:           sensor?.system?.rating ?? sys.sensorRating ?? 0,
-      bandSize:         bandExpanded ? rawBandSize * 2 : rawBandSize,
-      autoScanRange:    effectiveScanRange,
-      maxRange:         sensor?.system?.maxRange ?? 0,
-      apCostMultiplier: sensor?.system?.apCostMultiplier ?? 1,
-    };
+    return getSensorComponentStats(ship);
   }
 
   /**
@@ -2141,6 +1975,7 @@ ShipCombatState.fireWeapon      = function (payload) {
   ));
 };
 ShipCombatState._fireWeaponChat = GunnerState._fireWeaponChat;
+ShipCombatState.executeGunnerCoreAction = StationCoreActions.executeGunnerCoreAction;
 
 // Pilot / Helm
 ShipCombatState.consumePilotCore = PilotState.consumePilotCore;
@@ -2218,6 +2053,7 @@ ShipCombatState.setOrdnanceTurnDone       = OrdnanceState.setOrdnanceTurnDone;
 ShipCombatState.designateHostileTorpedo   = OrdnanceState.designateHostileTorpedo;
 ShipCombatState.torpedoPowerBoost         = OrdnanceState.torpedoPowerBoost;
 ShipCombatState.blastOrdnance             = OrdnanceState.blastOrdnance;
+ShipCombatState.executeOrdnanceCoreAction = StationCoreActions.executeOrdnanceCoreAction;
 
 // Crits
 ShipCombatState.rollCrit = CritState.rollCrit;

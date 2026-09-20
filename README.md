@@ -413,13 +413,36 @@ Run the versioned regression suite with:
 npm test
 ```
 
-Socket-contract tests inventory request/handler scope and companion API wiring.
-State-transition tests exercise pure transition functions across their complete
-finite input space, then verify that Foundry-facing launch, hook, and handler
-paths use those functions. Pull requests and pushes to `main` in Core or any
-companion repository run the same cross-module suite in GitHub Actions. An
-adapter workflow checks out its triggering commit alongside the latest `main`
-versions of Core and the other companions.
+`npm test` runs the behavioral unit suite first and the separately reported
+architecture suite second. Architecture checks inventory request/handler scope,
+companion API wiring, release packaging, and other repository-wide invariants.
+State-transition tests execute pure transition functions across their complete
+finite input space. Pull requests and pushes to `main` in Core or any companion
+repository run both suites in GitHub Actions. An adapter workflow checks out its
+triggering commit alongside the latest `main` versions of Core and the other
+companions.
+
+The suite distinguishes three kinds of evidence:
+
+1. **Behavioral unit contracts** execute the production boundary with realistic
+   inputs and assert returned values, emitted updates, delegation, and failure
+   behavior. Every adapter-facing contract must run once per supported adapter
+   shape. These tests are the primary regression proof.
+2. **Architecture checks** may inspect source to enforce global invariants such
+   as “no unscoped socket calls” or release allowlists. A source-pattern check is
+   supplemental and must never be the only test for user-visible behavior.
+3. **Foundry integration tests** enter through the real Foundry API or rendered
+   UI event and assert observable persisted/DOM state. Pre-seeding the state
+   being tested does not count. For example, initiative coverage must call
+   `Combat.rollInitiative()` with blank combatants and then observe populated
+   tracker values.
+
+For every reported regression, first reproduce it with a test that fails on the
+unfixed code. Prefer extracting one Core-owned executable contract over copying
+host-specific glue into companions. The unit contract must cover all known host
+input shapes, and the integration scenario must cover the Foundry-owned boundary
+that mocks cannot faithfully reproduce. Passing source inspection alone is not
+accepted as evidence that the regression is fixed.
 
 New persistent gameplay state should be introduced through a pure transition
 function wherever practical, with exhaustive table tests for its legal and
@@ -430,11 +453,19 @@ lifecycle behavior.
 
 ### Foundry integration CI
 
-Trusted pushes to `main` and manual runs also exercise each companion inside a
-real Foundry 14.367 process with Chromium. The disposable test world verifies
-module and adapter startup, AppV1/AppV2 sheet close-and-rerender behavior, a
-player-to-GM socket request, and duplicate-request idempotency. Companion-only
-pushes call the same reusable workflow for their own adapter.
+Trusted pushes to `main` and manual runs exercise four scenarios inside the
+newest Foundry build in the generation mutually supported by all four module
+manifests, currently Foundry 14, with Chromium: D&D5e, standalone SF2e, PF2e with the
+Starfinder Anachronism module, and Imperium Maledictum. Each disposable world
+verifies module and adapter startup, merged localization, AppV1/AppV2 sheet
+lifecycles, real bridge-crew drops, rendered Power Core ordering, computed NPC
+  ordnance-control layout, component derivation/form submission/trait editing,
+  player and NPC component drops and rendered unassignment/deletion, tracker
+  initiative from blank combatants, linked player ships, independent unlinked NPC
+  ships, player and NPC ordnance of both subtypes, combat-turn hooks, player-to-GM
+  socket traffic, and duplicate-request idempotency.
+Companion-only pushes call the same reusable workflow for the affected adapter
+(the SF2e companion runs both SF scenarios).
 
 Configure `FOUNDRY_USERNAME`, `FOUNDRY_PASSWORD`, and `FOUNDRY_LICENSE_KEY` as
 Actions secrets in all four repositories. `FOUNDRY_ADMIN_KEY` is optional. For
@@ -444,10 +475,28 @@ value and securely copies it to every repository without placing values in
 command arguments or files. Organization-owned repositories may instead use
 organization Actions secrets shared with the four repositories. Until the
 required secrets exist, ordinary integration runs report a clean skip; release
-packaging invokes the harness with credentials required. The runner downloads
-Foundry into an ephemeral container and neither caches nor uploads the
-proprietary application. Only Playwright traces, screenshots, and Foundry logs
-are retained on failure.
+packaging invokes the harness with credentials required. The runner keeps only
+an encrypted, credential-keyed cache of the licensed Foundry distribution; it
+never uploads the plaintext application as an artifact. Playwright traces,
+screenshots, and Foundry logs are retained only on failure.
+
+The workflow resolves the floating Foundry-generation container to an exact
+build and digest before restoring the encrypted distribution cache. After the
+complete four-scenario matrix passes on `main`, it can open manifest-only pull
+requests raising `compatibility.verified` in repositories whose value is older.
+It never changes `minimum`, `maximum`, or crosses a Foundry generation.
+Each scenario also resolves the newest compatible stable release of its game
+system and required modules from their official GitHub release manifests. The
+exact Foundry image digest, package versions, manifest URLs, and download URLs
+are retained as a `resolved-packages` workflow artifact for reproducibility.
+
+Automatic compatibility promotion is optional. Create a fine-grained personal
+access token with **Contents: Read and write** and **Pull requests: Read and
+write** access to all four ship-combat repositories, then run
+`zsh .github/scripts/set-compatibility-bot-token.zsh`. The token is stored only
+as the Core repository's `COMPATIBILITY_BOT_TOKEN` Actions secret. Without it,
+the integration matrix still resolves and tests the newest build but does not
+modify any repository.
 
 ### Release packaging
 
@@ -498,8 +547,9 @@ causodes-shipcombat-core/
 │   └── custom-class-compat.css   # Compat shims for systems that inject CSS classes
 ├── templates/                    # Sheets, partials, chat cards
 ├── tests/
-│   ├── unit/                     # Contract, pure transition, and wiring tests
-│   └── integration/              # Foundry fixture builder and Playwright tests
+│   ├── unit/                     # Executable contracts and pure transitions
+│   ├── architecture/             # Source topology and repository invariants
+│   └── integration/              # Observable behavior in real Foundry
 └── lang/en.json                  # Neutral default strings
 ```
 

@@ -11,6 +11,74 @@ import { calculateRawRamDamage } from "./ram-damage.js";
 import { rollCrit } from "./crit-state.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
 import { getStanceMovementModifiers, hasDevastationProtocol } from "../stances.js";
+import { getPowerCoreCount, getPowerCorePoolRole } from "../roles/crew-operators.js";
+
+function _movementUpdates(data, {
+  fuelUsed,
+  driftUsed = 0,
+  velocityX,
+  velocityY,
+} = {}) {
+  const pilot = data.resources?.pilot ?? {};
+  const updates = {
+    "resources.pilot.fuelBurned": fuelUsed,
+    "resources.pilot.driftBurned": (pilot.driftBurned ?? 0) + driftUsed,
+    "resources.pilot.bearing": 0,
+  };
+  if (velocityX !== undefined && velocityY !== undefined) {
+    updates["resources.pilot.velocityX"] = velocityX;
+    updates["resources.pilot.velocityY"] = velocityY;
+  }
+  return updates;
+}
+
+/** Pure projection shared by every authoritative Pilot Core action. */
+export function buildPilotCoreUpdates(data, actionId, effectUpdates = {}) {
+  const poolRole = getPowerCorePoolRole(data, "pilot");
+  const coreCount = getPowerCoreCount(data, "pilot");
+  if (coreCount <= 0) return null;
+  return {
+    ...effectUpdates,
+    [`resources.${poolRole}.coreCount`]: coreCount - 1,
+    "resources.pilot.coreActionsPlayed": [
+      ...(data.resources?.pilot?.coreActionsPlayed ?? []),
+      actionId,
+    ],
+  };
+}
+
+function _getPath(source, path) {
+  return path.split(".").reduce((value, key) => value?.[key], source);
+}
+
+async function _commitPilotCoreAction(state, data, actionId, effectUpdates, tokenUpdate = null) {
+  const updates = buildPilotCoreUpdates(data, actionId, effectUpdates);
+  if (!updates) return false;
+  await state.update(updates);
+  if (!tokenUpdate) return true;
+
+  try {
+    await tokenUpdate.document.update(tokenUpdate.position, { animate: true });
+  } catch (error) {
+    const rollback = Object.fromEntries(
+      Object.keys(updates).map(path => [path, structuredClone(_getPath(data, path))]),
+    );
+    try {
+      await state.update(rollback);
+    } catch (rollbackError) {
+      console.error(`${MODULE_ID} | Pilot Core action rollback failed`, rollbackError);
+    }
+    throw error;
+  }
+  return true;
+}
+
+function _withPilotCoreTransaction(state, operation) {
+  return state.withAllocationTransaction(
+    () => state.withPowerCoreTransaction(operation, state.ship),
+    state.ship,
+  );
+}
 
 /**
  * Consume the pilot's assigned Power Core and record the overcharge action played.
@@ -29,42 +97,34 @@ export async function consumePilotCore(userId, actionId) {
 export async function pilotRetrograde(userId, retroValue, newX, newY, newRotation, waypoints) {
   const token = this.ship?.getActiveTokens()?.[0];
   if (!token) return false;
-  const consumed = await this.consumePilotCore(userId, "retro");
-  if (!consumed) return false;
+  return _withPilotCoreTransaction(this, async () => {
+    const data = this.getData();
+    const isRealistic = game.settings.get(MODULE_ID, "movementMode") === "realistic";
 
-  const data = this.getData();
-  const isRealistic = game.settings.get(MODULE_ID, "movementMode") === "realistic";
-
-  if (isRealistic) {
-    const vx = data.resources?.pilot?.velocityX ?? 0;
-    const vy = data.resources?.pilot?.velocityY ?? 0;
-    const vmag = Math.hypot(vx, vy);
-    if (vmag > 0 && token) {
-      // Cancel retroValue VU from the velocity along the current heading direction
+    if (isRealistic) {
+      const vx = data.resources?.pilot?.velocityX ?? 0;
+      const vy = data.resources?.pilot?.velocityY ?? 0;
+      if (Math.hypot(vx, vy) <= 0) return false;
       const h0 = (token.document.rotation + 90) * (Math.PI / 180);
       const dot = vx * Math.cos(h0) + vy * Math.sin(h0);
       const cancel = Math.min(retroValue, Math.max(0, dot));
-      const newVx = vx - cancel * Math.cos(h0);
-      const newVy = vy - cancel * Math.sin(h0);
-      await this.update({
-        "resources.pilot.velocityX": newVx,
-        "resources.pilot.velocityY": newVy,
-      });
-      // Move token to retrograde position if any
-      if (waypoints?.length) {
-        // waypoints driven by caller
-      } else if (newX !== undefined) {
-        await token.document.update({ x: newX, y: newY, rotation: newRotation }, { animate: true });
-      }
+      if (cancel <= 0) return false;
+      const effect = {
+        "resources.pilot.velocityX": vx - cancel * Math.cos(h0),
+        "resources.pilot.velocityY": vy - cancel * Math.sin(h0),
+      };
+      const tokenUpdate = !waypoints?.length && newX !== undefined
+        ? { document: token.document, position: { x: newX, y: newY, rotation: newRotation } }
+        : null;
+      return _commitPilotCoreAction(this, data, "retro", effect, tokenUpdate);
     }
-    return true;
-  }
 
-  const prevMove   = data.resources?.pilot?.prevTurnMove ?? 0;
-  const currentMin = Math.ceil(prevMove / 2);
-  const newMin     = Math.max(0, currentMin - retroValue);
-  await this.update({ "resources.pilot.prevTurnMove": newMin * 2 });
-  return true;
+    const currentMin = Math.ceil((data.resources?.pilot?.prevTurnMove ?? 0) / 2);
+    const newMin = Math.max(0, currentMin - retroValue);
+    return _commitPilotCoreAction(this, data, "retro", {
+      "resources.pilot.prevTurnMove": newMin * 2,
+    });
+  });
 }
 
 /**
@@ -72,10 +132,12 @@ export async function pilotRetrograde(userId, retroValue, newX, newY, newRotatio
  * context doubles effective speed this turn.
  */
 export async function pilotOverdrive(userId) {
-  const consumed = await this.consumePilotCore(userId, "overdrive");
-  if (!consumed) return false;
-  await this.update({ "resources.pilot.overdrive": true });
-  return true;
+  return _withPilotCoreTransaction(this, () => {
+    const data = this.getData();
+    return _commitPilotCoreAction(this, data, "overdrive", {
+      "resources.pilot.overdrive": true,
+    });
+  });
 }
 
 /**
@@ -83,17 +145,15 @@ export async function pilotOverdrive(userId) {
  * In Realistic mode, also adds the lateral delta to the velocity vector.
  */
 export async function pilotStrafe(userId, newX, newY, newRotation, dist, waypoints) {
-  if (!this.ship?.getActiveTokens()?.[0]) return false;
-  const consumed = await this.consumePilotCore(userId, "strafe");
-  if (!consumed) return false;
-  const data = this.getData();
-  const isRealistic = game.settings.get(MODULE_ID, "movementMode") === "realistic";
-  let velocityX, velocityY;
-  if (isRealistic) {
-    const token = this.ship?.getActiveTokens()?.[0];
-    const vx = data.resources?.pilot?.velocityX ?? 0;
-    const vy = data.resources?.pilot?.velocityY ?? 0;
-    if (token) {
+  const token = this.ship?.getActiveTokens()?.[0];
+  if (!token) return false;
+  return _withPilotCoreTransaction(this, async () => {
+    const data = this.getData();
+    const isRealistic = game.settings.get(MODULE_ID, "movementMode") === "realistic";
+    let velocityX, velocityY;
+    if (isRealistic) {
+      const vx = data.resources?.pilot?.velocityX ?? 0;
+      const vy = data.resources?.pilot?.velocityY ?? 0;
       // Determine direction from displacement vs current heading perpendicular
       const h0 = (token.document.rotation + 90) * (Math.PI / 180);
       const perpAngle = h0 + Math.PI / 2; // starboard
@@ -105,16 +165,16 @@ export async function pilotStrafe(userId, newX, newY, newRotation, dist, waypoin
       velocityX = vx + Math.cos(perpAngle) * signedDist;
       velocityY = vy + Math.sin(perpAngle) * signedDist;
     }
-  }
-  const moved = await this.confirmMovement({
-    fuelUsed: data.resources?.pilot?.fuelBurned ?? 0,
-    newX, newY, newRotation,
-    gridSquaresMoved: dist,
-    waypoints,
-    velocityX,
-    velocityY,
+    const effect = _movementUpdates(data, {
+      fuelUsed: data.resources?.pilot?.fuelBurned ?? 0,
+      velocityX,
+      velocityY,
+    });
+    const tokenUpdate = !waypoints?.length
+      ? { document: token.document, position: { x: newX, y: newY, rotation: newRotation } }
+      : null;
+    return _commitPilotCoreAction(this, data, "strafe", effect, tokenUpdate);
   });
-  return moved !== false;
 }
 
 /**
@@ -122,24 +182,21 @@ export async function pilotStrafe(userId, newX, newY, newRotation, dist, waypoin
  * effective speed. Requires ≥50% power remaining; consumes 50% power and one Core.
  */
 export async function pilotFlipAndBurn(userId, halfSpeedUnits, newX, newY, newRotation, waypoints) {
-  if (!this.ship?.getActiveTokens()?.[0]) return false;
-  const consumed = await this.consumePilotCore(userId, "flipBurn");
-  if (!consumed) return false;
-  const data       = this.getData();
-  const fuelBurned = data.resources?.pilot?.fuelBurned ?? 0;
-  const isRealistic = game.settings.get(MODULE_ID, "movementMode") === "realistic";
-  const moved = await this.confirmMovement({
-    fuelUsed:         fuelBurned + 50,
-    newX,
-    newY,
-    newRotation,
-    gridSquaresMoved: halfSpeedUnits,
-    waypoints,
-    // In Realistic mode the burn fully arrests momentum (velocity → 0)
-    velocityX: isRealistic ? 0 : undefined,
-    velocityY: isRealistic ? 0 : undefined,
+  const token = this.ship?.getActiveTokens()?.[0];
+  if (!token) return false;
+  return _withPilotCoreTransaction(this, async () => {
+    const data = this.getData();
+    const isRealistic = game.settings.get(MODULE_ID, "movementMode") === "realistic";
+    const effect = _movementUpdates(data, {
+      fuelUsed: (data.resources?.pilot?.fuelBurned ?? 0) + 50,
+      velocityX: isRealistic ? 0 : undefined,
+      velocityY: isRealistic ? 0 : undefined,
+    });
+    const tokenUpdate = !waypoints?.length
+      ? { document: token.document, position: { x: newX, y: newY, rotation: newRotation } }
+      : null;
+    return _commitPilotCoreAction(this, data, "flipBurn", effect, tokenUpdate);
   });
-  return moved !== false;
 }
 
 /**

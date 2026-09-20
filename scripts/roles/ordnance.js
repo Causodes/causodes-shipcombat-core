@@ -736,15 +736,6 @@ async function _onOrdnanceMasterCoreAction(event, target) {
   }
   const entry = ORDNANCE_MASTER_CORE_ACTIONS.find(a => a.id === actionId);
   if (!entry) return;
-  let coreReserved = false;
-  const reserveCore = async () => {
-    if (coreReserved) return true;
-    coreReserved = await requestGM(this, "consumePowerCore", { roleId: "ordnance", actionId });
-    if (!coreReserved) {
-      ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NeedsPowerCore"));
-    }
-    return coreReserved;
-  };
 
   // ── Combat Recovery Doctrine ──────────────────────────────────────────────
   if (actionId === "combatRecoveryDoctrine") {
@@ -786,24 +777,9 @@ async function _onOrdnanceMasterCoreAction(event, target) {
       });
       if (!choice || choice === "cancel") return;
     }
-    if (!(await reserveCore())) return;
-
-    if (choice === "destroyed") {
-      // First use on a destroyed craft: moves 1 airframe to partial repair
-      await requestGM(this, "adjustResources", {
-        requirements: [{ roleId: "ordnance", key: "craftDestroyed", min: 1 }],
-        adjustments: [
-          { roleId: "ordnance", key: "craftDestroyed", delta: -1, min: 0 },
-          { roleId: "ordnance", key: "craftPartialRecovery", delta: 1 },
-        ],
-      });
-    } else if (choice === "partial") {
-      // Second use completes the repair  -  craft returns to empty bay slot (available for arming)
-      await requestGM(this, "adjustResources", {
-        requirements: [{ roleId: "ordnance", key: "craftPartialRecovery", min: 1 }],
-        adjustments: [{ roleId: "ordnance", key: "craftPartialRecovery", delta: -1, min: 0 }],
-      });
-    }
+    const result = await requestGM(this, "executeOrdnanceCoreAction", { actionId, choice });
+    if (!result?.ok) ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NeedsPowerCore"));
+    return;
   }
 
   // ── Shock Loading Rotation ────────────────────────────────────────────────
@@ -839,8 +815,8 @@ async function _onOrdnanceMasterCoreAction(event, target) {
     const idx = Number(result);
     if (Number.isNaN(idx) || idx < 0 || idx >= commitments.length) return;
 
-    if (!(await reserveCore())) return;
-    const completed = await requestGM(this, "completeOrdnanceCommitment", {
+    const completed = await requestGM(this, "executeOrdnanceCoreAction", {
+      actionId,
       commitmentId: commitments[idx].id ?? null,
       index: idx,
     });
@@ -876,26 +852,9 @@ async function _onOrdnanceMasterCoreAction(event, target) {
     });
     if (!choice || choice === "cancel") return;
 
-    const armedTorpedoes    = sys.resources?.ordnance?.armedTorpedoes    ?? 0;
-    const availablePayloads = sys.resources?.ordnance?.availablePayloads ?? 0;
-    if (!(await reserveCore())) return;
-    if (choice === "torpedo") {
-      await requestGM(this, "adjustResources", {
-        requirements: [{ roleId: "gunner", key: "ammo", min: 6 }],
-        adjustments: [
-          { roleId: "gunner", key: "ammo", delta: -6, min: 0 },
-          { roleId: "ordnance", key: "armedTorpedoes", delta: 1 },
-        ],
-      });
-    } else {
-      await requestGM(this, "adjustResources", {
-        requirements: [{ roleId: "gunner", key: "ammo", min: 4 }],
-        adjustments: [
-          { roleId: "gunner", key: "ammo", delta: -4, min: 0 },
-          { roleId: "ordnance", key: "availablePayloads", delta: 1 },
-        ],
-      });
-    }
+    const result = await requestGM(this, "executeOrdnanceCoreAction", { actionId, choice });
+    if (!result?.ok) ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Ordnance.MCFInsufficientAmmo"));
+    return;
   }
 
   // ── Deck Conscription ─────────────────────────────────────────────────────
@@ -922,30 +881,14 @@ async function _onOrdnanceMasterCoreAction(event, target) {
         d.render(true);
       });
       if (!choice || choice === "cancel") return;
-      if (!(await reserveCore())) return;
-
-      if (choice === "recover") {
-        // Restore 10% of permanently lost crew (min 1), capped at original component capacity
-        const permanentLoss = componentManpower - manpowerMax;
-        const restore = Math.max(1, Math.ceil(permanentLoss * 0.10));
-        const newMax = Math.min(componentManpower, manpowerMax + restore);
-        await requestGM(this, "adjustResources", {
-          adjustments: [
-            { roleId: "ordnance", key: "manpowerMax", delta: restore, max: componentManpower },
-            { roleId: "ordnance", key: "manpower", delta: restore, max: componentManpower },
-          ],
-        });
-      } else {
-        // Temp gain: 25% of current manpower cap
-        const tempGain = Math.max(1, Math.ceil(manpowerMax * 0.25));
-        await requestGM(this, "adjustResources", { adjustments: [{ roleId: "ordnance", key: "manpower", delta: tempGain }] });
-      }
+      const result = await requestGM(this, "executeOrdnanceCoreAction", { actionId, choice });
+      if (!result?.ok) ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NeedsPowerCore"));
     } else {
       // No permanent loss  -  temp bonus: 25% of manpower cap
-      if (!(await reserveCore())) return;
-      const tempGain = Math.max(1, Math.ceil(manpowerMax * 0.25));
-      await requestGM(this, "adjustResources", { adjustments: [{ roleId: "ordnance", key: "manpower", delta: tempGain }] });
+      const result = await requestGM(this, "executeOrdnanceCoreAction", { actionId, choice: "temp" });
+      if (!result?.ok) ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NeedsPowerCore"));
     }
+    return;
   }
 
   // ── Rapid Rearm ───────────────────────────────────────────────────────────
@@ -955,37 +898,10 @@ async function _onOrdnanceMasterCoreAction(event, target) {
       ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Ordnance.NoTorpedoConfig"));
       return;
     }
-    const crewSize = sys.crewSize ?? 6;
-    if (!(await reserveCore())) return;
-
-    // Always: immediately arm 1 torpedo and reset the auto-arm cycle
-    const adjustments = [
-      { roleId: "ordnance", key: "armedTorpedoes", delta: 1 },
-      { roleId: "ordnance", key: "autoArmTimer", value: 3 },
-    ];
-
-    if (crewSize >= 6) {
-      // Full crew: also trigger auto-load (1 free payload)
-      adjustments.push(
-        { roleId: "ordnance", key: "availablePayloads", delta: 1 },
-        { roleId: "ordnance", key: "autoLoadTimer", value: 2 },
-      );
-    } else {
-      // Smaller crew: grant AP equal to half the reactor's AP-per-core value
-      const reactorComp = this.actor.items?.find(i => i.type === `${MODULE_ID}.component` && i.system?.slot === "reactor" && i.system?.equipped !== false);
-      const reserveMultiplier = reactorComp?.system?.reserveMultiplier ?? 0;
-      const apGain = Math.floor(reserveMultiplier / 2);
-      if (apGain > 0) {
-        const auxCap  = reactorComp?.system?.bankCapacity ?? 0;
-        adjustments.push({ roleId: "engineer", key: "auxiliaryPower", delta: apGain, max: auxCap });
-      }
-    }
-    await requestGM(this, "adjustResources", { adjustments });
+    const result = await requestGM(this, "executeOrdnanceCoreAction", { actionId });
+    if (!result?.ok) ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NeedsPowerCore"));
+    return;
   }
-
-  // Future core actions still reserve through the same atomic backend even if
-  // they do not need any branch-specific preparation.
-  if (!coreReserved) await reserveCore();
 }
 
 /**

@@ -36,8 +36,23 @@ import { hasPlayerShipInitiative } from "../../initiative.js";
 import { normalizeCaptainZone } from "../../captain/card-instances.js";
 import { SHIP_PARTS, SHIP_TABS } from "./parts.js";
 import { buildPowerCorePips } from "./power-core-pips.js";
+import { resolveDroppedDocument } from "./drop-contract.js";
+import {
+  applyComponentSlotToItemData,
+  componentSlotUpdates,
+  playerComponentDropError,
+  prepareImportedComponentPlacement,
+} from "./component-contracts.js";
 
 const requestGM = createActionRequester(context => context.actor);
+
+function resolveDroppedActor(data) {
+  return resolveDroppedDocument(data, "Actor", dragData => Actor.fromDropData(dragData));
+}
+
+function resolveDroppedItem(data) {
+  return resolveDroppedDocument(data, "Item", dragData => Item.fromDropData(dragData));
+}
 
 // ── Module-level constants ────────────────────────────────────────────────
 
@@ -169,58 +184,6 @@ function buildSectionedItems(definitions, items, slotConfig, keyFn = getComponen
       items: sectionItems,
     };
   });
-}
-
-function prepareImportedComponentPlacement(shipActor, itemData, explicitWeaponPosition = false) {
-  const system = itemData.system ?? {};
-  if (system.equipped === false) return true;
-
-  const shipData = SystemAdapter.current.getShipData(shipActor);
-  const components = shipActor.items.filter(item =>
-    item.type === `${MODULE_ID}.component` && item.system.equipped !== false
-  );
-
-  if (system.slot === "weapon") {
-    const position = system.weaponPosition ?? "prow";
-    if (position === "flank" && !explicitWeaponPosition) {
-      const bays = ["port", "starboard"].map((id, index) => {
-        const capacity = Math.max(0, Number(shipData.weaponSlots?.[id] ?? 0));
-        const used = components.filter(item =>
-          item.system.slot === "weapon"
-          && (item.system.weaponPosition ?? "prow") === "flank"
-          && (item.system.weaponBay ?? "port") === id
-        ).length;
-        return { id, index, capacity, used };
-      }).filter(bay => bay.used < bay.capacity);
-
-      bays.sort((left, right) =>
-        (left.used / left.capacity) - (right.used / right.capacity) || left.index - right.index
-      );
-      if (bays.length > 0) {
-        system.weaponBay = bays[0].id;
-        return true;
-      }
-    } else {
-      const section = position === "flank" ? (system.weaponBay ?? "port") : position;
-      const capacity = Math.max(0, Number(shipData.weaponSlots?.[section] ?? 0));
-      const used = components.filter(item => {
-        if (item.system.slot !== "weapon") return false;
-        const itemPosition = item.system.weaponPosition ?? "prow";
-        const itemSection = itemPosition === "flank" ? (item.system.weaponBay ?? "port") : itemPosition;
-        return itemSection === section;
-      }).length;
-      if (used < capacity) return true;
-    }
-  } else if (EQUIPMENT_SECTIONS.some(section => section.id === system.slot)) {
-    const capacity = Math.max(0, Number(shipData.equipmentSlots?.[system.slot] ?? 0));
-    const used = components.filter(item => item.system.slot === system.slot).length;
-    if (used < capacity) return true;
-  } else {
-    return true;
-  }
-
-  system.equipped = false;
-  return false;
 }
 
 // ── ShipController ────────────────────────────────────────────────────────
@@ -841,10 +804,10 @@ export class ShipController {
    */
   async onDropActor(data, event) {
     if (!this.actor.isOwner) return;
-    const ordnanceDrop = event.target.closest?.("[data-ordnance-drop]");
+    const ordnanceDrop = event?.target?.closest?.("[data-ordnance-drop]");
     if (ordnanceDrop) {
       const slotType = ordnanceDrop.dataset.ordnanceDrop;
-      const actor = await Actor.fromDropData(data);
+      const actor = await resolveDroppedActor(data);
       if (!actor) return;
       const isValidDrop = actor.type === `${MODULE_ID}.${slotType === "strikeCraft" ? "strikeCraft" : "torpedo"}`
         || (slotType === "strikeCraft" && isStrikeCraft(actor))
@@ -865,11 +828,11 @@ export class ShipController {
       }] });
     }
 
-    const roleDrop = event.target.closest?.("[data-role-drop]");
+    const roleDrop = event?.target?.closest?.("[data-role-drop]");
     if (!roleDrop) return ShipController.DELEGATE_TO_SUPER;
     const roleId = roleDrop.dataset.roleDrop;
     if (!roleId) return;
-    const actor = await Actor.fromDropData(data);
+    const actor = await resolveDroppedActor(data);
     if (!actor) return;
     const userByCharacter = game.users.find(u => !u.isGM && u.character?.id === actor.id);
     const ownerIds = Object.entries(actor.ownership ?? {})
@@ -878,7 +841,7 @@ export class ShipController {
     const userByOwner = game.users.find(u => !u.isGM && ownerIds.includes(u.id));
     const targetUser = userByCharacter ?? userByOwner;
     if (!targetUser) return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.NoAssignableUser"));
-    requestGM(this, "assignRole", {
+    await requestGM(this, "assignRole", {
       userId: targetUser.id, roleId,
       actorRef: { id: actor.id, uuid: actor.uuid, name: actor.name, img: actor.img },
     });
@@ -889,10 +852,11 @@ export class ShipController {
    */
   async onDropItem(data, event) {
     if (!this.actor.isOwner) return;
-    const dropZone = event.target.closest?.("[data-component-slot]");
-    const item     = await Item.fromDropData(data);
+    const dropZone = event?.target?.closest?.("[data-component-slot]");
+    const item     = await resolveDroppedItem(data);
     if (!item) return;
-    if (item.type !== `${MODULE_ID}.component`) return ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.OnlyComponents"));
+    const error = playerComponentDropError(item);
+    if (error) return ui.notifications.warn(game.i18n.localize(error));
 
     const targetSlot     = dropZone?.dataset.componentSlot;
     const targetPosition = dropZone?.dataset.componentPosition;
@@ -900,37 +864,19 @@ export class ShipController {
     const sameItem = this.actor.items.get(item.id);
     if (sameItem) {
       if (targetSlot) {
-        const update = { "system.slot": targetSlot };
-        if (targetSlot === "weapon" && targetPosition) {
-          if (targetPosition === "port" || targetPosition === "starboard") {
-            update["system.weaponPosition"] = "flank";
-            update["system.weaponBay"]      = targetPosition;
-          } else {
-            update["system.weaponPosition"] = targetPosition;
-          }
-        }
-        await sameItem.update(update);
+        await sameItem.update(componentSlotUpdates(targetSlot, targetPosition));
       }
       return;
     }
 
     const createData = item.toObject();
     delete createData._id;
-    if (targetSlot) {
-      createData.system.slot = targetSlot;
-      if (targetSlot === "weapon" && targetPosition) {
-        if (targetPosition === "port" || targetPosition === "starboard") {
-          createData.system.weaponPosition = "flank";
-          createData.system.weaponBay      = targetPosition;
-        } else {
-          createData.system.weaponPosition = targetPosition;
-        }
-      }
-    }
+    applyComponentSlotToItemData(createData, targetSlot, targetPosition);
     const installed = prepareImportedComponentPlacement(
-      this.actor,
+      SystemAdapter.current.getShipData(this.actor),
+      this.actor.items,
       createData,
-      targetSlot === "weapon" && Boolean(targetPosition),
+      { explicitWeaponPosition: targetSlot === "weapon" && Boolean(targetPosition) },
     );
     await this.actor.createEmbeddedDocuments("Item", [createData]);
     if (!installed) {
@@ -1005,8 +951,8 @@ export class ShipController {
     });
 
     rootEl.querySelectorAll("[data-equip-slot]").forEach(sel => {
-      sel.addEventListener("change", ev => {
-        requestGM(this, "assignEquipment", {
+      sel.addEventListener("change", async ev => {
+        await requestGM(this, "assignEquipment", {
           slotId: sel.dataset.equipSlot,
           newItemId: sel.value,
         });
@@ -1014,12 +960,12 @@ export class ShipController {
     });
 
     rootEl.querySelectorAll("[data-weapon-assign]").forEach(sel => {
-      sel.addEventListener("change", ev => {
+      sel.addEventListener("change", async ev => {
         const pos    = sel.dataset.weaponAssign;
         const itemId = sel.value;
         if (!itemId) return;
         const isFlank = pos === "port" || pos === "starboard";
-        requestGM(this, "assignWeapon", {
+        await requestGM(this, "assignWeapon", {
           itemId,
           weaponPosition: isFlank ? "flank" : pos,
           weaponBay:      isFlank ? pos : "port",

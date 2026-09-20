@@ -10,7 +10,7 @@ on:
         required: true
         default: all
         type: choice
-        options: [all, dnd5e, sf2e, impmal]
+        options: [all, dnd5e, sf2e, sf2e-anachronism, impmal]
   workflow_call:
     inputs:
       adapter:
@@ -42,6 +42,8 @@ on:
         required: false
       FOUNDRY_ADMIN_KEY:
         required: false
+      COMPATIBILITY_BOT_TOKEN:
+        required: false
 
 permissions:
   contents: read
@@ -52,10 +54,51 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Core
+        uses: actions/checkout@v4
+        with:
+          repository: Causodes/causodes-shipcombat-core
+          ref: ${{ (inputs.changed_repository == 'Causodes/causodes-shipcombat-core' && inputs.changed_ref) || (inputs.changed_repository == '' && github.sha) || 'main' }}
+          path: modules/causodes-shipcombat-core
+
+      - name: Check out D&D 5e companion
+        uses: actions/checkout@v4
+        with:
+          repository: Causodes/causodes-shipcombat-dnd5e
+          ref: ${{ (inputs.changed_repository == 'Causodes/causodes-shipcombat-dnd5e' && inputs.changed_ref) || 'main' }}
+          path: modules/causodes-shipcombat-dnd5e
+
+      - name: Check out Starfinder 2e companion
+        uses: actions/checkout@v4
+        with:
+          repository: Causodes/causodes-shipcombat-sf2e
+          ref: ${{ (inputs.changed_repository == 'Causodes/causodes-shipcombat-sf2e' && inputs.changed_ref) || 'main' }}
+          path: modules/causodes-shipcombat-sf2e
+
+      - name: Check out Imperium Maledictum companion
+        uses: actions/checkout@v4
+        with:
+          repository: Causodes/causodes-shipcombat-impmal
+          ref: ${{ (inputs.changed_repository == 'Causodes/causodes-shipcombat-impmal' && inputs.changed_ref) || 'main' }}
+          path: modules/causodes-shipcombat-impmal
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Run contract and architecture tests
+        working-directory: modules/causodes-shipcombat-core
+        run: npm test
+
   credentials:
     runs-on: ubuntu-latest
     outputs:
       available: ${{ steps.check.outputs.available }}
+      promotion_available: ${{ steps.check.outputs.promotion_available }}
     steps:
       - id: check
         name: Check integration credentials
@@ -75,23 +118,102 @@ jobs:
             echo "available=false" >> "$GITHUB_OUTPUT"
             echo "Foundry integration skipped until repository or organization secrets are configured."
           fi
+          if [[ "${{ secrets.COMPATIBILITY_BOT_TOKEN != '' }}" == "true" ]]; then
+            echo "promotion_available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "promotion_available=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  resolve-foundry:
+    needs: [contracts, credentials]
+    if: needs.contracts.result == 'success' && needs.credentials.outputs.available == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      generation: ${{ steps.resolve.outputs.generation }}
+      version: ${{ steps.resolve.outputs.version }}
+      image: ${{ steps.resolve.outputs.image }}
+      digest: ${{ steps.resolve.outputs.digest }}
+    steps:
+      - name: Check out Core compatibility manifest
+        uses: actions/checkout@v4
+        with:
+          repository: Causodes/causodes-shipcombat-core
+          ref: ${{ (inputs.changed_repository == 'Causodes/causodes-shipcombat-core' && inputs.changed_ref) || (inputs.changed_repository == '' && github.sha) || 'main' }}
+          path: compatibility/causodes-shipcombat-core
+
+      - name: Check out D&D 5e compatibility manifest
+        uses: actions/checkout@v4
+        with:
+          repository: Causodes/causodes-shipcombat-dnd5e
+          ref: ${{ (inputs.changed_repository == 'Causodes/causodes-shipcombat-dnd5e' && inputs.changed_ref) || 'main' }}
+          path: compatibility/causodes-shipcombat-dnd5e
+
+      - name: Check out Starfinder 2e compatibility manifest
+        uses: actions/checkout@v4
+        with:
+          repository: Causodes/causodes-shipcombat-sf2e
+          ref: ${{ (inputs.changed_repository == 'Causodes/causodes-shipcombat-sf2e' && inputs.changed_ref) || 'main' }}
+          path: compatibility/causodes-shipcombat-sf2e
+
+      - name: Check out Imperium Maledictum compatibility manifest
+        uses: actions/checkout@v4
+        with:
+          repository: Causodes/causodes-shipcombat-impmal
+          ref: ${{ (inputs.changed_repository == 'Causodes/causodes-shipcombat-impmal' && inputs.changed_ref) || 'main' }}
+          path: compatibility/causodes-shipcombat-impmal
+
+      - id: resolve
+        name: Resolve newest image in the mutually supported Foundry generation
+        shell: bash
+        run: |
+          manifests=(
+            compatibility/causodes-shipcombat-core/module.json
+            compatibility/causodes-shipcombat-dnd5e/module.json
+            compatibility/causodes-shipcombat-sf2e/module.json
+            compatibility/causodes-shipcombat-impmal/module.json
+          )
+          generation="$(node compatibility/causodes-shipcombat-core/.github/scripts/foundry-compatibility.mjs generation "${manifests[@]}")"
+          floating_image="ghcr.io/felddy/foundryvtt:${generation}"
+          docker pull "$floating_image"
+
+          version="$(docker image inspect --format '{{ index .Config.Labels "com.foundryvtt.version" }}' "$floating_image")"
+          if [[ ! "$version" =~ ^${generation}\.[0-9]+$ ]]; then
+            echo "Container reported unexpected Foundry version: $version" >&2
+            exit 1
+          fi
+
+          container_version="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' "$floating_image")"
+          if [[ ! "$container_version" =~ ^${version}\.[0-9]+$ ]]; then
+            echo "Container reported unexpected image version: $container_version" >&2
+            exit 1
+          fi
+          image="ghcr.io/felddy/foundryvtt:${container_version}"
+          digest="$(docker image inspect --format '{{ index .RepoDigests 0 }}' "$floating_image")"
+          echo "generation=$generation" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "Resolved Foundry $version as $digest"
 
   integration:
-    needs: credentials
-    if: needs.credentials.outputs.available == 'true'
+    needs: [credentials, resolve-foundry]
+    if: needs.credentials.outputs.available == 'true' && needs.resolve-foundry.result == 'success'
     strategy:
       fail-fast: false
       max-parallel: 1
       matrix:
-        adapter: ${{ fromJSON((inputs.adapter == 'dnd5e' && '["dnd5e"]') || (inputs.adapter == 'sf2e' && '["sf2e"]') || (inputs.adapter == 'impmal' && '["impmal"]') || '["dnd5e","sf2e","impmal"]') }}
+        scenario: ${{ fromJSON((inputs.adapter == 'dnd5e' && '["dnd5e"]') || (inputs.adapter == 'sf2e' && '["sf2e","sf2e-anachronism"]') || (inputs.adapter == 'sf2e-anachronism' && '["sf2e-anachronism"]') || (inputs.adapter == 'impmal' && '["impmal"]') || '["dnd5e","sf2e","sf2e-anachronism","impmal"]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      FOUNDRY_DATA_PATH: ${{ github.workspace }}/foundry-${{ matrix.adapter }}
+      FOUNDRY_DATA_PATH: ${{ github.workspace }}/foundry-${{ matrix.scenario }}
       FOUNDRY_DISTRIBUTION_CACHE: ${{ github.workspace }}/foundry-distribution-cache
       FOUNDRY_BASE_URL: http://127.0.0.1:30000
-      FOUNDRY_VERSION: "14.367"
-      SHIPCOMBAT_ADAPTER: ${{ matrix.adapter }}
+      FOUNDRY_VERSION: ${{ needs.resolve-foundry.outputs.version }}
+      FOUNDRY_IMAGE: ${{ needs.resolve-foundry.outputs.image }}
+      FOUNDRY_IMAGE_DIGEST: ${{ needs.resolve-foundry.outputs.digest }}
+      PACKAGE_RESOLUTION_PATH: ${{ github.workspace }}/resolved-packages-${{ matrix.scenario }}.json
+      SHIPCOMBAT_SCENARIO: ${{ matrix.scenario }}
       FOUNDRY_USERNAME: ${{ secrets.FOUNDRY_USERNAME }}
       FOUNDRY_PASSWORD: ${{ secrets.FOUNDRY_PASSWORD }}
       FOUNDRY_LICENSE_KEY: ${{ secrets.FOUNDRY_LICENSE_KEY }}
@@ -105,7 +227,7 @@ jobs:
           path: checkouts/causodes-shipcombat-core
 
       - name: Check out D&D 5e companion
-        if: matrix.adapter == 'dnd5e'
+        if: matrix.scenario == 'dnd5e'
         uses: actions/checkout@v4
         with:
           repository: Causodes/causodes-shipcombat-dnd5e
@@ -113,7 +235,7 @@ jobs:
           path: checkouts/causodes-shipcombat-dnd5e
 
       - name: Check out Starfinder 2e companion
-        if: matrix.adapter == 'sf2e'
+        if: matrix.scenario == 'sf2e' || matrix.scenario == 'sf2e-anachronism'
         uses: actions/checkout@v4
         with:
           repository: Causodes/causodes-shipcombat-sf2e
@@ -121,7 +243,7 @@ jobs:
           path: checkouts/causodes-shipcombat-sf2e
 
       - name: Check out Imperium Maledictum companion
-        if: matrix.adapter == 'impmal'
+        if: matrix.scenario == 'impmal'
         uses: actions/checkout@v4
         with:
           repository: Causodes/causodes-shipcombat-impmal
@@ -159,10 +281,10 @@ jobs:
       - name: Build disposable Foundry data directory
         run: |
           node checkouts/causodes-shipcombat-core/tests/integration/prepare-foundry-data.mjs \
-          "${{ matrix.adapter }}" "$GITHUB_WORKSPACE/checkouts" "$FOUNDRY_DATA_PATH"
+          "${{ matrix.scenario }}" "$GITHUB_WORKSPACE/checkouts" "$FOUNDRY_DATA_PATH"
           chmod -R a+rwX "$FOUNDRY_DATA_PATH"
 
-      - name: Start Foundry VTT 14.367
+      - name: Start resolved Foundry VTT build
         shell: bash
         run: |
           distribution_args=(--env CONTAINER_CACHE=/data/container_cache)
@@ -176,10 +298,10 @@ jobs:
               --volume "$FOUNDRY_DATA_PATH:/data" \
               --env FOUNDRY_LICENSE_KEY \
               --env FOUNDRY_ADMIN_KEY \
-              --env FOUNDRY_WORLD="shipcombat-integration-${{ matrix.adapter }}" \
+              --env FOUNDRY_WORLD="shipcombat-integration-${{ matrix.scenario }}" \
               --env FOUNDRY_TELEMETRY=false \
               "${distribution_args[@]}" \
-              "ghcr.io/felddy/foundryvtt:${FOUNDRY_VERSION}.0"
+              "$FOUNDRY_IMAGE"
 
             for readiness_attempt in {1..90}; do
               if curl --fail --silent --show-error "$FOUNDRY_BASE_URL/join" >/dev/null; then
@@ -218,6 +340,15 @@ jobs:
         working-directory: checkouts/causodes-shipcombat-core
         run: npm run test:foundry
 
+      - name: Upload exact dependency resolution
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: foundry-${{ matrix.scenario }}-resolved-packages
+          path: ${{ env.PACKAGE_RESOLUTION_PATH }}
+          if-no-files-found: warn
+          retention-days: 30
+
       - name: Capture Foundry log
         if: failure()
         run: docker logs foundry > foundry.log 2>&1
@@ -226,7 +357,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: foundry-${{ matrix.adapter }}-failure
+          name: foundry-${{ matrix.scenario }}-failure
           path: |
             foundry.log
             checkouts/causodes-shipcombat-core/tests/integration/test-results
@@ -236,3 +367,88 @@ jobs:
       - name: Stop Foundry
         if: always()
         run: docker stop foundry
+
+  promote-verified:
+    needs: [credentials, resolve-foundry, integration]
+    if: >-
+      always() &&
+      needs.credentials.outputs.promotion_available == 'true' &&
+      needs.resolve-foundry.result == 'success' &&
+      needs.integration.result == 'success' &&
+      github.repository == 'Causodes/causodes-shipcombat-core' &&
+      github.ref == 'refs/heads/main' &&
+      inputs.changed_repository == '' &&
+      (inputs.adapter == '' || inputs.adapter == 'all')
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.COMPATIBILITY_BOT_TOKEN }}
+      VERIFIED_VERSION: ${{ needs.resolve-foundry.outputs.version }}
+    steps:
+      - name: Check out repositories for compatibility promotion
+        uses: actions/checkout@v4
+        with:
+          repository: Causodes/causodes-shipcombat-core
+          token: ${{ secrets.COMPATIBILITY_BOT_TOKEN }}
+          path: promotion/causodes-shipcombat-core
+
+      - uses: actions/checkout@v4
+        with:
+          repository: Causodes/causodes-shipcombat-dnd5e
+          token: ${{ secrets.COMPATIBILITY_BOT_TOKEN }}
+          path: promotion/causodes-shipcombat-dnd5e
+
+      - uses: actions/checkout@v4
+        with:
+          repository: Causodes/causodes-shipcombat-sf2e
+          token: ${{ secrets.COMPATIBILITY_BOT_TOKEN }}
+          path: promotion/causodes-shipcombat-sf2e
+
+      - uses: actions/checkout@v4
+        with:
+          repository: Causodes/causodes-shipcombat-impmal
+          token: ${{ secrets.COMPATIBILITY_BOT_TOKEN }}
+          path: promotion/causodes-shipcombat-impmal
+
+      - name: Raise verified compatibility and open pull requests
+        shell: bash
+        run: |
+          repositories=(
+            causodes-shipcombat-core
+            causodes-shipcombat-dnd5e
+            causodes-shipcombat-sf2e
+            causodes-shipcombat-impmal
+          )
+          manifests=()
+          for repository in "${repositories[@]}"; do
+            manifests+=("promotion/${repository}/module.json")
+          done
+
+          node promotion/causodes-shipcombat-core/.github/scripts/foundry-compatibility.mjs \
+            promote "$VERIFIED_VERSION" "${manifests[@]}"
+
+          for repository in "${repositories[@]}"; do
+            directory="promotion/${repository}"
+            if git -C "$directory" diff --quiet -- module.json; then
+              echo "Causodes/${repository} already verifies Foundry $VERIFIED_VERSION."
+              continue
+            fi
+
+            branch="automation/verify-foundry-${VERIFIED_VERSION}"
+            if gh pr list --repo "Causodes/${repository}" --state open --head "$branch" --json number --jq 'length > 0' | grep -qx true; then
+              echo "Causodes/${repository} already has an open Foundry $VERIFIED_VERSION compatibility PR."
+              continue
+            fi
+
+            git -C "$directory" config user.name "github-actions[bot]"
+            git -C "$directory" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git -C "$directory" switch -c "$branch"
+            git -C "$directory" add module.json
+            git -C "$directory" commit -m "Verify Foundry VTT ${VERIFIED_VERSION}"
+            git -C "$directory" push origin "$branch"
+            gh pr create \
+              --repo "Causodes/${repository}" \
+              --head "$branch" \
+              --base main \
+              --title "Verify Foundry VTT ${VERIFIED_VERSION}" \
+              --body "The complete four-adapter integration matrix passed on Foundry VTT ${VERIFIED_VERSION}. This raises only the manifest's verified compatibility metadata."
+          done

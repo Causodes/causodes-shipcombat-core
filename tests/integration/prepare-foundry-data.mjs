@@ -2,55 +2,29 @@ import { execFileSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
+import { resolvePackage } from "./package-resolution.mjs";
 
-const PACKAGE_CATALOG = Object.freeze({
-  dnd5e: {
-    id: "dnd5e",
-    kind: "system",
-    version: "5.3.3",
-    download: "https://github.com/foundryvtt/dnd5e/releases/download/release-5.3.3/dnd5e-release-5.3.3.zip",
+const SCENARIOS = Object.freeze({
+  dnd5e: { adapterId: "dnd5e", systemId: "dnd5e", moduleId: "causodes-shipcombat-dnd5e", dependencies: ["socketlib"] },
+  sf2e: { adapterId: "sf2e", systemId: "sf2e", moduleId: "causodes-shipcombat-sf2e", dependencies: ["socketlib"] },
+  "sf2e-anachronism": {
+    adapterId: "sf2e",
+    systemId: "pf2e",
+    moduleId: "causodes-shipcombat-sf2e",
+    dependencies: ["socketlib", "sf2e-anachronism"],
   },
-  sf2e: {
-    id: "sf2e",
-    kind: "system",
-    version: "1.4.1",
-    download: "https://github.com/foundryvtt/pf2e/releases/download/sf2e-1.4.1/system.zip",
-  },
-  impmal: {
-    id: "impmal",
-    kind: "system",
-    version: "4.0.0",
-    download: "https://github.com/moo-man/ImpMal-FoundryVTT/releases/download/4.0.0/impmal.zip",
-  },
-  socketlib: {
-    id: "socketlib",
-    kind: "module",
-    version: "v1.1.4",
-    download: "https://github.com/farling42/foundryvtt-socketlib/releases/download/v1.1.4/module.zip",
-  },
-  "warhammer-lib": {
-    id: "warhammer-lib",
-    kind: "module",
-    version: "3.3.4",
-    download: "https://github.com/moo-man/WarhammerLibrary-FVTT/releases/download/3.3.4/warhammer-lib.zip",
-  },
+  impmal: { adapterId: "impmal", systemId: "impmal", moduleId: "causodes-shipcombat-impmal", dependencies: ["socketlib", "warhammer-lib"] },
 });
 
-const ADAPTERS = Object.freeze({
-  dnd5e: { moduleId: "causodes-shipcombat-dnd5e", dependencies: ["socketlib"] },
-  sf2e: { moduleId: "causodes-shipcombat-sf2e", dependencies: ["socketlib"] },
-  impmal: { moduleId: "causodes-shipcombat-impmal", dependencies: ["socketlib", "warhammer-lib"] },
-});
-
-const [adapterId, checkoutsArg, dataArg] = process.argv.slice(2);
-if (!ADAPTERS[adapterId] || !checkoutsArg || !dataArg) {
-  throw new Error("Usage: node prepare-foundry-data.mjs <dnd5e|sf2e|impmal> <checkouts-dir> <foundry-data-dir>");
+const [scenarioId, checkoutsArg, dataArg] = process.argv.slice(2);
+if (!SCENARIOS[scenarioId] || !checkoutsArg || !dataArg) {
+  throw new Error("Usage: node prepare-foundry-data.mjs <dnd5e|sf2e|sf2e-anachronism|impmal> <checkouts-dir> <foundry-data-dir>");
 }
 
 const checkoutsDir = resolve(checkoutsArg);
 const dataDir = resolve(dataArg);
-const adapter = ADAPTERS[adapterId];
-const worldId = `shipcombat-integration-${adapterId}`;
+const scenario = SCENARIOS[scenarioId];
+const worldId = `shipcombat-integration-${scenarioId}`;
 const foundryVersion = process.env.FOUNDRY_VERSION ?? "14.367";
 
 for (const directory of ["Config", "Data/modules", "Data/systems", "Data/worlds"]) {
@@ -83,8 +57,7 @@ function findDescriptor(directory, filename) {
   return null;
 }
 
-async function installPackage(packageId) {
-  const definition = PACKAGE_CATALOG[packageId];
+async function installPackage(definition) {
   const parent = join(dataDir, `Data/${definition.kind}s`);
   const destination = join(parent, definition.id);
   const scratch = mkdtempSync(join(tmpdir(), `shipcombat-${definition.id}-`));
@@ -93,8 +66,19 @@ async function installPackage(packageId) {
   mkdirSync(extracted);
 
   try {
-    const response = await fetch(definition.download, { redirect: "follow" });
-    if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+    let response;
+    for (let attempt = 1; attempt <= 4; attempt += 1) {
+      try {
+        response = undefined;
+        response = await fetch(definition.download, { redirect: "follow" });
+        if (response.ok) break;
+        throw new Error(`${response.status} ${response.statusText}`);
+      } catch (error) {
+        if (attempt === 4 || (response && response.status < 500)) throw error;
+        console.warn(`Download attempt ${attempt} for ${definition.id} failed (${error.message}); retrying.`);
+      }
+      await new Promise(resolveDelay => setTimeout(resolveDelay, attempt * 2_000));
+    }
     writeFileSync(archive, Buffer.from(await response.arrayBuffer()));
     execFileSync("unzip", ["-q", archive, "-d", extracted], { stdio: "inherit" });
 
@@ -113,10 +97,15 @@ async function installPackage(packageId) {
   }
 }
 
+const packageIds = [...new Set([scenario.systemId, ...scenario.dependencies])];
+const resolvedPackages = Object.fromEntries(await Promise.all(packageIds.map(async packageId => [
+  packageId,
+  await resolvePackage(packageId, foundryVersion),
+])));
+
 stageCheckedOutModule("causodes-shipcombat-core");
-stageCheckedOutModule(adapter.moduleId);
-await installPackage(adapterId);
-for (const dependency of adapter.dependencies) await installPackage(dependency);
+stageCheckedOutModule(scenario.moduleId);
+for (const packageId of packageIds) await installPackage(resolvedPackages[packageId]);
 
 const worldDir = join(dataDir, "Data/worlds", worldId);
 mkdirSync(worldDir, { recursive: true });
@@ -124,14 +113,37 @@ mkdirSync(join(worldDir, "data"), { recursive: true });
 mkdirSync(join(worldDir, "scenes"), { recursive: true });
 writeFileSync(join(worldDir, "world.json"), `${JSON.stringify({
   id: worldId,
-  title: `Ship Combat Integration (${adapterId})`,
+  title: `Ship Combat Integration (${scenarioId})`,
   description: "Disposable CI fixture world.",
-  system: adapterId,
+  system: scenario.systemId,
   coreVersion: foundryVersion,
   compatibility: { minimum: "14", verified: foundryVersion, maximum: "14" },
-  systemVersion: PACKAGE_CATALOG[adapterId].version,
+  systemVersion: resolvedPackages[scenario.systemId].version,
   joinTheme: "minimal",
   flags: {},
 }, null, 2)}\n`);
 
-console.log(JSON.stringify({ adapterId, moduleId: adapter.moduleId, worldId, dataDir }));
+const resolution = {
+  scenarioId,
+  foundry: {
+    version: foundryVersion,
+    image: process.env.FOUNDRY_IMAGE ?? null,
+    digest: process.env.FOUNDRY_IMAGE_DIGEST ?? null,
+  },
+  packages: resolvedPackages,
+};
+const resolutionPath = process.env.PACKAGE_RESOLUTION_PATH
+  ? resolve(process.env.PACKAGE_RESOLUTION_PATH)
+  : join(dataDir, `resolved-packages-${scenarioId}.json`);
+writeFileSync(resolutionPath, `${JSON.stringify(resolution, null, 2)}\n`);
+
+console.log(JSON.stringify({
+  scenarioId,
+  adapterId: scenario.adapterId,
+  systemId: scenario.systemId,
+  moduleId: scenario.moduleId,
+  worldId,
+  dataDir,
+  resolutionPath,
+  packages: Object.fromEntries(Object.entries(resolvedPackages).map(([id, definition]) => [id, definition.version])),
+}));

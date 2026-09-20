@@ -346,20 +346,21 @@ function _paint(el, sheet) {
   });
   if (missingIds.length > 0) {
     for (const tokenId of missingIds) _pendingContactIds.add(tokenId);
-    requestGM(ship, "registerSensorContacts", { targetTokenIds: missingIds });
+    void requestGM(ship, "registerSensorContacts", { targetTokenIds: missingIds }).catch(error => {
+      for (const tokenId of missingIds) _pendingContactIds.delete(tokenId);
+      console.error(`${MODULE_ID} | Failed to register detected sensor contacts`, error);
+    });
     setTimeout(() => {
       for (const tokenId of missingIds) _pendingContactIds.delete(tokenId);
     }, 3000);
   }
 
-  const pendingBase = Number(shipData.resources?.sensors?.nextContactOrdinal) || 1;
-  const unregisteredIds = detectedIds.filter(tokenId => !existingContacts[tokenId]);
   for (const blip of rawBlips) {
     if (blip.friendly || blip.lockTier < 1 || existingContacts[blip.tokenId]) continue;
     blip.name = getContactDisplayName(shipData, blip.tokenId, {
       currentTier: blip.lockTier,
       realName: blip.realName,
-      fallbackOrdinal: pendingBase + unregisteredIds.indexOf(blip.tokenId),
+      fallbackOrdinal: sortedContactIds.indexOf(blip.tokenId) + 1,
     });
   }
 

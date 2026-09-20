@@ -1,17 +1,45 @@
 import { expect, test } from "@playwright/test";
+import { readFileSync } from "node:fs";
 
-const adapterId = process.env.SHIPCOMBAT_ADAPTER;
+const scenarioId = process.env.SHIPCOMBAT_SCENARIO ?? process.env.SHIPCOMBAT_ADAPTER;
+const scenarios = {
+  dnd5e: { adapterId: "dnd5e", systemId: "dnd5e", extraModules: [] },
+  sf2e: { adapterId: "sf2e", systemId: "sf2e", extraModules: [] },
+  "sf2e-anachronism": {
+    adapterId: "sf2e",
+    systemId: "pf2e",
+    extraModules: ["sf2e-anachronism"],
+  },
+  impmal: { adapterId: "impmal", systemId: "impmal", extraModules: ["warhammer-lib"] },
+};
+const scenario = scenarios[scenarioId];
+const adapterId = scenario?.adapterId;
 const adapterModuleId = `causodes-shipcombat-${adapterId}`;
 const playerName = "Ship Combat Integration Player";
 const playerPassword = "ship-combat-integration-player";
-const expectedSystemVersions = { dnd5e: "5.3.3", sf2e: "1.4.1", impmal: "4.0.0" };
-const expectedFoundryVersion = process.env.FOUNDRY_VERSION ?? "14.367";
-const worldId = `shipcombat-integration-${adapterId}`;
+const resolutionPath = process.env.PACKAGE_RESOLUTION_PATH;
+if (!resolutionPath) throw new Error("PACKAGE_RESOLUTION_PATH is required for Foundry integration tests.");
+const packageResolution = JSON.parse(readFileSync(resolutionPath, "utf8"));
+const expectedFoundryVersion = packageResolution.foundry.version;
+const expectedSystemVersion = packageResolution.packages[scenario?.systemId]?.version;
+const expectedDependencyVersions = Object.fromEntries(
+  ["socketlib", ...(scenario?.extraModules ?? [])].map(id => [id, packageResolution.packages[id]?.version]),
+);
+if (packageResolution.scenarioId !== scenarioId) {
+  throw new Error(`Package resolution is for ${packageResolution.scenarioId}, not ${scenarioId}.`);
+}
+if (process.env.FOUNDRY_VERSION && process.env.FOUNDRY_VERSION !== expectedFoundryVersion) {
+  throw new Error(`Resolved Foundry ${expectedFoundryVersion} does not match FOUNDRY_VERSION ${process.env.FOUNDRY_VERSION}.`);
+}
+if (!expectedSystemVersion || Object.values(expectedDependencyVersions).some(version => !version)) {
+  throw new Error(`Package resolution is incomplete for ${scenarioId}.`);
+}
+const worldId = `shipcombat-integration-${scenarioId}`;
 const adminKey = process.env.FOUNDRY_ADMIN_KEY;
-const logPrefix = `[foundry-integration:${adapterId}]`;
+const logPrefix = `[foundry-integration:${scenarioId}]`;
 
-if (!new Set(["dnd5e", "sf2e", "impmal"]).has(adapterId)) {
-  throw new Error(`Unsupported SHIPCOMBAT_ADAPTER: ${adapterId}`);
+if (!scenario) {
+  throw new Error(`Unsupported SHIPCOMBAT_SCENARIO: ${scenarioId}`);
 }
 
 function log(message) {
@@ -157,18 +185,17 @@ test("exercises Foundry-only document, application, canvas, combat, and socket b
   await phase("accept the license and launch the prepared world", () => ensureWorldActive(page));
   await phase("join the active world as Gamemaster", () => joinWorld(page, "Gamemaster"));
 
-  const requiresWarhammerLibrary = adapterId === "impmal";
-  const activation = await phase("activate Core, adapter, and dependencies", () => page.evaluate(async ({ adapterModuleId, requiresWarhammerLibrary }) => {
+  const activation = await phase("activate Core, adapter, and dependencies", () => page.evaluate(async ({ adapterModuleId, extraModules }) => {
     const current = game.settings.get("core", "moduleConfiguration") ?? {};
     const required = ["socketlib", "causodes-shipcombat-core", adapterModuleId];
-    if (requiresWarhammerLibrary) required.unshift("warhammer-lib");
+    required.unshift(...extraModules);
     if (required.every(id => current[id] === true)) return false;
     await game.settings.set("core", "moduleConfiguration", {
       ...current,
       ...Object.fromEntries(required.map(id => [id, true])),
     });
     return true;
-  }, { adapterModuleId, requiresWarhammerLibrary }));
+  }, { adapterModuleId, extraModules: scenario.extraModules }));
 
   if (activation) {
     await phase("reload after module activation", async () => {
@@ -186,32 +213,60 @@ test("exercises Foundry-only document, application, canvas, combat, and socket b
     };
   }));
 
-  await phase("verify Foundry, system, module, and adapter versions", () => expect.poll(() => page.evaluate(({ adapterModuleId }) => ({
+  await phase("verify Foundry, system, module, and adapter versions", () => expect.poll(() => page.evaluate(({ adapterModuleId, extraModules }) => ({
     foundry: game.release.version,
     systemId: game.system.id,
     systemVersion: game.system.version,
     core: game.modules.get("causodes-shipcombat-core")?.active,
     adapter: game.modules.get(adapterModuleId)?.active,
     socketlib: game.modules.get("socketlib")?.active,
+    extraModules: Object.fromEntries(extraModules.map(id => [id, game.modules.get(id)?.active])),
+    dependencyVersions: Object.fromEntries(["socketlib", ...extraModules].map(id => [id, game.modules.get(id)?.version])),
     configuredAdapter: globalThis.ShipCombat?._api?.SystemAdapter?.current?.moduleId,
-  }), { adapterModuleId })).toEqual({
+  }), { adapterModuleId, extraModules: scenario.extraModules })).toEqual({
     foundry: expectedFoundryVersion,
-    systemId: adapterId,
-    systemVersion: expectedSystemVersions[adapterId],
+    systemId: scenario.systemId,
+    systemVersion: expectedSystemVersion,
     core: true,
     adapter: true,
     socketlib: true,
+    extraModules: Object.fromEntries(scenario.extraModules.map(id => [id, true])),
+    dependencyVersions: expectedDependencyVersions,
     configuredAdapter: adapterModuleId,
   }));
+
+  await phase("verify every shared localization token resolved after adapter startup", async () => {
+    const unresolved = await page.evaluate(() => {
+      const matches = [];
+      const visit = (value, path = "") => {
+        if (typeof value === "string") {
+          if (/\{\{SHIPCOMBAT\.[\w.-]+\}\}/.test(value)) matches.push({ path, value });
+          return;
+        }
+        if (!value || typeof value !== "object") return;
+        for (const [key, child] of Object.entries(value)) visit(child, path ? `${path}.${key}` : key);
+      };
+      visit(game.i18n.translations?.SHIPCOMBAT, "SHIPCOMBAT");
+      return matches;
+    });
+    expect(unresolved).toEqual([]);
+  });
 
   const fixture = await phase("create player, NPC, ordnance, component, scene, and token fixtures", () => page.evaluate(async ({ adapterModuleId, playerName, playerPassword }) => {
     const fixtureNames = [
       "Ship Combat Integration Ship",
       "Ship Combat Integration NPC",
       "Ship Combat Integration Ordnance",
+      "Ship Combat Integration Crew",
+    ];
+    const fixtureItemNames = [
+      "Ship Combat Integration World Weapon",
+      "Ship Combat Integration World Engine",
     ];
     const existingActors = game.actors.filter(actor => fixtureNames.includes(actor.name));
     if (existingActors.length) await Actor.deleteDocuments(existingActors.map(actor => actor.id));
+    const existingItems = game.items.filter(item => fixtureItemNames.includes(item.name));
+    if (existingItems.length) await Item.deleteDocuments(existingItems.map(item => item.id));
     const existingScene = game.scenes.getName("Ship Combat Integration Scene");
     if (existingScene) await existingScene.delete();
     const existingPlayer = game.users.find(user => user.name === playerName);
@@ -222,6 +277,26 @@ test("exercises Foundry-only document, application, canvas, combat, and socket b
       password: playerPassword,
       role: CONST.USER_ROLES.PLAYER,
     });
+    const actorTypeRegistry = game.system.documentTypes?.Actor;
+    const systemActorTypes = Array.isArray(actorTypeRegistry)
+      ? actorTypeRegistry
+      : actorTypeRegistry instanceof Set
+        ? [...actorTypeRegistry]
+        : Array.isArray(actorTypeRegistry?.types)
+          ? actorTypeRegistry.types
+          : actorTypeRegistry?.types instanceof Set
+            ? [...actorTypeRegistry.types]
+            : actorTypeRegistry && typeof actorTypeRegistry === "object"
+              ? Object.keys(actorTypeRegistry)
+              : [];
+    const crewActorType = systemActorTypes.includes("character") ? "character" : systemActorTypes[0];
+    if (!crewActorType) throw new Error(`${game.system.id} exposes no Actor type for the crew fixture`);
+    const crewActor = await Actor.create({
+      name: "Ship Combat Integration Crew",
+      type: crewActorType,
+      ownership: { [player.id]: CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER },
+    });
+    await player.update({ character: crewActor.id });
     const actor = await Actor.create({
       name: "Ship Combat Integration Ship",
       type: `${adapterModuleId}.ship`,
@@ -236,13 +311,65 @@ test("exercises Foundry-only document, application, canvas, combat, and socket b
       type: `${adapterModuleId}.shipOrdnance`,
       system: { subtype: "torpedo" },
     });
-    const [component] = await actor.createEmbeddedDocuments("Item", [{
-      name: "Ship Combat Integration Engine",
+    const createdComponents = await actor.createEmbeddedDocuments("Item", [
+      {
+        name: "Ship Combat Integration Engine",
+        type: `${adapterModuleId}.component`,
+        system: {
+          slot: "engine", speed: 7, maneuverability: 2,
+          acContributionEngine: 2, armourClassContribution: 2,
+        },
+      },
+      {
+        name: "Ship Combat Integration Armour",
+        type: `${adapterModuleId}.component`,
+        system: {
+          slot: "armour", armourValues: { bow: 5, stern: 4, port: 3, starboard: 2 },
+          acContributionArmor: 3, armourClassContribution: 3,
+        },
+      },
+      {
+        name: "Ship Combat Integration Reactor",
+        type: `${adapterModuleId}.component`,
+        system: {
+          slot: "reactor", rating: 4, coreOutput: 4, shieldStrengthPerCore: 3,
+          heatCapacity: 8, bankCapacity: 6, reserveMultiplier: 2,
+        },
+      },
+      {
+        name: "Ship Combat Integration Sensor",
+        type: `${adapterModuleId}.component`,
+        system: { slot: "sensor", rating: 7, bandSize: 2, autoScanRange: 10, maxRange: 20, apCostMultiplier: 0.5 },
+      },
+      {
+        name: "Ship Combat Integration Weapons Bay",
+        type: `${adapterModuleId}.component`,
+        system: {
+          slot: "weaponsBay", bayAmmoCapacity: 12, bayChargeCapacity: 9,
+          bayManpower: 8, bayTorpedoCapacity: 5, bayMaxFlights: 3,
+          bayStrikeCraftCapacity: 7,
+        },
+      },
+    ]);
+    const componentsByName = new Map(createdComponents.map(item => [item.name, item]));
+    const component = componentsByName.get("Ship Combat Integration Engine");
+    const armour = componentsByName.get("Ship Combat Integration Armour");
+    const reactor = componentsByName.get("Ship Combat Integration Reactor");
+    const sensor = componentsByName.get("Ship Combat Integration Sensor");
+    const weaponsBay = componentsByName.get("Ship Combat Integration Weapons Bay");
+    if ([component, armour, reactor, sensor, weaponsBay].some(item => !item)) {
+      throw new Error("Bulk component creation did not return every named fixture document");
+    }
+    const worldWeapon = await Item.create({
+      name: fixtureItemNames[0],
       type: `${adapterModuleId}.component`,
-      system: { slot: "engine", speed: 7, maneuverability: 2 },
-    }]);
-    await actor.update({ "system.roles": { [player.id]: "ordnance" } });
-
+      system: { slot: "weapon", weaponPosition: "prow", range: 12, damage: "2d6" },
+    });
+    const worldEngine = await Item.create({
+      name: fixtureItemNames[1],
+      type: `${adapterModuleId}.component`,
+      system: { slot: "engine", speed: 11, maneuverability: 6 },
+    });
     const torpedoTemplate = ordnanceActor.toObject();
     delete torpedoTemplate._id;
     torpedoTemplate.name = "NPC Integration Torpedo";
@@ -274,14 +401,29 @@ test("exercises Foundry-only document, application, canvas, combat, and socket b
       grid: { type: CONST.GRID_TYPES.SQUARE, size: 100, distance: 1, units: "sq" },
     });
     const tokenData = await Promise.all([
-      actor.getTokenDocument({ x: 300, y: 400, hidden: false }),
-      npcActor.getTokenDocument({ x: 1_300, y: 400 }),
-      ordnanceActor.getTokenDocument({ x: 800, y: 900, hidden: false }),
+      actor.getTokenDocument({ name: "Ship Combat Integration Player Token", x: 300, y: 400, hidden: false }),
+      npcActor.getTokenDocument({ name: "Ship Combat Integration NPC Token", x: 1_300, y: 400 }),
+      npcActor.getTokenDocument({ name: "Ship Combat Integration Sibling NPC Token", x: 1_700, y: 400 }),
+      ordnanceActor.getTokenDocument({ name: "Ship Combat Integration Ordnance Token", x: 800, y: 900, hidden: false }),
     ]);
-    const [shipToken, npcToken, ordnanceToken] = await scene.createEmbeddedDocuments(
+    const createdTokens = await scene.createEmbeddedDocuments(
       "Token",
       tokenData.map(token => token.toObject()),
     );
+    const tokensByName = new Map(createdTokens.map(token => [token.name, token]));
+    const shipToken = tokensByName.get("Ship Combat Integration Player Token");
+    const npcToken = tokensByName.get("Ship Combat Integration NPC Token");
+    const siblingNpcToken = tokensByName.get("Ship Combat Integration Sibling NPC Token");
+    const ordnanceToken = tokensByName.get("Ship Combat Integration Ordnance Token");
+    if ([shipToken, npcToken, siblingNpcToken, ordnanceToken].some(token => !token)) {
+      throw new Error("Bulk token creation did not return every named fixture document");
+    }
+    if (shipToken.actorId !== actor.id
+      || npcToken.actorId !== npcActor.id
+      || siblingNpcToken.actorId !== npcActor.id
+      || ordnanceToken.actorId !== ordnanceActor.id) {
+      throw new Error("Named token fixtures resolved to the wrong persisted Actors");
+    }
 
     const sheet = actor.sheet;
     const useV1 = globalThis.ShipCombat._api.SystemAdapter.current.useApplicationV1;
@@ -289,12 +431,20 @@ test("exercises Foundry-only document, application, canvas, combat, and socket b
 
     return {
       actorId: actor.id,
+      crewActorId: crewActor.id,
       npcActorId: npcActor.id,
       ordnanceActorId: ordnanceActor.id,
       componentId: component.id,
+      armourId: armour.id,
+      reactorId: reactor.id,
+      sensorId: sensor.id,
+      weaponsBayId: weaponsBay.id,
+      worldWeaponId: worldWeapon.id,
+      worldEngineId: worldEngine.id,
       sceneId: scene.id,
       shipTokenId: shipToken.id,
       npcTokenId: npcToken.id,
+      siblingNpcTokenId: siblingNpcToken.id,
       ordnanceTokenId: ordnanceToken.id,
       playerId: player.id,
       useV1,
@@ -303,13 +453,22 @@ test("exercises Foundry-only document, application, canvas, combat, and socket b
 
   await phase("verify real data models, prototype defaults, and embedded document persistence", async () => {
     const boundaryState = await page.evaluate(async ({ actorId, npcActorId, ordnanceActorId, componentId }) => {
-      const { SystemAdapter } = globalThis.ShipCombat._api;
+      const { ShipCombatState, SystemAdapter } = globalThis.ShipCombat._api;
       const actor = game.actors.get(actorId);
       const npc = game.actors.get(npcActorId);
       const ordnance = game.actors.get(ordnanceActorId);
       const component = actor.items.get(componentId);
       await component.update({ name: "Ship Combat Integration Engine Updated" });
       await ordnance.update({ [SystemAdapter.current.systemPath("payloadCount")]: 4 });
+      const installedData = SystemAdapter.current.getShipData(actor);
+      const installedMovement = { ...installedData.movement };
+      const installedArmour = { ...installedData.armour };
+      const reactorStats = ShipCombatState.getReactorStats(actor);
+      const sensorStats = ShipCombatState.getSensorStats(actor);
+      const ordnanceBayStats = ShipCombatState.getOrdnanceBayStats(actor);
+      await component.update({ "system.equipped": false });
+      const unequippedMovement = { ...SystemAdapter.current.getShipData(actor).movement };
+      await component.update({ "system.equipped": true });
       return {
         modelClasses: [actor, npc, ordnance, component].map(document => document.system?.constructor?.name),
         shipPrototype: {
@@ -332,6 +491,14 @@ test("exercises Foundry-only document, application, canvas, combat, and socket b
         componentName: actor.items.get(componentId)?.name,
         componentParentId: actor.items.get(componentId)?.parent?.id,
         componentImg: actor.items.get(componentId)?.img,
+        installedMovement,
+        unequippedMovement,
+        installedArmour,
+        reactorStats,
+        sensorStats,
+        ordnanceBayStats,
+        dndComponentAC: Number(installedData.attributes?.ac?.value ?? 0),
+        sfComponentAC: Number(installedData.armorClass ?? 0),
       };
     }, fixture);
 
@@ -359,6 +526,34 @@ test("exercises Foundry-only document, application, canvas, combat, and socket b
     expect(boundaryState.componentParentId).toBe(fixture.actorId);
     expect(boundaryState.componentImg).toEqual(expect.any(String));
     expect(boundaryState.componentImg.length).toBeGreaterThan(0);
+    expect(boundaryState.installedMovement).toMatchObject({ speed: 7, maneuverability: 2 });
+    expect(boundaryState.unequippedMovement).toMatchObject({ speed: 0, maneuverability: 0 });
+    expect(boundaryState.installedArmour).toEqual({ bow: 5, stern: 4, port: 3, starboard: 2 });
+    expect(boundaryState.reactorStats).toEqual({
+      coreOutput: 4,
+      shieldStrengthPerCore: 3,
+      heatCapacity: 8,
+      auxPowerCapacity: 6,
+      reserveMultiplier: 2,
+      ...(adapterId === "dnd5e" ? { overclockBaseDC: 10 } : {}),
+    });
+    expect(boundaryState.sensorStats).toEqual({
+      rating: 7,
+      bandSize: 2,
+      autoScanRange: 10,
+      maxRange: 20,
+      apCostMultiplier: 0.5,
+    });
+    expect(boundaryState.ordnanceBayStats).toEqual({
+      ammoCapacity: 12,
+      chargeCapacity: 9,
+      manpower: 8,
+      torpedoCapacity: 5,
+      maxFlights: 3,
+      strikeCraftCapacity: 7,
+    });
+    if (adapterId === "dnd5e") expect(boundaryState.dndComponentAC).toBe(5);
+    if (adapterId === "sf2e") expect(boundaryState.sfComponentAC).toBe(5);
   });
 
   await phase("verify the initial AppV1/AppV2 ship sheet render", async () => {
@@ -368,10 +563,77 @@ test("exercises Foundry-only document, application, canvas, combat, and socket b
       const element = globalThis.__shipCombatAppRoot(sheet);
       return sheet.rendered && element?.isConnected === true;
     }, fixture.actorId)).toBe(true);
+    const unresolvedSheetTokens = await page.evaluate(actorId => {
+      const root = globalThis.__shipCombatAppRoot(game.actors.get(actorId).sheet);
+      return [...(root?.textContent?.matchAll(/\{\{SHIPCOMBAT\.[\w.-]+\}\}/g) ?? [])]
+        .map(match => match[0]);
+    }, fixture.actorId);
+    expect(unresolvedSheetTokens).toEqual([]);
     await page.evaluate(actorId => {
       const sheet = game.actors.get(actorId).sheet;
       globalThis.__shipCombatFirstSheetElement = globalThis.__shipCombatAppRoot(sheet);
     }, fixture.actorId);
+  });
+
+  await phase("render committed, staged, and overclocked Power Cores in canonical order", async () => {
+    await page.evaluate(async actorId => {
+      const { ShipCombatState, SystemAdapter } = globalThis.ShipCombat._api;
+      const actor = game.actors.get(actorId);
+      const state = ShipCombatState.forShip(actor);
+      await state.update({
+        assignedCores: { captain: true, gunner: true },
+        "shieldPool.committed": 1,
+        "resources.engineer.committedAuxCores": 1,
+        "resources.engineer.stagedCores": { sensors: true },
+        "resources.engineer.stagedShieldCores": 1,
+        "resources.engineer.stagedAuxCores": 1,
+        "resources.engineer.powerCores": 1,
+      });
+      const sheet = actor.sheet;
+      await sheet.render(SystemAdapter.current.useApplicationV1 ? true : { force: true });
+    }, fixture.actorId);
+    await expect.poll(() => page.evaluate(actorId => {
+      const sheet = game.actors.get(actorId).sheet;
+      const root = globalThis.__shipCombatAppRoot(sheet);
+      return [...(root?.querySelectorAll(".shipcombat-core-pips [data-pip-state]") ?? [])]
+        .map(element => element.dataset.pipState);
+    }, fixture.actorId)).toEqual([
+      "assigned", "assigned", "shield-committed", "aux-committed",
+      "staged", "shield-staged", "aux-staged", "available",
+    ]);
+    await page.evaluate(async actorId => {
+      const { ShipCombatState } = globalThis.ShipCombat._api;
+      const state = ShipCombatState.forShip(game.actors.get(actorId));
+      await state.update({
+        assignedCores: {},
+        "shieldPool.committed": 0,
+        "resources.engineer.committedAuxCores": 0,
+        "resources.engineer.stagedCores": {},
+        "resources.engineer.stagedShieldCores": 0,
+        "resources.engineer.stagedAuxCores": 0,
+        "resources.engineer.powerCores": 0,
+      });
+    }, fixture.actorId);
+  });
+
+  await phase("assign bridge crew through the live AppV1/AppV2 actor-drop boundary", async () => {
+    await page.evaluate(({ actorId, crewActorId }) => {
+      const sheet = game.actors.get(actorId).sheet;
+      const root = globalThis.__shipCombatAppRoot(sheet);
+      const target = root?.querySelector('[data-role-drop="ordnance"]');
+      if (!target) throw new Error("Rendered ship sheet has no Ordnance bridge-crew drop target");
+      const transfer = new DataTransfer();
+      transfer.setData("text/plain", JSON.stringify(game.actors.get(crewActorId).toDragData()));
+      target.dispatchEvent(new DragEvent("drop", {
+        bubbles: true,
+        cancelable: true,
+        dataTransfer: transfer,
+      }));
+    }, fixture);
+    await expect.poll(() => page.evaluate(({ actorId, playerId }) => (
+      globalThis.ShipCombat._api.SystemAdapter.current
+        .getShipData(game.actors.get(actorId)).roles?.[playerId]
+    ), fixture)).toBe("ordnance");
   });
 
   await phase("close the ship sheet and detach its DOM", async () => {
@@ -436,6 +698,181 @@ test("exercises Foundry-only document, application, canvas, combat, and socket b
     expect(rendered.every(result => result.connected && result.hasRenderedBox)).toBe(true);
   });
 
+  await phase("submit component edits through the real AppV1/AppV2 form", async () => {
+    const result = await page.evaluate(async ({ actorId, componentId }) => {
+      const actor = game.actors.get(actorId);
+      const component = actor.items.get(componentId);
+      const sheet = component.sheet;
+      const isV1 = sheet instanceof foundry.appv1.api.Application;
+      await sheet.render(isV1 ? true : { force: true });
+      const findInput = () => globalThis.__shipCombatAppRoot(sheet)
+        ?.querySelector('input[name="system.speed"]');
+      let input = findInput();
+      if (!input) {
+        const detailsTab = globalThis.__shipCombatAppRoot(sheet)
+          ?.querySelector('[data-tab="details"]');
+        detailsTab?.click();
+        await new Promise(resolve => setTimeout(resolve, 100));
+        input = findInput();
+      }
+      if (!input) throw new Error("Rendered component sheet did not expose system.speed");
+      input.value = "9";
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+      input.form?.requestSubmit?.();
+      const deadline = Date.now() + 5_000;
+      while (component.system.speed !== 9 && Date.now() < deadline) {
+        await new Promise(resolve => setTimeout(resolve, 25));
+      }
+      const persistedSpeed = component.system.speed;
+      const derivedSpeed = globalThis.ShipCombat._api.SystemAdapter.current
+        .getShipData(actor).movement.speed;
+      await component.update({ "system.speed": 7 });
+      await sheet.close();
+      return { persistedSpeed, derivedSpeed };
+    }, fixture);
+    expect(result).toEqual({ persistedSpeed: 9, derivedSpeed: 9 });
+  });
+
+  await phase("exercise player and NPC component drop contracts with real documents", async () => {
+    const result = await page.evaluate(async ({
+      actorId, npcActorId, worldWeaponId, worldEngineId, useV1, adapterId,
+    }) => {
+      const playerActor = game.actors.get(actorId);
+      const npcActor = game.actors.get(npcActorId);
+      const weapon = game.items.get(worldWeaponId);
+      const engine = game.items.get(worldEngineId);
+      const eventFor = (slot, position = null) => ({
+        preventDefault() {},
+        target: {
+          closest(selector) {
+            return selector === "[data-component-slot]"
+              ? { dataset: { componentSlot: slot, componentPosition: position } }
+              : null;
+          },
+        },
+      });
+      const playerSheet = playerActor.sheet;
+      const npcSheet = npcActor.sheet;
+      const callPlayerDrop = async (item, event) => {
+        if (useV1) return playerSheet._onDropItem(event, item.toDragData());
+        if (adapterId === "dnd5e") return playerSheet._onDropItem(event, item);
+        return playerSheet._onDropItem(item.toDragData(), event);
+      };
+      const callNpcDrop = async (item, event) => {
+        if (useV1) return npcSheet._onDropItem(event, item.toDragData());
+        if (adapterId === "dnd5e") return npcSheet._onDropItem(event, item);
+        return npcSheet._onDropItem(item.toDragData(), event);
+      };
+
+      const npcBefore = npcActor.items.size;
+      await callPlayerDrop(weapon, eventFor("weapon", "prow"));
+      await callPlayerDrop(engine, eventFor("engine"));
+      await callNpcDrop(engine, eventFor("weapon", "prow"));
+      const npcAfterRejected = npcActor.items.size;
+      await callNpcDrop(weapon, eventFor("weapon", "prow"));
+
+      const playerWeapon = playerActor.items.find(item => item.name === weapon.name);
+      const playerEngine = playerActor.items.find(item => item.name === engine.name);
+      const npcWeapon = npcActor.items.find(item => item.name === weapon.name);
+      return {
+        playerWeapon: playerWeapon ? {
+          slot: playerWeapon.system.slot,
+          position: playerWeapon.system.weaponPosition,
+          equipped: playerWeapon.system.equipped,
+        } : null,
+        overflowEngine: playerEngine ? {
+          slot: playerEngine.system.slot,
+          equipped: playerEngine.system.equipped,
+        } : null,
+        npcRejectedInvalid: npcAfterRejected === npcBefore,
+        npcWeapon: npcWeapon ? {
+          slot: npcWeapon.system.slot,
+          position: npcWeapon.system.weaponPosition,
+        } : null,
+      };
+    }, { ...fixture, adapterId });
+    expect(result).toEqual({
+      playerWeapon: { slot: "weapon", position: "prow", equipped: true },
+      overflowEngine: { slot: "engine", equipped: false },
+      npcRejectedInvalid: true,
+      npcWeapon: { slot: "weapon", position: "prow" },
+    });
+  });
+
+  await phase("edit weapon traits through the adapter component dialog", async () => {
+    await page.evaluate(async actorId => {
+      const actor = game.actors.get(actorId);
+      const component = actor.items.find(item => item.name === "Ship Combat Integration World Weapon");
+      if (!component) throw new Error("Dropped player weapon is missing");
+      const sheet = component.sheet;
+      const isV1 = sheet instanceof foundry.appv1.api.Application;
+      await sheet.render(isV1 ? true : { force: true });
+    }, fixture.actorId);
+    const componentRoot = page.locator(
+      '.shipcombat-component:visible, .causodes-shipcombat-dnd5e.component:visible, .causodes-shipcombat-impmal:visible',
+    ).last();
+    const detailsTab = componentRoot.locator('[data-action="tab"][data-tab="details"], nav [data-tab="details"], .tabs [data-tab="details"]').first();
+    if (await detailsTab.count()) await detailsTab.click();
+    const editTraits = componentRoot.locator('[data-action="editWeaponTraits"]');
+    await expect(editTraits).toBeVisible();
+    await editTraits.click();
+
+    const traitValue = page.locator('input[name="rend-value"]:visible').last();
+    const traitEnabled = page.locator('input[name="rendEnabled"]:visible').last();
+    await expect(traitValue).toBeVisible();
+    await traitValue.fill("3");
+    await traitEnabled.check();
+    const traitForm = traitValue.locator("xpath=ancestor::form");
+    const saveTraits = traitForm.locator('.wte-save, button[type="submit"], button[data-action="ok"]').last();
+    await expect(saveTraits).toBeVisible();
+    await saveTraits.click();
+    await expect.poll(() => page.evaluate(actorId => {
+      const component = game.actors.get(actorId).items
+        .find(item => item.name === "Ship Combat Integration World Weapon");
+      return {
+        rend: component?.system?.traits?.rend,
+        enabled: component?.system?.traits?.rendEnabled,
+      };
+    }, fixture.actorId)).toEqual({ rend: 3, enabled: true });
+    await page.evaluate(async actorId => {
+      const component = game.actors.get(actorId).items
+        .find(item => item.name === "Ship Combat Integration World Weapon");
+      await component?.sheet?.close();
+    }, fixture.actorId);
+  });
+
+  await phase("unassign and delete a component through rendered ship controls", async () => {
+    const result = await page.evaluate(async actorId => {
+      const actor = game.actors.get(actorId);
+      const component = actor.items.find(item => item.name === "Ship Combat Integration World Weapon");
+      if (!component) throw new Error("Dropped player weapon is missing");
+      const componentId = component.id;
+      const sheet = actor.sheet;
+      const isV1 = sheet instanceof foundry.appv1.api.Application;
+      const root = () => globalThis.__shipCombatAppRoot(sheet);
+      const waitFor = async predicate => {
+        const deadline = Date.now() + 5_000;
+        while (!predicate() && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 25));
+        if (!predicate()) throw new Error("Timed out waiting for rendered component control state");
+      };
+      await sheet.render(isV1 ? true : { force: true });
+      await waitFor(() => root()?.isConnected);
+      root()?.querySelector('[data-action="tab"][data-tab="overview"], nav [data-tab="overview"], .tabs [data-tab="overview"]')?.click();
+      await waitFor(() => root()?.querySelector(`[data-id="${componentId}"] [data-action="unassignWeapon"]`));
+      root().querySelector(`[data-id="${componentId}"] [data-action="unassignWeapon"]`).click();
+      await waitFor(() => actor.items.get(componentId)?.system.equipped === false);
+
+      root()?.querySelector('[data-action="tab"][data-tab="config"], nav [data-tab="config"], .tabs [data-tab="config"]')?.click();
+      await waitFor(() => root()?.querySelector(`[data-id="${componentId}"] [data-action="deleteEmbedded"]`));
+      root().querySelector(`[data-id="${componentId}"] [data-action="deleteEmbedded"]`).click();
+      await waitFor(() => !actor.items.has(componentId));
+      await sheet.close();
+      return { unassigned: true, deleted: !actor.items.has(componentId) };
+    }, fixture.actorId);
+    expect(result).toEqual({ unassigned: true, deleted: true });
+  });
+
   await phase("activate the scene and let real canvasReady hooks reconcile token state", async () => {
     await page.evaluate(async sceneId => {
       const scene = game.scenes.get(sceneId);
@@ -443,10 +880,101 @@ test("exercises Foundry-only document, application, canvas, combat, and socket b
       await scene.view();
     }, fixture.sceneId);
     await expect.poll(() => page.evaluate(sceneId => canvas?.ready && canvas.scene?.id === sceneId, fixture.sceneId)).toBe(true);
-    await expect.poll(() => page.evaluate(({ sceneId, npcTokenId }) => {
-      const token = game.scenes.get(sceneId)?.tokens.get(npcTokenId);
-      return { actorLink: token?.actorLink, hidden: token?.hidden };
-    }, fixture)).toEqual({ actorLink: true, hidden: true });
+    await expect.poll(() => page.evaluate(({ sceneId, npcTokenId, siblingNpcTokenId }) => {
+      const scene = game.scenes.get(sceneId);
+      const token = scene?.tokens.get(npcTokenId);
+      const sibling = scene?.tokens.get(siblingNpcTokenId);
+      return {
+        actorLink: token?.actorLink,
+        hidden: token?.hidden,
+        siblingActorLink: sibling?.actorLink,
+        siblingHidden: sibling?.hidden,
+        actorId: token?.actorId,
+        actorType: token?.actor?.type,
+        actorSourceType: token?.actor?._source?.type,
+        siblingActorId: sibling?.actorId,
+        siblingActorType: sibling?.actor?.type,
+        siblingActorSourceType: sibling?.actor?._source?.type,
+      };
+    }, fixture)).toMatchObject({
+      actorLink: false,
+      hidden: true,
+      siblingActorLink: false,
+      siblingHidden: true,
+    });
+  });
+
+  await phase("commit a Pilot Core action across real Actor and Token documents", async () => {
+    const result = await page.evaluate(async ({ actorId, shipTokenId }) => {
+      const { ShipCombatState, SystemAdapter } = globalThis.ShipCombat._api;
+      const actor = game.actors.get(actorId);
+      const token = canvas.scene.tokens.get(shipTokenId);
+      const state = ShipCombatState.forShip(actor);
+      await state.update({
+        "resources.pilot.coreCount": 1,
+        "resources.pilot.coreActionsPlayed": [],
+        "resources.pilot.fuelBurned": 0,
+      });
+      const oldX = token.x;
+      const gridSize = canvas.grid.size;
+      if (!Number.isFinite(gridSize) || gridSize <= 0) {
+        throw new Error(`Foundry exposed an invalid canvas grid size: ${gridSize}`);
+      }
+      const requestedX = oldX + gridSize;
+      const committed = await state.pilotStrafe(
+        game.user.id,
+        requestedX,
+        token.y,
+        token.rotation,
+        1,
+        [],
+      );
+      const data = SystemAdapter.current.getShipData(actor);
+      return {
+        committed,
+        requestedX,
+        activeTokenId: actor.getActiveTokens()[0]?.document?.id ?? null,
+        coreCount: data.resources.pilot.coreCount,
+        played: data.resources.pilot.coreActionsPlayed,
+      };
+    }, fixture);
+    expect(result).toMatchObject({
+      committed: true,
+      activeTokenId: fixture.shipTokenId,
+      coreCount: 0,
+      played: ["strafe"],
+    });
+    await expect.poll(() => page.evaluate(shipTokenId => (
+      canvas.scene.tokens.get(shipTokenId)?.x ?? null
+    ), fixture.shipTokenId)).toBe(result.requestedX);
+  });
+
+  await phase("preserve independent state across unlinked NPC tokens", async () => {
+    const isolation = await page.evaluate(async ({ sceneId, npcActorId, npcTokenId, siblingNpcTokenId }) => {
+      const { SystemAdapter } = globalThis.ShipCombat._api;
+      const scene = game.scenes.get(sceneId);
+      const source = game.actors.get(npcActorId);
+      const primary = scene.tokens.get(npcTokenId).actor;
+      const sibling = scene.tokens.get(siblingNpcTokenId).actor;
+      await primary.update({
+        [SystemAdapter.current.systemPath("shields.bow")]: 7,
+        [SystemAdapter.current.systemPath("resources.pilot.bearing")]: 33,
+      });
+      const snapshot = actor => {
+        const data = SystemAdapter.current.getShipData(actor);
+        return { bow: data.shields?.bow ?? 0, bearing: data.resources?.pilot?.bearing ?? 0 };
+      };
+      return {
+        actorsDistinct: primary !== source && sibling !== source && primary !== sibling,
+        primary: snapshot(primary),
+        source: snapshot(source),
+        sibling: snapshot(sibling),
+      };
+    }, fixture);
+    expect(isolation.actorsDistinct).toBe(true);
+    expect(isolation.primary).toEqual({ bow: 7, bearing: 33 });
+    expect(isolation.source).not.toEqual(isolation.primary);
+    expect(isolation.sibling).not.toEqual(isolation.primary);
   });
 
   const playerOrdnance = await phase("spawn both player-ship ordnance subtypes through the production workflow", () => page.evaluate(async ({
@@ -481,11 +1009,11 @@ test("exercises Foundry-only document, application, canvas, combat, and socket b
   }, fixture));
 
   await phase("open the NPC ordnance tab with real AppV1/AppV2 listeners", async () => {
-    await page.evaluate(async npcActorId => {
-      const sheet = game.actors.get(npcActorId).sheet;
+    await page.evaluate(async npcTokenId => {
+      const sheet = canvas.scene.tokens.get(npcTokenId).actor.sheet;
       const isV1 = sheet instanceof foundry.appv1.api.Application;
       await sheet.render(isV1 ? true : { force: true });
-    }, fixture.npcActorId);
+    }, fixture.npcTokenId);
     const ordnanceTab = page.locator(
       'nav [data-tab="ordnance"], .tabs [data-tab="ordnance"], [data-action="tab"][data-tab="ordnance"]',
     ).filter({ visible: true }).last();
@@ -493,6 +1021,34 @@ test("exercises Foundry-only document, application, canvas, combat, and socket b
     await ordnanceTab.click();
     await expect(page.locator('[data-action="npcLaunchTorpedo"]')).toBeVisible();
     await expect(page.locator('[data-action="npcLaunchStrikeCraft"]')).toBeVisible();
+  });
+
+  await phase("verify NPC ordnance selectors and launch controls fit their rendered rows", async () => {
+    const layout = await page.locator(".shipcombat-npc-launch-row:visible").evaluateAll(rows => rows.map(row => {
+      const select = row.querySelector(".shipcombat-npc-launch-template");
+      const controls = row.querySelector(".shipcombat-npc-launch-controls");
+      const count = row.querySelector(".shipcombat-npc-launch-count");
+      const button = row.querySelector(".shipcombat-npc-launch-btn");
+      const rowRect = row.getBoundingClientRect();
+      const selectRect = select.getBoundingClientRect();
+      const countRect = count.getBoundingClientRect();
+      const buttonRect = button.getBoundingClientRect();
+      return {
+        optionText: select.selectedOptions[0]?.textContent?.trim() ?? "",
+        selectorUsesRow: selectRect.width / rowRect.width,
+        controlsFit: controls.scrollWidth <= controls.clientWidth + 1,
+        buttonWiderThanTall: buttonRect.width > buttonRect.height * 1.5,
+        alignedHeights: Math.abs(buttonRect.height - countRect.height) <= 2,
+      };
+    }));
+    expect(layout).toHaveLength(2);
+    for (const row of layout) {
+      expect(row.optionText.length).toBeGreaterThan(0);
+      expect(row.selectorUsesRow).toBeGreaterThan(0.9);
+      expect(row.controlsFit).toBe(true);
+      expect(row.buttonWiderThanTall).toBe(true);
+      expect(row.alignedHeights).toBe(true);
+    }
   });
 
   const npcTorpedoActorIdsBefore = await page.evaluate(moduleId => game.actors
@@ -538,7 +1094,7 @@ test("exercises Foundry-only document, application, canvas, combat, and socket b
       const token = actor.getActiveTokens()[0];
       return [actor.system.subtype, { actorId: actor.id, tokenId: token?.id }];
     }));
-    await game.actors.get(npcActorId).sheet.close();
+    await canvas.scene.tokens.get(npcTokenId).actor.sheet.close();
     return result;
   }, { ...fixture, moduleId: adapterModuleId }));
   fixture.ordnanceMatrix = {
@@ -633,7 +1189,7 @@ test("exercises Foundry-only document, application, canvas, combat, and socket b
     const tokenState = await page.evaluate(async ({ actorId, sceneId, shipTokenId, npcTokenId }) => {
       const scene = game.scenes.get(sceneId);
       const npcToken = scene.tokens.get(npcTokenId);
-      await npcToken.update({ x: npcToken.x + 100, hidden: false });
+      const updatedNpcToken = await npcToken.update({ hidden: false });
       const actor = game.actors.get(actorId);
       await globalThis.ShipCombat._api.ShipCombatState.forShip(actor).update({
         "resources.sensors.recommendedTargetId": npcTokenId,
@@ -649,7 +1205,9 @@ test("exercises Foundry-only document, application, canvas, combat, and socket b
         canvasTokenIds: canvas.tokens.placeables.map(token => token.id),
         shipLinked: scene.tokens.get(shipTokenId)?.actorLink,
         npcLinked: scene.tokens.get(npcTokenId)?.actorLink,
-        npcX: scene.tokens.get(npcTokenId)?.x,
+        npcHidden: scene.tokens.get(npcTokenId)?.hidden,
+        npcHiddenSource: scene.tokens.get(npcTokenId)?._source?.hidden,
+        npcHiddenFromUpdate: updatedNpcToken.hidden,
         references: {
           recommended: data.resources.sensors.recommendedTargetId,
           priority: data.resources.captain.priorityTargetId,
@@ -667,8 +1225,10 @@ test("exercises Foundry-only document, application, canvas, combat, and socket b
       fixture.ordnanceTokenId,
     ]));
     expect(tokenState.shipLinked).toBe(true);
-    expect(tokenState.npcLinked).toBe(true);
-    expect(tokenState.npcX).toBe(1_400);
+    expect(tokenState.npcLinked).toBe(false);
+    expect(tokenState.npcHidden).toBe(false);
+    expect(tokenState.npcHiddenSource).toBe(false);
+    expect(tokenState.npcHidden).toBe(tokenState.npcHiddenFromUpdate);
     expect(tokenState.references).toEqual({
       recommended: fixture.npcTokenId,
       priority: fixture.npcTokenId,
@@ -703,7 +1263,7 @@ test("exercises Foundry-only document, application, canvas, combat, and socket b
 
     await page.evaluate(({ sceneId, npcTokenId }) => {
       const token = game.scenes.get(sceneId).tokens.get(npcTokenId);
-      return token.update({ x: token.x + 100 });
+      return token.update({ rotation: (token.rotation + 45) % 360 });
     }, fixture);
     await expect.poll(() => page.evaluate(npcTokenId => {
       const app = globalThis.__shipCombatIntegrationPopup;
@@ -721,7 +1281,7 @@ test("exercises Foundry-only document, application, canvas, combat, and socket b
       const app = globalThis.__shipCombatIntegrationPopup;
       await app.close();
       const token = game.scenes.get(sceneId).tokens.get(npcTokenId);
-      await token.update({ x: token.x + 100 });
+      await token.update({ rotation: (token.rotation + 45) % 360 });
       await new Promise(resolve => setTimeout(resolve, 300));
     }, fixture);
     expect(await page.evaluate(() => {
@@ -731,20 +1291,85 @@ test("exercises Foundry-only document, application, canvas, combat, and socket b
     })).toBe(true);
   });
 
+  await phase("keep the Ordnance roll available while commitments lock allocation", async () => {
+    const state = await page.evaluate(async actorId => {
+      const { ShipCombatState, SystemAdapter } = globalThis.ShipCombat._api;
+      const actor = game.actors.get(actorId);
+      await ShipCombatState.forShip(actor).update({
+        "resources.ordnance.bosunRolled": false,
+        "resources.ordnance.commitments": [{
+          id: "integration-queued-action",
+          action: "loadAmmo",
+          crewCount: 2,
+          turnsRemaining: 0,
+          addedRound: 0,
+        }],
+      });
+      const sheet = actor.sheet;
+      const isV1 = sheet instanceof foundry.appv1.api.Application;
+      await sheet.render(isV1 ? true : { force: true });
+      await new Promise(resolve => setTimeout(resolve, 100));
+      const root = globalThis.__shipCombatAppRoot(sheet);
+      const roll = root?.querySelector('[data-action="rollOrdnanceMaster"]');
+      const allocationPanel = roll?.closest(".shipcombat-helm-stats, .sc-skill-row");
+      const allocationButtons = [...(allocationPanel?.querySelectorAll('[data-action="allocOrdnanceSL"]') ?? [])];
+      const result = {
+        rollExists: !!roll,
+        rollPointerEvents: roll ? getComputedStyle(roll).pointerEvents : null,
+        allocationPanelExists: !!allocationPanel,
+        allocationPanelPointerEvents: allocationPanel ? getComputedStyle(allocationPanel).pointerEvents : null,
+        allocationsExist: allocationButtons.length > 0,
+        allocationsDisabled: allocationButtons.every(button => button.disabled),
+        systemPath: SystemAdapter.current.systemPath("resources.ordnance.commitments"),
+      };
+      await ShipCombatState.forShip(actor).update({ "resources.ordnance.commitments": [] });
+      await sheet.close();
+      return result;
+    }, fixture.actorId);
+    expect(state).toEqual({
+      rollExists: true,
+      rollPointerEvents: "auto",
+      allocationPanelExists: true,
+      allocationPanelPointerEvents: "auto",
+      allocationsExist: true,
+      allocationsDisabled: true,
+      systemPath: "system.resources.ordnance.commitments",
+    });
+  });
+
   const combatFixture = await phase("start real combat with player and NPC combatants", () => page.evaluate(async ({
-    actorId, npcActorId, sceneId, shipTokenId, npcTokenId,
+    actorId, crewActorId, playerId, npcActorId, sceneId, shipTokenId, npcTokenId,
   }) => {
     const { ShipCombatState, SystemAdapter } = globalThis.ShipCombat._api;
     const ship = game.actors.get(actorId);
-    const npc = game.actors.get(npcActorId);
+    const crew = game.actors.get(crewActorId);
+    const npc = game.scenes.get(sceneId).tokens.get(npcTokenId).actor;
     const hpRemaining = SystemAdapter.current.hullDisplayMode === "hpRemaining";
-    await ShipCombatState.forShip(ship).update({
+    const shipState = ShipCombatState.forShip(ship);
+    await shipState.update({
       "hull.max": 20,
       "hull.value": hpRemaining ? 20 : 0,
       internalFire: 2,
+      "resources.ordnance.manpower": 12,
+      "resources.ordnance.manpowerMax": 12,
+      "resources.captain.hand": [{
+        instanceId: "integration-hold-the-line",
+        cardId: "holdTheLine",
+        salvaged: false,
+      }],
       "resources.pilot.fuelBurned": 25,
       "resources.pilot.bearing": 45,
       "resources.pilot.prevTurnMove": 0,
+    });
+    await shipState.playCard({
+      cardId: "holdTheLine",
+      cardInstanceId: "integration-hold-the-line",
+    });
+    await shipState.assignRole(playerId, "captain", {
+      id: crew.id,
+      uuid: crew.uuid,
+      name: crew.name,
+      img: crew.img,
     });
     await npc.update({
       "system.hull.max": 20,
@@ -755,21 +1380,51 @@ test("exercises Foundry-only document, application, canvas, combat, and socket b
       [SystemAdapter.current.systemPath("resources.pilot.fuelBurned")]: 25,
       [SystemAdapter.current.systemPath("resources.pilot.bearing")]: 45,
       [SystemAdapter.current.systemPath("resources.pilot.prevTurnMove")]: 0,
+      [SystemAdapter.current.systemPath("resources.pilot.pilotingSL")]: 4,
+      [SystemAdapter.current.systemPath("resources.pilot.pilotingMessageId")]: "integration-piloting-roll",
+      [SystemAdapter.current.systemPath("resources.gunner.ordnanceSL")]: 3,
+      [SystemAdapter.current.systemPath("resources.gunner.ordnanceRolled")]: true,
+      [SystemAdapter.current.systemPath("resources.gunner.slLocked")]: true,
+      "system.engActionUsed": true,
     });
     const combat = await Combat.create({
       scene: sceneId,
       active: true,
       combatants: [
-        { actorId, tokenId: shipTokenId, sceneId, initiative: 20 },
-        { actorId: npcActorId, tokenId: npcTokenId, sceneId, initiative: 10 },
+        { actorId, tokenId: shipTokenId, sceneId },
+        { actorId: npcActorId, tokenId: npcTokenId, sceneId },
       ],
     });
+    const combatantIds = combat.combatants.map(combatant => combatant.id);
+    await combat.rollInitiative(combatantIds);
+    const rolledInitiatives = combat.combatants.map(combatant => combatant.initiative);
+    if (rolledInitiatives.some(value => !Number.isFinite(Number(value)) || Number(value) <= 0)) {
+      const diagnostics = combat.combatants.map(combatant => ({
+        id: combatant.id,
+        actorId: combatant.actorId,
+        initiative: combatant.initiative,
+        actorType: combatant.actor?.type,
+        actorSourceType: combatant.actor?._source?.type,
+        worldActorType: game.actors.get(combatant.actorId)?.type,
+        worldActorSourceType: game.actors.get(combatant.actorId)?._source?.type,
+        tokenBaseType: combatant.token?.baseActor?.type,
+        tokenBaseSourceType: combatant.token?.baseActor?._source?.type,
+      }));
+      throw new Error(`Ship tracker initiative did not resolve: ${JSON.stringify(diagnostics)}`);
+    }
+    const playerCombatant = combat.combatants.find(combatant => combatant.actorId === actorId);
+    const npcCombatant = combat.combatants.find(combatant => combatant.actorId === npcActorId);
+    await combat.setInitiative(playerCombatant.id, 20);
+    await combat.setInitiative(npcCombatant.id, 10);
     await combat.startCombat();
-    return { combatId: combat.id, hpRemaining };
+    return { combatId: combat.id, hpRemaining, rolledInitiatives };
   }, fixture));
 
+  expect(combatFixture.rolledInitiatives).toHaveLength(2);
+  expect(combatFixture.rolledInitiatives.every(value => Number(value) > 0)).toBe(true);
+
   await phase("verify player turn-start hooks and duplicate-delivery idempotency", async () => {
-    const expectedHull = combatFixture.hpRemaining ? 18 : 2;
+    const expectedHull = combatFixture.hpRemaining ? 20 : 0;
     await expect.poll(() => page.evaluate(({ actorId, combatId }) => {
       const { SystemAdapter } = globalThis.ShipCombat._api;
       const actor = game.actors.get(actorId);
@@ -779,12 +1434,18 @@ test("exercises Foundry-only document, application, canvas, combat, and socket b
         hull: data.hull.value,
         fuelBurned: data.resources.pilot.fuelBurned,
         bearing: data.resources.pilot.bearing,
+        manpower: data.resources.ordnance.manpower,
+        manpowerMax: data.resources.ordnance.manpowerMax,
+        holdTheLineActive: data.resources.captain.holdTheLineActive,
       };
     }, { ...fixture, ...combatFixture })).toEqual({
       currentActorId: fixture.actorId,
       hull: expectedHull,
       fuelBurned: 0,
       bearing: 0,
+      manpower: 12,
+      manpowerMax: 12,
+      holdTheLineActive: false,
     });
 
     await page.evaluate(combatId => {
@@ -813,9 +1474,11 @@ test("exercises Foundry-only document, application, canvas, combat, and socket b
       await game.combats.get(combatId).nextTurn();
     }, { ...fixture, ...combatFixture });
     const expectedHull = combatFixture.hpRemaining ? 18 : 2;
-    await expect.poll(() => page.evaluate(({ npcActorId, combatId, ordnanceMatrix }) => {
-      const npc = game.actors.get(npcActorId);
+    await expect.poll(() => page.evaluate(({ sceneId, npcActorId, npcTokenId, siblingNpcTokenId, combatId, ordnanceMatrix }) => {
+      const npc = game.scenes.get(sceneId).tokens.get(npcTokenId).actor;
       const data = npc.system;
+      const source = game.actors.get(npcActorId).system;
+      const sibling = game.scenes.get(sceneId).tokens.get(siblingNpcTokenId).actor.system;
       const playerTorpedo = canvas.scene.tokens.get(ordnanceMatrix.playerTorpedo.tokenId)?.actor?.system;
       const playerCraft = canvas.scene.tokens.get(ordnanceMatrix.playerStrikeCraft.tokenId)?.actor?.system;
       return {
@@ -824,6 +1487,11 @@ test("exercises Foundry-only document, application, canvas, combat, and socket b
         flux: data.voidshieldFluxRemaining,
         fuelBurned: data.resources.pilot.fuelBurned,
         bearing: data.resources.pilot.bearing,
+        pilotingMessageId: data.resources.pilot.pilotingMessageId,
+        ordnanceRolled: data.resources.gunner.ordnanceRolled,
+        engActionUsed: data.engActionUsed,
+        sourceBearing: source.resources.pilot.bearing,
+        siblingBearing: sibling.resources.pilot.bearing,
         playerTorpedoTurnComplete: playerTorpedo?.turnComplete,
         playerTorpedoLaunchDriftPending: playerTorpedo?.launchDriftPending,
         playerCraftTurnComplete: playerCraft?.turnComplete,
@@ -834,6 +1502,11 @@ test("exercises Foundry-only document, application, canvas, combat, and socket b
       flux: 3,
       fuelBurned: 0,
       bearing: 0,
+      pilotingMessageId: "",
+      ordnanceRolled: false,
+      engActionUsed: false,
+      sourceBearing: 0,
+      siblingBearing: 0,
       playerTorpedoTurnComplete: false,
       playerTorpedoLaunchDriftPending: false,
       playerCraftTurnComplete: false,
@@ -891,6 +1564,16 @@ test("exercises Foundry-only document, application, canvas, combat, and socket b
     });
   });
 
+  await phase("seed one authoritative Ordnance Core action for the player socket", () => page.evaluate(async actorId => {
+    const state = globalThis.ShipCombat._api.ShipCombatState.forShip(game.actors.get(actorId));
+    await state.update({
+      "resources.ordnance.coreCount": 1,
+      "resources.ordnance.coreActionsPlayed": [],
+      "resources.ordnance.craftDestroyed": 1,
+      "resources.ordnance.craftPartialRecovery": 0,
+    });
+  }, fixture.actorId));
+
   await phase("stop the GM canvas before starting the player client", () => page.evaluate(async () => {
     if (canvas?.ready) await canvas.tearDown();
   }));
@@ -942,14 +1625,43 @@ test("exercises Foundry-only document, application, canvas, combat, and socket b
     });
   });
 
-  const results = await phase("send a duplicated player-to-GM resource request", () => playerPage.evaluate(async actorId => {
+  await phase("commit an Ordnance Core spend and effect through one player-to-GM request", async () => {
+    const result = await playerPage.evaluate(async actorId => {
+      const actor = game.actors.get(actorId);
+      const requestGM = globalThis.ShipCombat._api.createActionRequester(() => actor);
+      return requestGM(null, "executeOrdnanceCoreAction", {
+        requestId: "integration-ordnance-core-atomic",
+        actionId: "combatRecoveryDoctrine",
+        choice: "destroyed",
+      });
+    }, fixture.actorId);
+    expect(result).toEqual({ ok: true });
+    await expect.poll(() => page.evaluate(actorId => {
+      const data = globalThis.ShipCombat._api.SystemAdapter.current.getShipData(game.actors.get(actorId));
+      return {
+        coreCount: data.resources.ordnance.coreCount,
+        destroyed: data.resources.ordnance.craftDestroyed,
+        partial: data.resources.ordnance.craftPartialRecovery,
+        played: data.resources.ordnance.coreActionsPlayed,
+      };
+    }, fixture.actorId)).toEqual({
+      coreCount: 0,
+      destroyed: 0,
+      partial: 1,
+      played: ["combatRecoveryDoctrine"],
+    });
+  });
+
+  const duplicateRequest = await phase("send a duplicated player-to-GM resource request", () => playerPage.evaluate(async actorId => {
     const actor = game.actors.get(actorId);
     const requestGM = globalThis.ShipCombat._api.createActionRequester(() => actor);
+    const before = globalThis.ShipCombat._api.SystemAdapter.current
+      .getShipData(actor)?.resources?.engineer?.auxiliaryPower;
     const payload = {
       requestId: "integration-duplicate-request",
       adjustments: [{ roleId: "engineer", key: "auxiliaryPower", delta: 1 }],
     };
-    return Promise.race([
+    const results = await Promise.race([
       Promise.all([
         requestGM(null, "adjustResources", payload),
         requestGM(null, "adjustResources", payload),
@@ -959,15 +1671,16 @@ test("exercises Foundry-only document, application, canvas, combat, and socket b
         30_000,
       )),
     ]);
+    return { before, results };
   }, fixture.actorId));
 
   await phase("verify duplicate delivery committed exactly once", async () => {
-    expect(results).toEqual([{ ok: true }, { ok: true }]);
+    expect(duplicateRequest.results).toEqual([{ ok: true }, { ok: true }]);
     await expect.poll(() => page.evaluate(actorId => {
       const actor = game.actors.get(actorId);
       return globalThis.ShipCombat._api.SystemAdapter.current
         .getShipData(actor)?.resources?.engineer?.auxiliaryPower;
-    }, fixture.actorId)).toBe(1);
+    }, fixture.actorId)).toBe(duplicateRequest.before + 1);
   });
 
   await phase("verify GM document updates replicate into the isolated player client", async () => {
@@ -983,11 +1696,11 @@ test("exercises Foundry-only document, application, canvas, combat, and socket b
   });
 
   await phase("delete integration fixtures", () => page.evaluate(async ({
-    actorId, npcActorId, ordnanceActorId, ordnanceMatrix, sceneId, playerId,
+    actorId, crewActorId, npcActorId, ordnanceActorId, ordnanceMatrix, sceneId, playerId,
   }) => {
     await game.scenes.get(sceneId)?.delete();
     const generatedIds = Object.values(ordnanceMatrix).map(entry => entry.actorId);
-    const actorIds = [actorId, npcActorId, ordnanceActorId, ...generatedIds]
+    const actorIds = [actorId, crewActorId, npcActorId, ordnanceActorId, ...generatedIds]
       .filter(id => game.actors.has(id));
     if (actorIds.length) await Actor.deleteDocuments(actorIds);
     await game.users.get(playerId)?.delete();

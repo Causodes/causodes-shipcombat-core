@@ -45,13 +45,13 @@ async function _onDeleteEmbedded(event, target) {
 // ── Role management ─────────────────────────────────────────────────────────
 
 async function _onUnassignRole(event, target) {
-  requestGM(this, "assignRole", { userId: null, roleId: target.dataset.roleId });
+  await requestGM(this, "assignRole", { userId: null, roleId: target.dataset.roleId });
 }
 
 async function _onClaimRole(event, target) {
   const actor = game.user.character;
   const ref = actor ?? game.actors.find(a => a.isOwner && a.type === "character");
-  requestGM(this, "assignRole", {
+  await requestGM(this, "assignRole", {
     userId: game.user.id,
     roleId: target.dataset.roleId,
     actorRef: ref ? {
@@ -65,7 +65,7 @@ async function _onClaimRole(event, target) {
 
 async function _onReleaseRole(event, target) {
   // Release the current user's own role by un-assigning via the roleId on the row
-  requestGM(this, "assignRole", { userId: null, roleId: target.dataset.roleId });
+  await requestGM(this, "assignRole", { userId: null, roleId: target.dataset.roleId });
 }
 
 // ── Captain ─────────────────────────────────────────────────────────────────
@@ -73,7 +73,7 @@ async function _onReleaseRole(event, target) {
 async function _onPerformStandard(event, target) {
   // Captain/crew generic "perform standard"  -  just marks the role's turn done
   const roleId = target.dataset.roleId;
-  if (roleId) requestGM(this, "toggleTurnDone", { roleId });
+  if (roleId) await requestGM(this, "toggleTurnDone", { roleId });
 }
 
 async function _onPerformOvercharged(event, target) {
@@ -108,7 +108,7 @@ async function _onAdjustSector(event, target) {
   // When increasing, cannot exceed available pool; when decreasing, cannot go below 0
   if (d > 0 && pool <= 0) return;
   const next = Math.max(0, current + d);
-  requestGM(this, "adjustShieldZone", { sector, value: next });
+  await requestGM(this, "adjustShieldZone", { sector, value: next });
 }
 
 
@@ -131,7 +131,7 @@ async function _onDecrementResource(event, target) {
 async function _onMarkDone(event, target) {
   const roleId = target.dataset.roleId;
   if (!roleId) return;
-  requestGM(this, "toggleTurnDone", { roleId });
+  await requestGM(this, "toggleTurnDone", { roleId });
 }
 
 // ── Exported helpers ─────────────────────────────────────────────────────────
@@ -146,7 +146,7 @@ export function adjustShieldSectorDelta(sheet, sector, delta) {
   const pool    = sys.shieldPool?.current ?? 0;
   if (delta > 0 && pool <= 0) return;
   const next = Math.max(0, current + delta);
-  requestGM(sheet, "adjustShieldZone", { sector, value: next });
+  return requestGM(sheet, "adjustShieldZone", { sector, value: next });
 }
 
 // ── Exported action map ─────────────────────────────────────────────────────

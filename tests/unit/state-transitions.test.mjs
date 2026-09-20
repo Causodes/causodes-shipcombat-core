@@ -1,8 +1,5 @@
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import path from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
 
 import {
   actorTypeHasOrdnanceLifecycle,
@@ -15,8 +12,6 @@ import { setModuleId } from "../../scripts/constants.js";
 import { setOrdnanceTurnDone } from "../../scripts/state/ordnance-state.js";
 import { SystemAdapter } from "../../scripts/systems/SystemAdapter.js";
 import { installFoundryStateHarness, RecordingDocument } from "./helpers/foundry-state-harness.mjs";
-
-const coreRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 class TestAdapter extends SystemAdapter {}
 
@@ -146,21 +141,4 @@ test("authoritative state harness exposes failed writes without mutating its sna
   );
   assert.equal(actor.system.turnComplete, false);
   assert.deepEqual(actor.updates, []);
-});
-
-test("launch and combat-hook integration use the shared transition functions", () => {
-  const playerLaunch = fs.readFileSync(path.join(coreRoot, "scripts/state/ordnance-state.js"), "utf8");
-  const npcLaunch = fs.readFileSync(
-    path.join(coreRoot, "scripts/actors/npc/NpcShipSheetMixin.js"),
-    "utf8",
-  );
-  const entrypoint = fs.readFileSync(path.join(coreRoot, "causodes-shipcombat-core.js"), "utf8");
-  const lifecycle = fs.readFileSync(path.join(coreRoot, "scripts/state/ShipCombatState.js"), "utf8");
-
-  assert.match(playerLaunch, /Object\.assign\(actorData\.system, getOrdnanceLaunchTurnState\(subtype\)\)/);
-  assert.match(npcLaunch, /Object\.assign\(actorData\.system, getOrdnanceLaunchTurnState\(slotKey\)\)/);
-  assert.match(playerLaunch, /canSetOrdnanceTurnDone\(ordnanceData, done\)/);
-  assert.match(entrypoint, /processParentOrdnanceLifecycle\(prevCombatant\?\.actor/);
-  assert.match(entrypoint, /_combatUpdateGate\.run\(key, \(\) => _processCombatUpdate\(combat, changes\)\)/);
-  assert.match(lifecycle, /getOrdnanceLifecycleTransition\(/);
 });

@@ -5,11 +5,12 @@
  * Inside each function, `this` refers to the ShipCombatState class itself.
  */
 
-import { MODULE_ID, ORDNANCE_4MAN_COSTS, ORDNANCE_MASTER_ACTIONS } from "../constants.js";
+import { MODULE_ID, ORDNANCE_MASTER_ACTIONS } from "../constants.js";
 import { isStrikeCraft, isTorpedo, ordnanceTypeName } from "../actors/ordnance/ordnance-types.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
 import { getOrdnanceControllerUserId } from "../roles/crew-operators.js";
 import { canSetOrdnanceTurnDone, getOrdnanceLaunchTurnState } from "./ordnance-turn-state.js";
+import { getOrdnanceReservation } from "./ordnance-reservations.js";
 
 const destroyingOrdnanceTokenIds = new Set();
 
@@ -90,11 +91,8 @@ export async function executeOrdnanceLaunch({ actionId, spawnRequests = [] } = {
       && configuredTemplates[request.type].some(template => template?.id === request.templateId));
     if (!hasConfiguredTemplates) return { ok: false, reason: "invalidTemplate" };
 
-    const override = (data.crewSize ?? 6) <= 4 ? ORDNANCE_4MAN_COSTS[actionId] : null;
-    const crewCost = Math.max(2, (override?.crew ?? entry.crew) - Math.max(0, ordnance.allocEfficiency ?? 0));
-    const duration = Math.max(1, (override?.duration ?? entry.duration) - Math.max(0, ordnance.allocExpedience ?? 0));
-    const manpower = ordnance.manpower ?? 0;
-    if (manpower < crewCost) {
+    const { crewCost, duration, manpower, affordable } = getOrdnanceReservation(data, actionId);
+    if (!affordable) {
       return { ok: false, reason: "insufficientCrew", need: crewCost, have: manpower };
     }
     if (["launchTorpedo", "torpedoSalvo"].includes(actionId) && (ordnance.armedTorpedoes ?? 0) < 1) {
@@ -187,12 +185,8 @@ export async function executeCraftRecovery({ tokenId } = {}) {
 
     const data = SystemAdapter.current.getShipData(ship) ?? {};
     const ordnance = data.resources?.ordnance ?? {};
-    const entry = ORDNANCE_MASTER_ACTIONS.recallCraft;
-    const override = (data.crewSize ?? 6) <= 4 ? ORDNANCE_4MAN_COSTS.recallCraft : null;
-    const crewCost = Math.max(2, (override?.crew ?? entry.crew) - Math.max(0, ordnance.allocEfficiency ?? 0));
-    const duration = Math.max(1, (override?.duration ?? entry.duration) - Math.max(0, ordnance.allocExpedience ?? 0));
-    const manpower = ordnance.manpower ?? 0;
-    if (manpower < crewCost) {
+    const { crewCost, duration, manpower, affordable } = getOrdnanceReservation(data, "recallCraft");
+    if (!affordable) {
       return { ok: false, reason: "insufficientCrew", need: crewCost, have: manpower };
     }
 

@@ -3,7 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test tests/unit/*.test.mjs",
+    "test": "npm run test:unit && npm run test:architecture",
+    "test:unit": "node --test tests/unit/*.test.mjs",
+    "test:architecture": "node --test tests/architecture/*.test.mjs",
     "test:foundry": "playwright test --config tests/integration/playwright.config.mjs"
   },
   "devDependencies": {

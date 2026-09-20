@@ -16,7 +16,7 @@ const companionApiSource = fs.readFileSync(path.join(coreRoot, "scripts/companio
 const stateSource = fs.readFileSync(path.join(coreRoot, "scripts/state/ShipCombatState.js"), "utf8");
 
 function jsFiles(root) {
-  if (!fs.existsSync(root)) return [];
+  assert.equal(fs.existsSync(root), true, `missing module root: ${root}`);
   const files = [];
   const visit = directory => {
     for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
@@ -144,7 +144,7 @@ test("all repository request sites use the scoped request factory", () => {
 
 test("persistent document mutations are never silently fire-and-forget", () => {
   const violations = [];
-  const mutationCall = /\.(?:update|setFlag|unsetFlag|createEmbeddedDocuments|deleteEmbeddedDocuments)\s*\(/;
+  const mutationCall = /(?:\.(?:update|setFlag|unsetFlag|createEmbeddedDocuments|deleteEmbeddedDocuments)|\brequestGM)\s*\(/;
   for (const file of moduleRoots.flatMap(jsFiles)) {
     const source = fs.readFileSync(file, "utf8")
       .replace(/\/\*[\s\S]*?\*\//g, comment => comment.replace(/[^\n]/g, ""));
@@ -156,7 +156,8 @@ test("persistent document mutations are never silently fire-and-forget", () => {
       const prefix = line.slice(0, callAt);
       const nearbyStatement = lines.slice(index, index + 4).join(" ");
       const handled = /\b(?:await|return|void)\b/.test(prefix)
-        || /=>\s*[^;]*\.(?:update|setFlag|unsetFlag|createEmbeddedDocuments|deleteEmbeddedDocuments)\s*\(/.test(line)
+        || /=>\s*[^;]*(?:\.(?:update|setFlag|unsetFlag|createEmbeddedDocuments|deleteEmbeddedDocuments)|\brequestGM)\s*\(/.test(line)
+        || /\.push\(\s*requestGM\s*\(/.test(line)
         || /\.catch\s*\(/.test(nearbyStatement);
       if (!handled) violations.push(`${path.relative(coreRoot, file)}:${index + 1}`);
     }

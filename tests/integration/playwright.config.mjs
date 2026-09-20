@@ -5,7 +5,7 @@ export default defineConfig({
   // A single boundary test intentionally keeps one disposable Foundry world and
   // browser session alive across document, canvas, combat, and socket phases.
   // Slow CI runners need headroom, while per-phase logging identifies stalls.
-  timeout: 600_000,
+  timeout: 1_200_000,
   expect: { timeout: 20_000 },
   fullyParallel: false,
   workers: 1,

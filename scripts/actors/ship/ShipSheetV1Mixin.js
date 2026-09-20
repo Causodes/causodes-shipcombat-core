@@ -179,14 +179,14 @@ export const ShipSheetV1Mixin = (BaseClass) => {
       const row = target.closest("[data-id]");
       const id  = row?.dataset?.id;
       if (!id) return;
-      requestGM(this, "unassignComponent", { itemId: id });
+      await requestGM(this, "unassignComponent", { itemId: id });
     }
 
     static async _onUnassignEquipment(event, target) {
       const row = target.closest("[data-id]");
       const id  = row?.dataset?.id;
       if (!id) return;
-      requestGM(this, "unassignComponent", { itemId: id });
+      await requestGM(this, "unassignComponent", { itemId: id });
     }
 
     // ── Data preparation ────────────────────────────────────────────────────

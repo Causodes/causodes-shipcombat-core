@@ -57,6 +57,75 @@ function _findCardDef(cardId) {
   return CAPTAIN_CARDS.find(c => c.id === cardId) ?? null;
 }
 
+/** Pure effect projection used by authoritative execution and exhaustive tests. */
+export function buildCaptainCardEffectUpdates(sys, cardId, {
+  sector = null,
+  hitBonusStep = 0,
+  auxiliaryPowerCapacity = 0,
+} = {}) {
+  const updates = {};
+  const cardDef = _findCardDef(cardId);
+  if (cardDef?.category === "gambit" && cardDef.setsStance) {
+    updates["resources.captain.pendingStance"] = cardDef.setsStance;
+  }
+
+  switch (cardId) {
+    case "gunsHot":         _grantCore(sys, updates, "gunner");   break;
+    case "pressTheAttack":  _grantCore(sys, updates, "pilot");    break;
+    case "enhancedSensor":  _grantCore(sys, updates, "sensors");  break;
+    case "armamentOrder":   _grantCore(sys, updates, "ordnance"); break;
+    case "inspiredTargeting":
+      updates["resources.gunner.captainHitBonus"] = (sys.resources?.gunner?.captainHitBonus ?? 0) + hitBonusStep;
+      break;
+    case "hardOver":
+      updates["resources.pilot.hardOverActive"] = true;
+      break;
+    case "sensorPriority":
+      updates["resources.sensors.sensorPriorityActive"] = true;
+      break;
+    case "hardenShields":
+      updates["resources.captain.hardenedShields"] = true;
+      break;
+    case "repairArmour":
+      if (sector) updates[`armourRend.${sector}`] = 0;
+      break;
+    case "holdTheLine":
+      updates["resources.captain.holdTheLineActive"] = true;
+      break;
+    case "emergencyReserves": {
+      if (sys.conditions?.coreSystems?.tier === "high") break;
+      const auxiliaryPower = sys.resources?.engineer?.auxiliaryPower ?? 0;
+      updates["resources.engineer.auxiliaryPower"] = Math.min(
+        auxiliaryPowerCapacity,
+        auxiliaryPower + Math.ceil(auxiliaryPowerCapacity / 2),
+      );
+      break;
+    }
+    case "ventingSequence": {
+      const heat = sys.resources?.engineer?.heat ?? 0;
+      const vented = Math.min(5, heat);
+      updates["resources.engineer.heat"] = Math.max(0, heat - 5);
+      if (vented > 0) updates.internalFire = (sys.internalFire ?? 0) + vented;
+      break;
+    }
+    case "overdriveCommand":
+      for (const roleId of ["gunner", "pilot", "sensors", "ordnance", "captain"]) {
+        _grantCore(sys, updates, roleId);
+      }
+      updates["resources.engineer.extraActions"] = (sys.resources?.engineer?.extraActions ?? 0) + 1;
+      break;
+    case "doubleShift":
+      updates["resources.engineer.extraActions"] = (sys.resources?.engineer?.extraActions ?? 0) + 1;
+      break;
+    case "acceleratedLoading":
+      updates["resources.captain.acceleratedLoadingActive"] = true;
+      break;
+    default:
+      break;
+  }
+  return updates;
+}
+
 async function _announceCoreAction(actionId) {
   const actionDef = CAPTAIN_CORE_ACTIONS.find(action => action.id === actionId);
   try {
@@ -225,85 +294,14 @@ async function _playCard({ cardId, cardInstanceId, sector }) {
     "resources.captain.playedCards": [...(captain.playedCards ?? []), cardId],
   };
 
-  // Apply card effect
-  if (cardDef.category === "gambit" && cardDef.setsStance) {
-    updates["resources.captain.pendingStance"] = cardDef.setsStance;
+  if (cardId === "emergencyReserves" && sys.conditions?.coreSystems?.tier === "high") {
+    ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.APShutdown"));
   }
-
-  // Per-card immediate effects
-  switch (cardId) {
-    // Core grants share the receiving operator's pool. They intentionally do
-    // not touch assignedCores, which is exclusively the Engineer's ledger.
-    case "gunsHot":         _grantCore(sys, updates, "gunner");   break;
-    case "pressTheAttack":  _grantCore(sys, updates, "pilot");    break;
-    case "enhancedSensor":  _grantCore(sys, updates, "sensors");  break;
-    case "armamentOrder":   _grantCore(sys, updates, "ordnance"); break;
-    // Gunner hit bonus
-    case "inspiredTargeting":
-      updates["resources.gunner.captainHitBonus"] = (sys.resources?.gunner?.captainHitBonus ?? 0) + SystemAdapter.current.getHitBonusStep();
-      break;
-    // Pilot maneuverability doubled
-    case "hardOver":
-      updates["resources.pilot.hardOverActive"] = true;
-      break;
-    // Sensors: halve L1/L2 lock costs after component modifiers
-    case "sensorPriority":
-      updates["resources.sensors.sensorPriorityActive"] = true;
-      break;
-    // Harden Shields: shield bypass weapons cannot bypass void shields this round
-    case "hardenShields":
-      updates["resources.captain.hardenedShields"] = true;
-      break;
-    // Armour Repair: reset rend damage on the chosen sector
-    case "repairArmour":
-      if (sector) updates[`armourRend.${sector}`] = 0;
-      break;
-    // Hold the Line: flag checked in advanceRound fire processing
-    case "holdTheLine":
-      updates["resources.captain.holdTheLineActive"] = true;
-      break;
-    // Emergency Reserves: replenish AP by 50%
-    case "emergencyReserves": {
-      if (sys.conditions?.coreSystems?.tier === "high") {
-        ui.notifications.warn(game.i18n.localize("SHIPCOMBAT.Warning.APShutdown"));
-        break;
-      }
-      const ap    = sys.resources?.engineer?.auxiliaryPower ?? 0;
-      const apMax = this.getReactorStats().auxPowerCapacity;
-      updates["resources.engineer.auxiliaryPower"] = Math.min(apMax, ap + Math.ceil(apMax / 2));
-      break;
-    }
-    // Venting Sequence: vent up to 5 heat immediately, creating internal fires equal to heat vented
-    case "ventingSequence": {
-      const currentHeat = sys.resources?.engineer?.heat ?? 0;
-      const vented = Math.min(5, currentHeat);
-      updates["resources.engineer.heat"] = Math.max(0, currentHeat - 5);
-      if (vented > 0) {
-        updates["internalFire"] = (sys.internalFire ?? 0) + vented;
-      }
-      break;
-    }
-    // Overdrive Command: grant a free core use to all combat roles + extra engineer action
-    case "overdriveCommand": {
-      for (const roleId of ["gunner", "pilot", "sensors", "ordnance", "captain"]) {
-        _grantCore(sys, updates, roleId);
-      }
-      updates["resources.engineer.extraActions"] = (sys.resources?.engineer?.extraActions ?? 0) + 1;
-      break;
-    }
-    // Double Shift: grant Engineer one additional action slot this round
-    case "doubleShift": {
-      updates["resources.engineer.extraActions"] = (sys.resources?.engineer?.extraActions ?? 0) + 1;
-      break;
-    }
-    // Accelerated Loading: crew commitments tick by 2 at next advanceRound
-    case "acceleratedLoading": {
-      updates["resources.captain.acceleratedLoadingActive"] = true;
-      break;
-    }
-    default:
-      break;
-  }
+  Object.assign(updates, buildCaptainCardEffectUpdates(sys, cardId, {
+    sector,
+    hitBonusStep: SystemAdapter.current.getHitBonusStep(),
+    auxiliaryPowerCapacity: this.getReactorStats().auxPowerCapacity,
+  }));
 
   await this.update(updates);
 

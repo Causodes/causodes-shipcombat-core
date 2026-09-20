@@ -108,7 +108,11 @@ export function getContactDesignation(shipData, targetTokenId, { currentTier = 0
   const record = getContactRecord(shipData, targetTokenId);
   const locks = sensors.locks ?? [];
   const lockIndex = locks.findIndex(lock => lock.targetTokenId === targetTokenId);
-  const ordinal = record?.ordinal ?? fallbackOrdinal ?? Math.max(1, lockIndex + 1);
+  // A live radar/popup supplies the target's current scene ordinal. Prefer it
+  // so acquiring a lock cannot replace Contact-1 with an old persisted value
+  // such as Contact-20. Persisted ordinals remain the fallback for asynchronous
+  // contexts (chat cards and state resolution) that have no live contact list.
+  const ordinal = fallbackOrdinal ?? record?.ordinal ?? Math.max(1, lockIndex + 1);
   const mode = _designationMode();
   const suffix = _ordinalSuffix(ordinal, mode);
 

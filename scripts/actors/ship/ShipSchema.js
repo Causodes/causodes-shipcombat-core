@@ -160,7 +160,9 @@ export const ShipSchemaMixin = (BaseClass) => class extends BaseClass {
   computeDerived() {
     // Derive movement stats from the installed engine component (if any).
     const engine = this.parent?.items?.find(
-      i => i.type === `${MODULE_ID}.component` && i.system.slot === "engine"
+      i => i.type === `${MODULE_ID}.component`
+        && i.system.slot === "engine"
+        && i.system.equipped !== false
     );
     if (engine) {
       this.movement.speed           = engine.system.speed           ?? this.movement.speed;
@@ -183,7 +185,9 @@ export const ShipSchemaMixin = (BaseClass) => class extends BaseClass {
 
     // Sum armour from all equipped armour components, then subtract accumulated rend.
     const armourItems = this.parent?.items?.filter(
-      i => i.type === `${MODULE_ID}.component` && i.system.slot === "armour"
+      i => i.type === `${MODULE_ID}.component`
+        && i.system.slot === "armour"
+        && i.system.equipped !== false
     ) ?? [];
     for (const sector of ["bow", "stern", "port", "starboard"]) {
       const base = armourItems.reduce(

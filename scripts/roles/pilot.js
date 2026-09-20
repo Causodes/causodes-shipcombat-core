@@ -93,7 +93,7 @@ async function _onRollPiloting() {
 }
 
 async function _onResetHelm() {
-  requestGM(this, "resetHelmState");
+  await requestGM(this, "resetHelmState");
 }
 
 async function _onConfirmHelm() {

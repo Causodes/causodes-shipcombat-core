@@ -1,8 +1,22 @@
-## Unreleased
+## v2.5.2
 ### Bug Fixes
+- Keep a contact's live radar designation stable when acquiring a lock instead of replacing its scene ordinal with an accumulated historical number
+- Confirm combat-tracker initiative persistence and compensate when a host system returns before its delegated Combatant update completes
+- Exclude unequipped engine and armour components from derived movement and armour, and read D&D5e reactor output from its adapter-specific field
+- Keep player, NPC, AppV1, and AppV2 component placement and trait-editing rules on shared executable contracts
+- Normalize warhammer-lib and D&D5e's opposite AppV2 drop-handler contracts so actors can be assigned to bridge crew roles without regressing either adapter
+- Route combat-tracker initiative for player and NPC ships through one Core-owned adapter contract so companion modules cannot omit ship rolls
+- Identify unlinked NPC ship combatants by their persisted base actor so system-normalized synthetic actor types cannot bypass ship initiative
 - Preserve an NPC ship's disposition on launched torpedo and strike-craft Tokens across system-specific token normalization
 - Fully remove deleted Tokens from Sensors contacts and BDA records by using Foundry's nested-key deletion semantics
-- Hide newly created NPC ship Tokens by default at the Scene Token boundary, since Foundry 14 does not persist `hidden` on prototype Tokens
+- Keep newly created NPC ship Tokens hidden and unlinked at the Scene Token boundary, even when a host system normalizes their synthetic actor data
+- Preserve independent state on unlinked NPC ship Tokens and reset every NPC Piloting, Ranged, and Engineering action gate at turn start
+- Apply Hold the Line to both internal-fire hull damage and Ordnance manpower casualties in tracker and manual round advancement
+- Keep player and NPC condition effects consistent between Foundry tracker advancement and manual round controls
+- Commit Gunner and Ordnance Master Core costs and effects in one authoritative update so a failed effect cannot consume its Power Core
+- Commit Pilot Core costs and movement state together, restoring the actor state if an immediate Token move fails
+- Resolve nested adapter terminology after the final translation merge so late localization initialization cannot expose raw localization tokens
+- Await every player-to-GM mutation request, including sheet listeners and radar contact registration, so failures cannot become unhandled background work
 
 ## v2.5.1
 ### Bug Fixes

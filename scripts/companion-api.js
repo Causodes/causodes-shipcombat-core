@@ -42,6 +42,7 @@ export { ShipSheetMixin }                                    from "./actors/ship
 export { SHIP_PARTS, SHIP_TABS }                             from "./actors/ship/parts.js";
 export { ShipComponentSchemaMixin }                          from "./items/ShipComponentSchema.js";
 export { ShipComponentSheetMixin, ShipComponentSheetV1Mixin } from "./items/ShipComponentSheetMixin.js";
+export { WEAPON_TRAITS, ORDNANCE_TRAITS, buildComponentTraitUpdates } from "./items/component-traits.js";
 export { CORE_MODULE_ID, MACRO_FIRE_TIERS, buildChargeTiers, SHIP_CLASSIFICATIONS } from "./constants.js";
 export { hullDisplay }                                       from "./constants.js";
 export { getAttackStanceModifier, getStanceMovementModifiers, hasDevastationProtocol } from "./stances.js";

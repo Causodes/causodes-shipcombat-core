@@ -6,16 +6,16 @@ import { SystemAdapter } from "../systems/SystemAdapter.js";
 
 const requestGM = createActionRequester(context => context.actor);
 
-async function _onEndShipTurn() { requestGM(this, "endShipTurn"); }
+async function _onEndShipTurn() { await requestGM(this, "endShipTurn"); }
 
-async function _onAdvanceRound() { requestGM(this, "advanceRound"); }
+async function _onAdvanceRound() { await requestGM(this, "advanceRound"); }
 
 async function _onEndCombat() {
   const ok = await foundry.applications.api.DialogV2.confirm({
     window:  { title: game.i18n.localize("SHIPCOMBAT.Dialog.EndCombat") },
     content: `<p>${game.i18n.localize("SHIPCOMBAT.Dialog.EndCombatBody")}</p>`,
   });
-  if (ok) requestGM(this, "endCombat");
+  if (ok) await requestGM(this, "endCombat");
 }
 
 async function _onFullReset() {
@@ -23,7 +23,7 @@ async function _onFullReset() {
     window:  { title: game.i18n.localize("SHIPCOMBAT.Dialog.FullReset") },
     content: `<p>${game.i18n.localize("SHIPCOMBAT.Dialog.FullResetBody")}</p>`,
   });
-  if (ok) requestGM(this, "fullReset");
+  if (ok) await requestGM(this, "fullReset");
 }
 
 async function _onAdjustHull(event, target) {

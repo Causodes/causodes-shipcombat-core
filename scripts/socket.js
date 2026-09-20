@@ -52,6 +52,7 @@ export const ACTION_CONTRACTS = Object.freeze({
   adjustShieldZone: _shipAction,
   fluxToCharge: _shipAction,
   fireWeapon: _sourceAction("actorId"),
+  executeGunnerCoreAction: _shipAction,
   repairHull: _shipAction,
   executeSensorAction: _shipAction,
   executeSensorCoreAction: _shipAction,
@@ -59,6 +60,7 @@ export const ACTION_CONTRACTS = Object.freeze({
   registerSensorContacts: _shipAction,
   executeOrdnanceLaunch: _shipAction,
   executeCraftRecovery: _shipAction,
+  executeOrdnanceCoreAction: _shipAction,
   deleteOrdnanceTokens: _parentShipAction,
   destroyOrdnanceTokens: _parentShipAction,
   commitOrdnanceAction: _shipAction,
@@ -470,6 +472,9 @@ async function _handleAction(action, payload = {}) {
       return _fwResult;
     }
 
+    case "executeGunnerCoreAction":
+      return state.executeGunnerCoreAction(payload);
+
     case "repairHull":
       return _booleanActionResult(state.repairHull(payload.auxiliaryPowerSpent, payload.sl));
 
@@ -490,6 +495,9 @@ async function _handleAction(action, payload = {}) {
 
     case "executeCraftRecovery":
       return state.executeCraftRecovery(payload);
+
+    case "executeOrdnanceCoreAction":
+      return state.executeOrdnanceCoreAction(payload);
 
     case "deleteOrdnanceTokens": {
       const tokenIds = _getOwnedOrdnanceTokenIds(state.ship, payload.tokenIds);

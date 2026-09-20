@@ -12,26 +12,14 @@
 import { MODULE_ID, CORE_MODULE_ID } from "../constants.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
 import { coerceEmptyNumberInputs } from "../sheet-utils.js";
+import {
+  ORDNANCE_TRAITS,
+  WEAPON_TRAITS,
+  buildComponentTraitUpdates,
+} from "./component-traits.js";
 
 const ZONE_KEYS = ["bow", "stern", "port", "starboard"];
 
-const WEAPON_TRAITS = [
-  { key: "shieldBypass",      hasValue: false },
-  { key: "unlimitedRof",      hasValue: false },
-  { key: "shieldBurn",        hasValue: true,  enabledKey: "shieldBurnEnabled" },
-  { key: "rend",              hasValue: true,  enabledKey: "rendEnabled" },
-  { key: "armourPenetration", hasValue: true,  enabledKey: "armourPenetrationEnabled" },
-  { key: "devastating",       hasValue: true,  enabledKey: "devastatingEnabled" },
-  { key: "unreliable",        hasValue: false },
-  { key: "overcharge",        hasValue: false },
-  { key: "hitRatingModifier", hasValue: true, allowNegative: true, enabledKey: "hitRatingModifierEnabled" },
-];
-const ORDNANCE_TRAITS = [
-  { key: "shieldBypass",      hasValue: false },
-  { key: "shieldBurn",        hasValue: true,  enabledKey: "shieldBurnEnabled" },
-  { key: "rend",              hasValue: true,  enabledKey: "rendEnabled" },
-  { key: "armourPenetration", hasValue: true,  enabledKey: "armourPenetrationEnabled" },
-];
 
 function _weaponTraitsDisplayHtml(traits) {
   const parts = [];
@@ -221,17 +209,14 @@ export const ShipComponentSheetMixin = (BaseClass) => {
     static async _onEditWeaponTraits() {
       const sys    = this.item.system;
       const slot = sys.slot;
-      let traitPath, traits, traitDefs;
+      let traits, traitDefs;
       if (slot === "torpedo") {
-        traitPath = "system.torpedoTraits";
         traits = sys.torpedoTraits ?? {};
         traitDefs = ORDNANCE_TRAITS;
       } else if (slot === "strikeCraft") {
-        traitPath = "system.craftTraits";
         traits = sys.craftTraits ?? {};
         traitDefs = ORDNANCE_TRAITS;
       } else {
-        traitPath = "system.traits";
         traits = sys.traits ?? {};
         traitDefs = WEAPON_TRAITS;
       }
@@ -259,18 +244,7 @@ export const ShipComponentSheetMixin = (BaseClass) => {
       });
       if (!result) return;
 
-      const updates = {};
-      for (const def of traitDefs) {
-        if (def.hasValue) {
-          updates[`${traitPath}.${def.key}`] = Number(result[`${def.key}-value`] ?? 0);
-          if (def.enabledKey) {
-            updates[`${traitPath}.${def.enabledKey}`] = result[def.enabledKey] === true || result[def.enabledKey] === "on";
-          }
-        } else {
-          updates[`${traitPath}.${def.key}`] = result[def.key] === true || result[def.key] === "on";
-        }
-      }
-      await this.item.update(updates);
+      await this.item.update(buildComponentTraitUpdates(slot, result));
     }
 
     _processFormData(event, form, formData) {
@@ -360,33 +334,10 @@ class _WeaponTraitsEditorV1 extends foundry.appv1.api.Application {
     const sys  = this._item.system;
     const slot = sys.slot;
 
-    let traitPath, traitDefs;
-    if (slot === "torpedo") {
-      traitPath = "system.torpedoTraits";
-      traitDefs = ORDNANCE_TRAITS;
-    } else if (slot === "strikeCraft") {
-      traitPath = "system.craftTraits";
-      traitDefs = ORDNANCE_TRAITS;
-    } else {
-      traitPath = "system.traits";
-      traitDefs = WEAPON_TRAITS;
-    }
-
     const form   = this.element.find("form")[0];
     const result = new foundry.applications.ux.FormDataExtended(form).object;
 
-    const updates = {};
-    for (const def of traitDefs) {
-      if (def.hasValue) {
-        updates[`${traitPath}.${def.key}`] = Number(result[`${def.key}-value`] ?? 0);
-        if (def.enabledKey) {
-          updates[`${traitPath}.${def.enabledKey}`] = result[def.enabledKey] === true || result[def.enabledKey] === "on";
-        }
-      } else {
-        updates[`${traitPath}.${def.key}`] = result[def.key] === true || result[def.key] === "on";
-      }
-    }
-    await this._item.update(updates);
+    await this._item.update(buildComponentTraitUpdates(slot, result));
     this.close();
   }
 }

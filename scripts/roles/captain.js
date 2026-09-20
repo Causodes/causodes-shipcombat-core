@@ -259,7 +259,7 @@ function _cardIcon(category) {
 async function _onTriage(event, target) {
   const locId = target.dataset.locId;
   if (!locId) return;
-  requestGM(this, "triageCondition", { locId });
+  await requestGM(this, "triageCondition", { locId });
 }
 
 async function _onPlayCard(event, target) {
@@ -288,11 +288,11 @@ async function _onPlayCard(event, target) {
       d.render(true);
     });
     if (!sector || sector === "cancel") return;
-    requestGM(this, "playCard", { cardId, cardInstanceId, sector });
+    await requestGM(this, "playCard", { cardId, cardInstanceId, sector });
     return;
   }
 
-  requestGM(this, "playCard", { cardId, cardInstanceId });
+  await requestGM(this, "playCard", { cardId, cardInstanceId });
 }
 
 async function _onDiscardCard(event, target) {
@@ -300,7 +300,7 @@ async function _onDiscardCard(event, target) {
   const cardId = card?.dataset?.cardId;
   const cardInstanceId = card?.dataset?.cardInstanceId;
   if (!cardId) return;
-  requestGM(this, "discardCard", { cardId, cardInstanceId });
+  await requestGM(this, "discardCard", { cardId, cardInstanceId });
 }
 
 async function _onMulligan(event, target) {
@@ -501,7 +501,7 @@ async function _onCaptainCoreAction(event, target) {
 // ── Exports ──────────────────────────────────────────────────────────────────
 
 async function _onFluxToCharge() {
-  requestGM(this, "fluxToCharge");
+  await requestGM(this, "fluxToCharge");
 }
 
 async function _onCaptainReorderCard(event, target) {
