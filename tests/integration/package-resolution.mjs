@@ -65,26 +65,69 @@ export function selectNewestCompatiblePackage(candidates, packageId, foundryVers
   return compatible[0];
 }
 
-async function fetchJson(url, token) {
+const DEFAULT_MAX_ATTEMPTS = 6;
+const MAX_RETRY_DELAY_MS = 120_000;
+
+function headerDelayMs(response, now) {
+  const retryAfter = response.headers.get("retry-after");
+  if (retryAfter) {
+    const seconds = Number(retryAfter);
+    if (Number.isFinite(seconds)) return Math.max(0, seconds * 1_000);
+    const date = Date.parse(retryAfter);
+    if (Number.isFinite(date)) return Math.max(0, date - now());
+  }
+
+  const reset = Number(response.headers.get("x-ratelimit-reset"));
+  if (Number.isFinite(reset) && reset > 0) return Math.max(0, (reset * 1_000) - now() + 1_000);
+  return null;
+}
+
+function retryDelayMs(response, attempt, now, random) {
+  const requestedDelay = response ? headerDelayMs(response, now) : null;
+  if (requestedDelay !== null) return Math.min(requestedDelay, MAX_RETRY_DELAY_MS);
+  const exponential = Math.min(2_000 * (2 ** (attempt - 1)), 30_000);
+  return exponential + Math.floor(random() * 500);
+}
+
+function isRateLimited(response, body) {
+  if (response.status === 429) return true;
+  if (response.status !== 403) return false;
+  return response.headers.get("x-ratelimit-remaining") === "0"
+    || response.headers.has("retry-after")
+    || /(?:secondary |API )?rate limit/i.test(body);
+}
+
+export async function fetchWithRetry(url, token, {
+  fetchImpl = globalThis.fetch,
+  sleep = delay => new Promise(resolveDelay => setTimeout(resolveDelay, delay)),
+  now = Date.now,
+  random = Math.random,
+  maxAttempts = DEFAULT_MAX_ATTEMPTS,
+} = {}) {
   const headers = { Accept: "application/vnd.github+json", "User-Agent": "causodes-shipcombat-integration" };
   if (token) headers.Authorization = `Bearer ${token}`;
-  for (let attempt = 1; attempt <= 4; attempt += 1) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    let response;
     try {
-      const response = await fetch(url, { headers, redirect: "follow" });
-      if (response.ok) return response.json();
-      if (response.status < 500 && response.status !== 429) {
-        const error = new Error(`${url}: ${response.status} ${response.statusText}`);
-        error.retryable = false;
-        throw error;
-      }
-      throw new Error(`${url}: ${response.status} ${response.statusText}`);
+      response = await fetchImpl(url, { headers, redirect: "follow" });
+      if (response.ok) return response;
+      const body = await response.text();
+      const error = new Error(`${url}: ${response.status} ${response.statusText}${body ? ` — ${body.slice(0, 240)}` : ""}`);
+      error.retryable = response.status >= 500 || response.status === 408 || isRateLimited(response, body);
+      throw error;
     } catch (error) {
-      if (attempt === 4 || error.retryable === false) throw error;
-      console.warn(`Manifest request attempt ${attempt} failed (${error.message}); retrying.`);
-      await new Promise(resolveDelay => setTimeout(resolveDelay, attempt * 2_000));
+      if (attempt === maxAttempts || error.retryable === false) throw error;
+      const delay = retryDelayMs(response, attempt, now, random);
+      console.warn(`Manifest request attempt ${attempt} failed (${error.message}); retrying in ${Math.ceil(delay / 1_000)}s.`);
+      await sleep(delay);
     }
   }
   throw new Error(`Unable to fetch ${url}.`);
+}
+
+export async function fetchJson(url, token, options) {
+  const response = await fetchWithRetry(url, token, options);
+  return response.json();
 }
 
 export async function resolvePackage(packageId, foundryVersion, token = process.env.GITHUB_TOKEN) {

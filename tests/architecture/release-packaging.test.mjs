@@ -8,6 +8,9 @@ import { fileURLToPath } from "node:url";
 
 const coreRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const modulesRoot = path.dirname(coreRoot);
+const topologyModulesRoot = process.env.SHIPCOMBAT_TOPOLOGY_MODULES_ROOT
+  ? path.resolve(process.env.SHIPCOMBAT_TOPOLOGY_MODULES_ROOT)
+  : modulesRoot;
 const moduleRoots = fs.readdirSync(modulesRoot, { withFileTypes: true })
   .filter(entry => entry.isDirectory() && entry.name.startsWith("causodes-shipcombat-"))
   .map(entry => path.join(modulesRoot, entry.name));
@@ -29,17 +32,25 @@ test("every module downloads its named release asset instead of a source archive
   }
 });
 
-test("every release workflow builds and uploads an allowlisted runtime package", () => {
-  for (const root of moduleRoots) {
+test("every release workflow delegates to the shared runtime packager", () => {
+  for (const runtimeRoot of moduleRoots) {
+    const root = path.join(topologyModulesRoot, path.basename(runtimeRoot));
     const workflowPath = path.join(root, ".github/workflows/publish-manifest.yml");
     const workflow = fs.readFileSync(workflowPath, "utf8");
-    assert.match(workflow, /zip -r "dist\/\$\{module_id\}\.zip" module\.json \$entrypoints lang scripts styles templates/);
-    const packageUpload = workflow.indexOf('gh release upload "$RELEASE_TAG" "dist/${module_id}.zip"');
-    const manifestUpload = workflow.indexOf('gh release upload "$RELEASE_TAG" module.json');
-    assert.ok(packageUpload >= 0, `${path.basename(root)}: missing package upload`);
-    assert.ok(manifestUpload > packageUpload, `${path.basename(root)}: manifest must upload after package`);
+    assert.match(workflow, /package-release\.yml(?:@main)?/);
     assert.doesNotMatch(workflow, /archive\/refs\/tags/);
   }
+
+  const sharedWorkflow = fs.readFileSync(
+    path.join(topologyModulesRoot, "causodes-shipcombat-core", ".github/workflows/package-release.yml"),
+    "utf8",
+  );
+  assert.match(sharedWorkflow, /zip -r "dist\/\$\{module_id\}\.zip" module\.json \$entrypoints lang scripts styles templates/);
+  const packageUpload = sharedWorkflow.indexOf('gh release upload "$RELEASE_TAG" "dist/${module_id}.zip"');
+  const manifestUpload = sharedWorkflow.indexOf('gh release upload "$RELEASE_TAG" module.json');
+  assert.ok(packageUpload >= 0, "shared packager: missing package upload");
+  assert.ok(manifestUpload > packageUpload, "shared packager: manifest must upload after package");
+  assert.doesNotMatch(sharedWorkflow, /archive\/refs\/tags/);
 });
 
 test("the runtime allowlist produces installable archives without development files", () => {

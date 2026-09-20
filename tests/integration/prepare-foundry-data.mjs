@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
-import { resolvePackage } from "./package-resolution.mjs";
+import { fetchWithRetry, resolvePackage } from "./package-resolution.mjs";
 
 const SCENARIOS = Object.freeze({
   dnd5e: { adapterId: "dnd5e", systemId: "dnd5e", moduleId: "causodes-shipcombat-dnd5e", dependencies: ["socketlib"] },
@@ -66,19 +66,8 @@ async function installPackage(definition) {
   mkdirSync(extracted);
 
   try {
-    let response;
-    for (let attempt = 1; attempt <= 4; attempt += 1) {
-      try {
-        response = undefined;
-        response = await fetch(definition.download, { redirect: "follow" });
-        if (response.ok) break;
-        throw new Error(`${response.status} ${response.statusText}`);
-      } catch (error) {
-        if (attempt === 4 || (response && response.status < 500)) throw error;
-        console.warn(`Download attempt ${attempt} for ${definition.id} failed (${error.message}); retrying.`);
-      }
-      await new Promise(resolveDelay => setTimeout(resolveDelay, attempt * 2_000));
-    }
+    // Download URLs are manifest-controlled and may leave github.com, so never forward the API token.
+    const response = await fetchWithRetry(definition.download, null);
     writeFileSync(archive, Buffer.from(await response.arrayBuffer()));
     execFileSync("unzip", ["-q", archive, "-d", extracted], { stdio: "inherit" });
 

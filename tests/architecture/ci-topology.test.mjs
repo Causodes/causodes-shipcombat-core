@@ -7,6 +7,9 @@ import { fileURLToPath } from "node:url";
 
 const coreRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const modulesRoot = path.dirname(coreRoot);
+const topologyModulesRoot = process.env.SHIPCOMBAT_TOPOLOGY_MODULES_ROOT
+  ? path.resolve(process.env.SHIPCOMBAT_TOPOLOGY_MODULES_ROOT)
+  : modulesRoot;
 const moduleNames = [
   "causodes-shipcombat-core",
   "causodes-shipcombat-dnd5e",
@@ -26,7 +29,7 @@ test("every integration harness module passes a syntax check", () => {
 
 test("every module pull request triggers the shared cross-module suite", () => {
   for (const changedModule of moduleNames) {
-    const workflowPath = path.join(modulesRoot, changedModule, ".github/workflows/test.yml");
+    const workflowPath = path.join(topologyModulesRoot, changedModule, ".github/workflows/test.yml");
     assert.equal(fs.existsSync(workflowPath), true, `${changedModule} has no test workflow`);
     const workflow = fs.readFileSync(workflowPath, "utf8");
     assert.match(workflow, /pull_request:/);
@@ -43,7 +46,7 @@ test("every module pull request triggers the shared cross-module suite", () => {
 test("adapter workflows check out their triggering commit rather than main", () => {
   for (const adapter of moduleNames.filter(name => name !== "causodes-shipcombat-core")) {
     const workflow = fs.readFileSync(
-      path.join(modulesRoot, adapter, ".github/workflows/test.yml"),
+      path.join(topologyModulesRoot, adapter, ".github/workflows/test.yml"),
       "utf8",
     );
     const ownCheckout = workflow.match(/- name: Check out [^\n]+\n[\s\S]*?(?=\n\s+- name:)/)?.[0] ?? "";
@@ -55,7 +58,7 @@ test("adapter workflows check out their triggering commit rather than main", () 
 
 test("trusted pushes run the real-Foundry harness without forwarding unrelated secrets", () => {
   const coreWorkflow = fs.readFileSync(
-    path.join(coreRoot, ".github/workflows/foundry-integration.yml"),
+    path.join(topologyModulesRoot, "causodes-shipcombat-core", ".github/workflows/foundry-integration.yml"),
     "utf8",
   );
   assert.match(coreWorkflow, /workflow_call:/);
@@ -64,6 +67,11 @@ test("trusted pushes run the real-Foundry harness without forwarding unrelated s
   assert.match(coreWorkflow, /contracts:\n\s+runs-on: ubuntu-latest/);
   assert.match(coreWorkflow, /Run contract and architecture tests/);
   assert.match(coreWorkflow, /run: npm test/);
+  assert.match(coreWorkflow, /SHIPCOMBAT_TOPOLOGY_MODULES_ROOT: \$\{\{ github\.workspace \}\}\/topology-modules/);
+  for (const moduleName of moduleNames) {
+    assert.match(coreWorkflow, new RegExp(`path: topology-modules/${moduleName}`),
+      `current CI topology is not checked out for ${moduleName}`);
+  }
   assert.match(coreWorkflow, /needs: \[contracts, credentials\]/);
   assert.match(coreWorkflow, /foundry-compatibility\.mjs generation/);
   assert.match(coreWorkflow, /com\.foundryvtt\.version/);
@@ -87,6 +95,7 @@ test("trusted pushes run the real-Foundry harness without forwarding unrelated s
   assert.match(coreWorkflow, /foundry-compatibility\.mjs \\\n+\s+promote/);
   assert.match(coreWorkflow, /COMPATIBILITY_BOT_TOKEN/);
   assert.match(coreWorkflow, /PACKAGE_RESOLUTION_PATH/);
+  assert.match(coreWorkflow, /Build disposable Foundry data directory\n\s+env:\n\s+GITHUB_TOKEN: \$\{\{ github\.token \}\}/);
   assert.match(coreWorkflow, /resolved-packages-\$\{\{ matrix\.scenario \}\}/);
 
   const smokeTest = fs.readFileSync(
@@ -98,9 +107,16 @@ test("trusted pushes run the real-Foundry harness without forwarding unrelated s
   assert.doesNotMatch(smokeTest, /systemVersion:\s*["'][0-9]/,
     "integration expectations must come from the resolved-package artifact");
 
+  const dataPreparation = fs.readFileSync(
+    path.join(coreRoot, "tests/integration/prepare-foundry-data.mjs"),
+    "utf8",
+  );
+  assert.match(dataPreparation, /fetchWithRetry\(definition\.download, null\)/,
+    "manifest-controlled download URLs must never receive the GitHub API token");
+
   for (const adapter of moduleNames.filter(name => name !== "causodes-shipcombat-core")) {
     const workflow = fs.readFileSync(
-      path.join(modulesRoot, adapter, ".github/workflows/foundry-integration.yml"),
+      path.join(topologyModulesRoot, adapter, ".github/workflows/foundry-integration.yml"),
       "utf8",
     );
     assert.match(workflow, /foundry-integration\.yml@main/);
@@ -112,21 +128,36 @@ test("trusted pushes run the real-Foundry harness without forwarding unrelated s
   }
 });
 
-test("every release upload is gated by licensed Foundry integration", () => {
+test("every release upload requires successful integration for the exact tagged commit", () => {
   for (const moduleName of moduleNames) {
     const workflow = fs.readFileSync(
-      path.join(modulesRoot, moduleName, ".github/workflows/publish-manifest.yml"),
+      path.join(topologyModulesRoot, moduleName, ".github/workflows/publish-manifest.yml"),
       "utf8",
     );
-    assert.match(workflow, /require_credentials: true/);
-    assert.match(workflow, /publish-manifest:\n\s+needs: foundry-integration/);
+    assert.match(workflow, /run-name: \$\{\{ inputs\.tag \|\| github\.event\.release\.tag_name \}\} Asset Packaging/);
+    assert.match(workflow, /permissions:\n\s+actions: read\n\s+contents: write/,
+      `${moduleName}'s release caller must grant the shared packager its exact permissions`);
+    assert.match(workflow, /package-release\.yml(?:@main)?/);
+    assert.match(workflow, /tag: \$\{\{ inputs\.tag \|\| github\.event\.release\.tag_name \}\}/);
+    assert.doesNotMatch(workflow, /foundry-integration\.yml/,
+      `${moduleName}'s asset packaging must reuse validation instead of rerunning Foundry`);
     assert.doesNotMatch(workflow, /secrets: inherit/);
   }
+
+  const packager = fs.readFileSync(
+    path.join(topologyModulesRoot, "causodes-shipcombat-core", ".github/workflows/package-release.yml"),
+    "utf8",
+  );
+  assert.match(packager, /workflow_call:/);
+  assert.match(packager, /git rev-parse "\$\{RELEASE_TAG\}\^\{commit\}"/);
+  assert.match(packager, /actions\/workflows\/foundry-integration\.yml\/runs/);
+  assert.match(packager, /-f head_sha="\$release_sha"/);
+  assert.match(packager, /latest_conclusion.*success/);
 });
 
 test("personal-account secret setup updates every repository without command-line secret values", () => {
   const setupScript = fs.readFileSync(
-    path.join(coreRoot, ".github/scripts/set-foundry-integration-secrets.zsh"),
+    path.join(topologyModulesRoot, "causodes-shipcombat-core", ".github/scripts/set-foundry-integration-secrets.zsh"),
     "utf8",
   );
   for (const moduleName of moduleNames) {

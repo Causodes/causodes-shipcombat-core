@@ -1,0 +1,112 @@
+name: Package validated release
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: Existing release tag to package
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+    steps:
+      - name: Check out the released source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - name: Require successful integration for the release commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          release_sha="$(git rev-parse "${RELEASE_TAG}^{commit}")"
+
+          for attempt in {1..30}; do
+            runs="$(gh api --method GET \
+              "repos/${GITHUB_REPOSITORY}/actions/workflows/foundry-integration.yml/runs" \
+              -f head_sha="$release_sha" \
+              -f per_page=20)"
+            latest_status="$(jq -r '.workflow_runs[0].status // "missing"' <<<"$runs")"
+            latest_conclusion="$(jq -r '.workflow_runs[0].conclusion // ""' <<<"$runs")"
+            latest_url="$(jq -r '.workflow_runs[0].html_url // ""' <<<"$runs")"
+
+            if [[ "$latest_status" == "completed" && "$latest_conclusion" == "success" ]]; then
+              echo "Release $RELEASE_TAG is validated by $latest_url"
+              break
+            fi
+
+            if [[ "$latest_status" == "completed" ]]; then
+              echo "Latest integration for $release_sha concluded $latest_conclusion: $latest_url" >&2
+              exit 1
+            fi
+
+            if (( attempt == 30 )); then
+              echo "No successful completed integration found for release commit $release_sha." >&2
+              exit 1
+            fi
+
+            echo "Integration for $release_sha is $latest_status; retrying in 20 seconds ($attempt/30)."
+            sleep 20
+          done
+
+      - name: Validate manifest against the release tag
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+
+          const manifest = JSON.parse(fs.readFileSync("module.json", "utf8"));
+          const tag = process.env.RELEASE_TAG;
+          const expectedVersion = tag.replace(/^v/, "");
+          const expectedDownload = `https://github.com/${process.env.GITHUB_REPOSITORY}/releases/download/${tag}/${manifest.id}.zip`;
+
+          if (manifest.version !== expectedVersion) {
+            throw new Error(`module.json version ${manifest.version} does not match release ${tag}`);
+          }
+          if (manifest.download !== expectedDownload) {
+            throw new Error(`module.json download URL does not match release ${tag}`);
+          }
+          NODE
+
+      - name: Build runtime-only module package
+        shell: bash
+        run: |
+          module_id="$(node -p "require('./module.json').id")"
+          entrypoints="$(node -p "require('./module.json').esmodules.join(' ')")"
+          mkdir -p dist
+          zip -r "dist/${module_id}.zip" module.json $entrypoints lang scripts styles templates
+
+          if unzip -Z1 "dist/${module_id}.zip" | grep -Eq '(^|/)(tests|\.github|node_modules|package\.json)(/|$)'; then
+            echo "Development-only files leaked into the release package." >&2
+            exit 1
+          fi
+
+      - name: Upload manifest and runtime package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          for attempt in {1..6}; do
+            module_id="$(node -p "require('./module.json').id")"
+            if gh release upload "$RELEASE_TAG" "dist/${module_id}.zip" --clobber --repo "$GITHUB_REPOSITORY" \
+              && gh release upload "$RELEASE_TAG" module.json --clobber --repo "$GITHUB_REPOSITORY"; then
+              exit 0
+            fi
+
+            if (( attempt == 6 )); then
+              echo "Release $RELEASE_TAG was still unavailable after $attempt attempts." >&2
+              exit 1
+            fi
+
+            echo "Release $RELEASE_TAG is not available yet; retrying in 10 seconds ($attempt/6)."
+            sleep 10
+          done

@@ -85,6 +85,34 @@ jobs:
           ref: ${{ (inputs.changed_repository == 'Causodes/causodes-shipcombat-impmal' && inputs.changed_ref) || 'main' }}
           path: modules/causodes-shipcombat-impmal
 
+      - name: Check out current Core CI topology
+        uses: actions/checkout@v4
+        with:
+          repository: Causodes/causodes-shipcombat-core
+          ref: main
+          path: topology-modules/causodes-shipcombat-core
+
+      - name: Check out current D&D 5e CI topology
+        uses: actions/checkout@v4
+        with:
+          repository: Causodes/causodes-shipcombat-dnd5e
+          ref: main
+          path: topology-modules/causodes-shipcombat-dnd5e
+
+      - name: Check out current Starfinder 2e CI topology
+        uses: actions/checkout@v4
+        with:
+          repository: Causodes/causodes-shipcombat-sf2e
+          ref: main
+          path: topology-modules/causodes-shipcombat-sf2e
+
+      - name: Check out current Imperium Maledictum CI topology
+        uses: actions/checkout@v4
+        with:
+          repository: Causodes/causodes-shipcombat-impmal
+          ref: main
+          path: topology-modules/causodes-shipcombat-impmal
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -92,6 +120,8 @@ jobs:
 
       - name: Run contract and architecture tests
         working-directory: modules/causodes-shipcombat-core
+        env:
+          SHIPCOMBAT_TOPOLOGY_MODULES_ROOT: ${{ github.workspace }}/topology-modules
         run: npm test
 
   credentials:
@@ -279,6 +309,8 @@ jobs:
           npx playwright install --with-deps chromium
 
       - name: Build disposable Foundry data directory
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           node checkouts/causodes-shipcombat-core/tests/integration/prepare-foundry-data.mjs \
           "${{ matrix.scenario }}" "$GITHUB_WORKSPACE/checkouts" "$FOUNDRY_DATA_PATH"
