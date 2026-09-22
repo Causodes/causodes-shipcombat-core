@@ -37,6 +37,7 @@ import { getStanceMovementModifiers } from "./scripts/stances.js";
 import { collectExistingTargetTokenIds } from "./scripts/state/target-references.js";
 import { processParentOrdnanceLifecycle } from "./scripts/state/ordnance-turn-state.js";
 import { IdempotencyGate, combatTransitionKey } from "./scripts/state/idempotency.js";
+import { initializePlayerShipsForCombat, isCombatStartTransition } from "./scripts/state/combat-start.js";
 import { installCombatInitiativeHandler } from "./scripts/combat-initiative.js";
 import { getShipTokenCreationDefaults } from "./scripts/actor-identity.js";
 import { getNpcTurnResetUpdates, getPlayerTurnConditionUpdates } from "./scripts/state/turn-effects.js";
@@ -571,6 +572,18 @@ Hooks.on("updateCombat", (combat, changes) => {
 async function _processCombatUpdate(combat, changes) {
   if (!game.user.isGM) return;
   if (!("round" in changes) && !("turn" in changes)) return;
+
+  // Foundry's native Combat tracker is the authoritative combat-start entry
+  // point. Initialize every participating player ship before processing its
+  // first turn so deck, resources, and action gates cannot remain at schema
+  // defaults. This runs inside the same idempotency gate as the turn update,
+  // preventing duplicate hook delivery from reshuffling the deck.
+  if (isCombatStartTransition(changes)) {
+    await initializePlayerShipsForCombat(combat, {
+      moduleId: MODULE_ID,
+      stateClass: ShipCombatState,
+    });
+  }
 
   const prevCombatantId    = combat.previous?.combatantId;
   const currentCombatantId = combat.combatant?.id;

@@ -25,7 +25,7 @@ import { CAPTAIN_ACTIONS } from "../../roles/captain.js";
 import { HelmPreview } from "../../canvas/HelmPreview.js";
 import { WeaponArcOverlay } from "../../canvas/WeaponArcOverlay.js";
 import { SystemAdapter } from "../../systems/SystemAdapter.js";
-import { SHIP_PARTS, SHIP_TABS } from "./parts.js";
+import { SHIP_PARTS, SHIP_TABS, isGunnerTab, isHelmTab } from "./parts.js";
 import { ShipController } from "./ShipController.js";
 import { normalizeDropArguments } from "./drop-contract.js";
 import { normalizeStrikeCraftTemplateHull } from "../ordnance/ordnance-helpers.js";
@@ -34,8 +34,6 @@ import { openManualOverride } from "../../apps/ManualOverride.js";
 
 const requestGM = createActionRequester(context => context.actor);
 export { getEffectiveSkillSpec } from "./ShipController.js";
-
-const GUNNER_TABS = new Set(["gunner", "gunner4man", "gunner5man"]);
 
 // ── Mixin ─────────────────────────────────────────────────────────────────
 
@@ -95,6 +93,18 @@ export const ShipSheetV2Mixin = (BaseClass) => {
       const allowed = this._allowedParts();
       options.parts = (options.parts ?? Object.keys(SHIP_PARTS))
         .filter(p => allowed.has(p));
+    }
+
+    _replaceHTML(result, content, options) {
+      super._replaceHTML(result, content, options);
+      // AppV2 replaces requested parts but does not remove previously rendered
+      // parts when the crew layout changes. Remove obsolete station panels so
+      // hidden controls from the prior layout cannot remain in the sheet.
+      const allowed = this._allowedParts();
+      for (const part of content.querySelectorAll("[data-application-part]")) {
+        const partId = part.dataset.applicationPart;
+        if (Object.hasOwn(SHIP_PARTS, partId) && !allowed.has(partId)) part.remove();
+      }
     }
 
     _prepareTabs(options) {
@@ -233,7 +243,7 @@ export const ShipSheetV2Mixin = (BaseClass) => {
     }
 
     _updateHelmPreview() {
-      if (this.tabGroups?.primary !== "pilot") { HelmPreview.hide(); return; }
+      if (!isHelmTab(this.tabGroups?.primary)) { HelmPreview.hide(); return; }
       if (!game.user.isGM && !userOperatesStation(this.actor, game.user, "pilot")) return;
       helmUpdatePreview(this);
     }
@@ -241,11 +251,10 @@ export const ShipSheetV2Mixin = (BaseClass) => {
     changeTab(tab, group, options = {}) {
       super.changeTab(tab, group, options);
       if (group === "primary") {
-        const isHelmTab = tab === "pilot" || tab === "engineer3man";
-        if (!isHelmTab) HelmPreview.hide();
+        if (!isHelmTab(tab)) HelmPreview.hide();
         else this._updateHelmPreview();
         const arcBroadcast = !!(SystemAdapter.current.getShipData(this.actor).resources?.gunner?.arcOverlayActive);
-        if (GUNNER_TABS.has(tab) || arcBroadcast) WeaponArcOverlay.activate(this.actor);
+        if (isGunnerTab(tab) || arcBroadcast) WeaponArcOverlay.activate(this.actor);
         else WeaponArcOverlay.deactivate();
       }
     }

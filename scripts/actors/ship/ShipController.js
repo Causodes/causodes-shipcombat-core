@@ -34,7 +34,7 @@ import { SensorRadar } from "../../canvas/SensorRadar.js";
 import { SystemAdapter } from "../../systems/SystemAdapter.js";
 import { hasPlayerShipInitiative } from "../../initiative.js";
 import { normalizeCaptainZone } from "../../captain/card-instances.js";
-import { SHIP_PARTS, SHIP_TABS } from "./parts.js";
+import { SHIP_PARTS, SHIP_TABS, SHIP_TAB_CONTRACTS, getCrewLayout, isGunnerTab } from "./parts.js";
 import { buildPowerCorePips } from "./power-core-pips.js";
 import { resolveDroppedDocument } from "./drop-contract.js";
 import {
@@ -79,16 +79,6 @@ const ROLE_SL_TOOLTIP_CFG = {
   gunner:   { slName: "Gunnery",         allocs: ["Accuracy", "Penetration", "Firepower"] },
   ordnance: { slName: "Ordnance Master", allocs: ["Efficiency", "Expedience"] },
 };
-/** Maps tab id → canonical role id (for role-title overrides). */
-const TAB_TO_ROLE = {
-  captain: "captain", captain4man: "captain", captain5man: "captain",
-  engineer: "engineer", engineer3man: "engineer", engineer5man: "engineer",
-  pilot: "pilot", sensors: "sensors",
-  gunner: "gunner", gunner4man: "gunner", gunner5man: "gunner",
-  ordnance: "ordnance",
-};
-const GUNNER_TABS = new Set(["gunner", "gunner4man", "gunner5man"]);
-
 // ── Module-level helpers ──────────────────────────────────────────────────
 
 let _roleMainSkillsCache = null;
@@ -221,11 +211,7 @@ export class ShipController {
 
   getDisabledRoles() {
     const crewSize = SystemAdapter.current.getShipData(this.actor).crewSize ?? 6;
-    const disabled = new Set();
-    if (crewSize <= 5) disabled.add("ordnance");
-    if (crewSize <= 4) disabled.add("sensors");
-    if (crewSize <= 3) disabled.add("pilot");
-    return disabled;
+    return new Set(getCrewLayout(crewSize).disabledRoles);
   }
 
   /**
@@ -234,33 +220,11 @@ export class ShipController {
    * @returns {Set<string>}
    */
   allowedParts(user = game.user) {
-    const disabled = this.getDisabledRoles();
-    const useCombinedCaptain = disabled.has("ordnance");
-    const useCombinedSensors = disabled.has("sensors");
-    const useCombinedPilot   = disabled.has("pilot");
+    const crewSize = SystemAdapter.current.getShipData(this.actor).crewSize ?? 6;
+    const layout = getCrewLayout(crewSize);
 
     if (user.isGM) {
-      const all = new Set(Object.keys(SHIP_PARTS));
-      for (const r of disabled) all.delete(r);
-      if (useCombinedCaptain) {
-        all.delete("captain");    all.add("captain5man");
-        all.delete("engineer");  all.add("engineer5man");
-        all.delete("gunner");     all.add("gunner5man");
-      } else {
-        all.delete("captain5man"); all.delete("engineer5man"); all.delete("gunner5man");
-      }
-      if (useCombinedSensors) {
-        all.delete("captain5man"); all.add("captain4man");
-        all.delete("gunner5man");  all.add("gunner4man");
-      } else {
-        all.delete("captain4man"); all.delete("gunner4man");
-      }
-      if (useCombinedPilot) {
-        all.delete("engineer5man"); all.add("engineer3man");
-      } else {
-        all.delete("engineer3man");
-      }
-      return all;
+      return new Set(["header", "tabs", "overview", "config", ...Object.values(layout.tabsByRole)]);
     }
 
     const myRole    = this.resolveRoleForUser(user);
@@ -271,14 +235,8 @@ export class ShipController {
     if (canObserve) allowed.add("overview");
     if (isOwner)    allowed.add("config");
 
-    const effectivePart = (myRole === "engineer" && useCombinedPilot)    ? "engineer3man"
-      : (myRole === "captain"   && useCombinedSensors)  ? "captain4man"
-      : (myRole === "captain"   && useCombinedCaptain) ? "captain5man"
-      : (myRole === "engineer" && useCombinedCaptain) ? "engineer5man"
-      : (myRole === "gunner"    && useCombinedSensors)  ? "gunner4man"
-      : (myRole === "gunner"    && useCombinedCaptain) ? "gunner5man"
-      : myRole;
-    if (effectivePart && !disabled.has(effectivePart)) allowed.add(effectivePart);
+    const effectivePart = layout.tabsByRole[myRole];
+    if (effectivePart) allowed.add(effectivePart);
     return allowed;
   }
 
@@ -296,7 +254,7 @@ export class ShipController {
     for (const [key, def] of Object.entries(SHIP_TABS)) {
       if (!allowed.has(key)) continue;
       const tab    = { ...def };
-      const roleId = TAB_TO_ROLE[key];
+      const roleId = SHIP_TAB_CONTRACTS[key]?.role;
       if (roleId && roleTitles[roleId]) tab.label = roleTitles[roleId];
       tabs[key] = tab;
     }
@@ -1187,7 +1145,7 @@ export class ShipController {
 
     const arcBroadcast = !!(SystemAdapter.current.getShipData(this.actor).resources?.gunner?.arcOverlayActive);
     const activeTab = this.sheet.tabGroups?.primary ?? this.sheet._tabs?.[0]?.active;
-    if (GUNNER_TABS.has(activeTab) || arcBroadcast) WeaponArcOverlay.activate(this.actor);
+    if (isGunnerTab(activeTab) || arcBroadcast) WeaponArcOverlay.activate(this.actor);
     else WeaponArcOverlay.deactivate();
   }
 }

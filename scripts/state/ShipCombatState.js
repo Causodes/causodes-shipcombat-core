@@ -11,7 +11,7 @@
  * the same public API  -  callers still use ShipCombatState.fireWeapon(), etc.
  */
 
-import { MODULE_ID, CORE_MODULE_ID, DEFAULT_COMBAT_STATE, LOCK_DECAY_ROUNDS, ORDNANCE_MASTER_ACTIONS, buildCaptainDeck } from "../constants.js";
+import { MODULE_ID, CORE_MODULE_ID, DEFAULT_COMBAT_STATE, LOCK_DECAY_ROUNDS, ORDNANCE_MASTER_ACTIONS } from "../constants.js";
 import { isOrdnance, isTorpedo, isStrikeCraft } from "../actors/ordnance/ordnance-types.js";
 
 // ── Domain imports ──────────────────────────────────────────────────────────
@@ -28,6 +28,7 @@ import { SystemAdapter }   from "../systems/SystemAdapter.js";
 import { applyPlayerShipInitiativeBonus, hasPlayerShipInitiative, recordPlayerShipInitiative } from "../initiative.js";
 import { POWER_CORE_STATION_ROLES, getPowerCoreCount, getPowerCorePoolRole, getPowerCorePoolRoles } from "../roles/crew-operators.js";
 import { prepareCaptainHandForRound } from "../captain/card-instances.js";
+import { buildInitialCaptainZones } from "../captain/deck-state.js";
 import { getContactDisplayName } from "../targeting/contact-intelligence.js";
 import { isAllocationResource, validateAllocationChange } from "./allocation-guard.js";
 import { getStanceMovementModifiers, hasDevastationProtocol } from "../stances.js";
@@ -37,6 +38,7 @@ import { getNpcRoundConditionEffects } from "./npc-condition-effects.js";
 import { getOrdnanceLifecycleTransition } from "./ordnance-turn-state.js";
 import { mutationQueueKey, runSerializedMutation } from "./mutation-queue.js";
 import { buildRecordDeletionUpdates } from "./target-references.js";
+import { buildCombatStartUpdates } from "./combat-start.js";
 import { getInternalFireManpowerUpdates, getPlayerTurnConditionUpdates } from "./turn-effects.js";
 import { applyOrdnanceCompletionEffect, getOrdnanceReservation } from "./ordnance-reservations.js";
 import {
@@ -1262,15 +1264,12 @@ export class ShipCombatState {
     updates["conditions.coreSystems"]    = { ...condClear };
     updates["conditions.weaponsSensors"] = { ...condClear };
     // ── Captain: re-initialize deck and triage ──
-    const _excl5man = (data.crewSize ?? 6) <= 4 ? ["ordnance", "sensors"] : (data.crewSize ?? 6) <= 5 ? ["ordnance"] : [];
-    const _exclCards = (data.crewSize ?? 6) <= 3 ? ["pressTheAttack"] : [];
-    const captainDeck = buildCaptainDeck(_excl5man, _exclCards);
-    const captainHand = captainDeck.splice(0, 3);
+    const captainZones = buildInitialCaptainZones(data.crewSize);
     updates["resources.captain.stance"]               = "none";
     updates["resources.captain.pendingStance"]        = "";
-    updates["resources.captain.hand"]                 = captainHand;
-    updates["resources.captain.drawPile"]             = captainDeck;
-    updates["resources.captain.discardPile"]          = [];
+    updates["resources.captain.hand"]                 = captainZones.hand;
+    updates["resources.captain.drawPile"]             = captainZones.drawPile;
+    updates["resources.captain.discardPile"]          = captainZones.discardPile;
     updates["resources.captain.triageCount"]          = 2;
     updates["resources.captain.triageConditionsUsed"] = [];
     updates["resources.captain.payload"]              = "";
@@ -1403,81 +1402,10 @@ export class ShipCombatState {
       return false;
     }
     const data = this.getData();
-    const max = this.getReactorStats().coreOutput;
-    const shieldCfg = this.getShieldStats();
-    const _excl5man = (data.crewSize ?? 6) <= 4 ? ["ordnance", "sensors"] : (data.crewSize ?? 6) <= 5 ? ["ordnance"] : [];
-    const _exclCards = (data.crewSize ?? 6) <= 3 ? ["pressTheAttack"] : [];
-    const captainDeck = buildCaptainDeck(_excl5man, _exclCards);
-    const captainHand = captainDeck.splice(0, 3);
-    const updates = {
-      active: true, round: 1, internalFire: 0,
-      "resources.pilot.prevTurnMove": 0,
-      "resources.engineer.powerCores": max,
-      "resources.engineer.heat": 0,
-      "resources.engineer.actionChoices": [],
-      "resources.engineer.extraActions":  0,
-      "shieldPool.current":   shieldCfg.maxVoidFlux,
-      "shieldPool.committed": 0,
-      ventLocked: false,
-      ventPending: false,
-      // ── Conditions: clear all at start of combat ──
-      "conditions.hull":           { tier: null, lockedRole: null, blindedSectionId: null },
-      "conditions.engines":        { tier: null, lockedRole: null, blindedSectionId: null },
-      "conditions.manoeuvring":    { tier: null, lockedRole: null, blindedSectionId: null },
-      "conditions.coreSystems":    { tier: null, lockedRole: null, blindedSectionId: null },
-      "conditions.weaponsSensors": { tier: null, lockedRole: null, blindedSectionId: null },
-      // ── Captain: initialize deck and triage ──
-      "resources.captain.stance":                "none",
-      "resources.captain.pendingStance":         "",
-      "resources.captain.hand":                  captainHand,
-      "resources.captain.drawPile":              captainDeck,
-      "resources.captain.discardPile":           [],
-      "resources.captain.currentHandCap":         3,
-      "resources.captain.mulligansSpent":         0,
-      "resources.captain.allocationLocked":       false,
-      "resources.captain.triageCount":           2,
-      "resources.captain.triageConditionsUsed":  [],
-      "resources.captain.payload":               "",
-      "resources.captain.leadershipRolled":      false,
-      "resources.captain.leadershipSL":          0,
-      "resources.captain.prevTurnInitiativeBonus": 0,
-      "resources.captain.allocInspire":          0,
-      "resources.captain.allocResolve":          0,
-      "resources.captain.allocInitiative":       0,
-      "resources.captain.handCapBonus":          0,
-      "resources.captain.playedCards":           [],
-      "resources.captain.priorityTargetId":      null,
-    };
-    Object.assign(updates,
-      buildRecordDeletionUpdates("resources.sensors.contacts", data.resources?.sensors?.contacts),
-    );
-    updates["resources.sensors.nextContactOrdinal"] = 1;
-    updates["resources.sensors.recommendedTargetId"] = null;
-    for (const roleId of Object.keys(data.turnDone ?? {})) updates[`turnDone.${roleId}`] = false;
-    for (const roleId of Object.keys(data.overchargeUsed ?? {})) updates[`overchargeUsed.${roleId}`] = false;
-    for (const uid of Object.keys(data.assignedCores ?? {})) updates[`assignedCores.${uid}`] = false;
-    for (const uid of Object.keys(data.reactions ?? {})) updates[`reactions.${uid}`] = false;
-    for (const uid of Object.keys(data.resources?.engineer?.stagedCores ?? {})) {
-      updates[`resources.engineer.stagedCores.${uid}`] = false;
-    }
-    for (const roleId of ["engineer", "captain", "gunner", "pilot", "sensors", "ordnance"]) {
-      updates[`resources.${roleId}.coreCount`] = 0;
-    }
-    for (const stationRole of ["gunner", "pilot", "sensors", "ordnance"]) {
-      updates[`resources.${stationRole}.coreActionsPlayed`] = [];
-    }
-
-    // ── Ordnance Master: start with 1 armed torpedo / strike craft if allocated in config ──
-    const ordnanceActors = data.ordnanceActors ?? {};
-    if ((ordnanceActors.torpedo ?? []).length > 0) {
-      updates["resources.ordnance.armedTorpedoes"] = 1;
-    }
-    if ((ordnanceActors.strikeCraft ?? []).length > 0) {
-      updates["resources.ordnance.armedCraft"] = 1;
-    }
-    updates["resources.ordnance.availablePayloads"] = 1;
-    updates["resources.ordnance.autoArmTimer"] = 3;
-    updates["resources.ordnance.autoLoadTimer"] = 2;
+    const updates = buildCombatStartUpdates(data, {
+      coreOutput: this.getReactorStats().coreOutput,
+      maxVoidFlux: this.getShieldStats().maxVoidFlux,
+    });
 
     await this.withPowerCoreTransaction(() => this.update(updates));
     return true;

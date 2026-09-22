@@ -31,6 +31,15 @@ export function captainCardId(entry) {
   return typeof entry === "string" ? entry : (entry?.cardId ?? entry?.id ?? "");
 }
 
+/** One authoritative eligibility projection for combat start and Full Reset. */
+export function getCaptainDeckExclusions(crewSize = 6) {
+  const size = Math.max(3, Math.min(6, Number(crewSize) || 6));
+  return {
+    roles: size <= 4 ? ["ordnance", "sensors"] : size <= 5 ? ["ordnance"] : [],
+    cards: size <= 3 ? ["pressTheAttack"] : [],
+  };
+}
+
 export function shuffleCaptainCards(cards) {
   const shuffled = [...cards];
   for (let index = shuffled.length - 1; index > 0; index -= 1) {

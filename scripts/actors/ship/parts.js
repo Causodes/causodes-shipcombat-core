@@ -56,3 +56,57 @@ export const SHIP_TABS = {
   ordnance:     { id: "ordnance",     group: "primary", label: "SHIPCOMBAT.Role.Ordnance" },
   config:       { id: "config",       group: "primary", label: "SHIPCOMBAT.Tab.Config"    },
 };
+
+/** Canonical station role and capabilities exposed by every sheet tab. */
+export const SHIP_TAB_CONTRACTS = Object.freeze({
+  captain:      { role: "captain", capabilities: ["captain"] },
+  captain4man:  { role: "captain", capabilities: ["captain", "sensors"] },
+  captain5man:  { role: "captain", capabilities: ["captain", "ordnance"] },
+  engineer:     { role: "engineer", capabilities: ["engineer"] },
+  engineer3man: { role: "engineer", capabilities: ["engineer", "pilot"] },
+  engineer5man: { role: "engineer", capabilities: ["engineer"] },
+  pilot:        { role: "pilot", capabilities: ["pilot"] },
+  sensors:      { role: "sensors", capabilities: ["sensors"] },
+  gunner:       { role: "gunner", capabilities: ["gunner"] },
+  gunner4man:   { role: "gunner", capabilities: ["gunner", "ordnance"] },
+  gunner5man:   { role: "gunner", capabilities: ["gunner"] },
+  ordnance:     { role: "ordnance", capabilities: ["ordnance"] },
+});
+
+export function tabHasCapability(tabId, capability) {
+  return SHIP_TAB_CONTRACTS[tabId]?.capabilities.includes(capability) ?? false;
+}
+
+export function isHelmTab(tabId) {
+  return tabHasCapability(tabId, "pilot");
+}
+
+export function isGunnerTab(tabId) {
+  return tabHasCapability(tabId, "gunner");
+}
+
+export function getCrewLayout(crewSize = 6) {
+  const size = Math.max(3, Math.min(6, Number(crewSize) || 6));
+  if (size === 3) {
+    return {
+      disabledRoles: new Set(["ordnance", "sensors", "pilot"]),
+      tabsByRole: { captain: "captain4man", engineer: "engineer3man", gunner: "gunner4man" },
+    };
+  }
+  if (size === 4) {
+    return {
+      disabledRoles: new Set(["ordnance", "sensors"]),
+      tabsByRole: { captain: "captain4man", engineer: "engineer5man", pilot: "pilot", gunner: "gunner4man" },
+    };
+  }
+  if (size === 5) {
+    return {
+      disabledRoles: new Set(["ordnance"]),
+      tabsByRole: { captain: "captain5man", engineer: "engineer5man", pilot: "pilot", sensors: "sensors", gunner: "gunner5man" },
+    };
+  }
+  return {
+    disabledRoles: new Set(),
+    tabsByRole: { captain: "captain", engineer: "engineer", pilot: "pilot", sensors: "sensors", gunner: "gunner", ordnance: "ordnance" },
+  };
+}

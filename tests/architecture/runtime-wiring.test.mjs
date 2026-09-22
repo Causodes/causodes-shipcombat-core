@@ -51,6 +51,35 @@ test("architecture: launch and combat entry points use shared transition functio
   assert.match(lifecycle, /getPlayerTurnConditionUpdates\(/);
   assert.match(lifecycle, /getNpcRoundConditionEffects\(/);
   assert.match(lifecycle, /getOrdnanceLifecycleTransition\(/);
+  assert.match(lifecycle, /buildCombatStartUpdates\(/);
+});
+
+test("architecture: crew-layout aliases and Captain deck eligibility have one source of truth", () => {
+  const scriptsRoot = path.join(coreRoot, "scripts");
+  const combinedTabPattern = /captain4man|captain5man|engineer3man|engineer5man|gunner4man|gunner5man/;
+  const visit = directory => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const filename = path.join(directory, entry.name);
+      if (entry.isDirectory()) visit(filename);
+      else if (entry.name.endsWith(".js") && filename !== path.join(scriptsRoot, "actors/ship/parts.js")) {
+        assert.doesNotMatch(fs.readFileSync(filename, "utf8"), combinedTabPattern, `${filename} duplicates the crew-layout registry`);
+      }
+    }
+  };
+  visit(scriptsRoot);
+
+  const deckBuilders = [];
+  const findDeckBuilders = directory => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const filename = path.join(directory, entry.name);
+      if (entry.isDirectory()) findDeckBuilders(filename);
+      else if (entry.name.endsWith(".js") && /buildCaptainDeck\(/.test(fs.readFileSync(filename, "utf8"))) {
+        deckBuilders.push(path.relative(coreRoot, filename));
+      }
+    }
+  };
+  findDeckBuilders(scriptsRoot);
+  assert.deepEqual(deckBuilders.sort(), ["scripts/captain/deck-state.js", "scripts/constants.js"]);
 });
 
 test("architecture: deletion and manual cleanup enter the shared target-reference boundary", () => {

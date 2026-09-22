@@ -1,3 +1,8 @@
+## v2.5.3
+### Bug Fixes
+- Initialize every participating player ship when combat starts through Foundry's native tracker so Captain hands, draw piles, resources, and action gates cannot remain at empty schema defaults
+- Keep the movement preview active on the three-person combined Engineer/Helm station in both AppV1 and AppV2 sheets
+
 ## v2.5.2
 ### Bug Fixes
 - Keep a contact's live radar designation stable when acquiring a lock instead of replacing its scene ordinal with an accumulated historical number

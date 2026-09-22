@@ -180,6 +180,17 @@ function collectModuleErrors(page) {
   return errors;
 }
 
+async function installAppRootResolver(page) {
+  await page.evaluate(() => {
+    globalThis.__shipCombatAppRoot = application => {
+      const element = application?.element;
+      if (typeof element?.querySelector === "function") return element;
+      const indexed = element?.[0] ?? element?.get?.(0);
+      return typeof indexed?.querySelector === "function" ? indexed : null;
+    };
+  });
+}
+
 test("exercises Foundry-only document, application, canvas, combat, and socket boundaries", async ({ browser, page }) => {
   const gmErrors = collectModuleErrors(page);
   await phase("accept the license and launch the prepared world", () => ensureWorldActive(page));
@@ -204,14 +215,7 @@ test("exercises Foundry-only document, application, canvas, combat, and socket b
     });
   }
 
-  await phase("install the cross-version application root resolver", () => page.evaluate(() => {
-    globalThis.__shipCombatAppRoot = application => {
-      const element = application?.element;
-      if (typeof element?.querySelector === "function") return element;
-      const indexed = element?.[0] ?? element?.get?.(0);
-      return typeof indexed?.querySelector === "function" ? indexed : null;
-    };
-  }));
+  await phase("install the cross-version application root resolver", () => installAppRootResolver(page));
 
   await phase("verify Foundry, system, module, and adapter versions", () => expect.poll(() => page.evaluate(({ adapterModuleId, extraModules }) => ({
     foundry: game.release.version,
@@ -904,6 +908,76 @@ test("exercises Foundry-only document, application, canvas, combat, and socket b
     });
   });
 
+  await phase("render every crew layout and draw each canonical or combined Helm preview", async () => {
+    const previews = await page.evaluate(async actorId => {
+      const { HelmPreview, ShipCombatState, SystemAdapter } = globalThis.ShipCombat._api;
+      const actor = game.actors.get(actorId);
+      const state = ShipCombatState.forShip(actor);
+      const sheet = actor.sheet;
+      const useV1 = SystemAdapter.current.useApplicationV1;
+      const expectedTabs = {
+        3: ["captain4man", "engineer3man", "gunner4man"],
+        4: ["captain4man", "engineer5man", "pilot", "gunner4man"],
+        5: ["captain5man", "engineer5man", "pilot", "sensors", "gunner5man"],
+        6: ["captain", "engineer", "pilot", "sensors", "gunner", "ordnance"],
+      };
+      const allRoleTabs = [...new Set(Object.values(expectedTabs).flat())];
+      const results = [];
+      for (const crewSize of [3, 4, 5, 6]) {
+        await state.update({
+          crewSize,
+          "resources.pilot.fuelBurned": 0,
+          "resources.pilot.prevTurnMove": 0,
+        });
+        await sheet.render(useV1 ? true : { force: true });
+        const deadline = Date.now() + 10_000;
+        const expected = [...expectedTabs[crewSize]].sort();
+        let renderedTabs = [];
+        let navigationTabs = [];
+        let root;
+        // AppV1 render() returns before its replacement DOM is ready. AppV2
+        // can update parts in place. Wait for the actual station panels, not
+        // merely a connected application root from the previous layout.
+        do {
+          root = globalThis.__shipCombatAppRoot(sheet);
+          renderedTabs = allRoleTabs.filter(tabId => useV1
+            ? root?.querySelector(`.sheet-body .tab[data-tab="${tabId}"]`)
+            : root?.querySelector(`[data-application-part="${tabId}"]`)).sort();
+          navigationTabs = allRoleTabs.filter(tabId => root?.querySelector(`nav [data-tab="${tabId}"]`)).sort();
+          if (root?.isConnected
+            && JSON.stringify(renderedTabs) === JSON.stringify(expected)
+            && JSON.stringify(navigationTabs) === JSON.stringify(expected)) break;
+          await new Promise(resolve => setTimeout(resolve, 25));
+        } while (Date.now() < deadline);
+        if (JSON.stringify(renderedTabs) !== JSON.stringify(expected)
+          || JSON.stringify(navigationTabs) !== JSON.stringify(expected)) {
+          throw new Error(`Crew layout ${crewSize}: panels [${renderedTabs.join(", ")}], navigation [${navigationTabs.join(", ")}]; expected [${expected.join(", ")}]`);
+        }
+        const helmTab = crewSize === 3 ? "engineer3man" : "pilot";
+        if (useV1) sheet._tabs[0].active = helmTab;
+        else sheet.tabGroups.primary = helmTab;
+        sheet._helmState = { fuelSlider: 50, bearing: 15, confirmed: false };
+        sheet._updateHelmPreview();
+        results.push({
+          crewSize,
+          renderedTabs,
+          activeTab: useV1 ? sheet._tabs[0].active : sheet.tabGroups.primary,
+          containerName: HelmPreview._container?.name ?? null,
+          lineName: HelmPreview._line?.name ?? null,
+        });
+        HelmPreview.hide();
+      }
+      await sheet.close();
+      return results;
+    }, fixture.actorId);
+    expect(previews).toEqual([
+      { crewSize: 3, renderedTabs: ["captain4man", "engineer3man", "gunner4man"], activeTab: "engineer3man", containerName: "shipcombat-helm-ghost", lineName: "shipcombat-helm-line" },
+      { crewSize: 4, renderedTabs: ["captain4man", "engineer5man", "gunner4man", "pilot"], activeTab: "pilot", containerName: "shipcombat-helm-ghost", lineName: "shipcombat-helm-line" },
+      { crewSize: 5, renderedTabs: ["captain5man", "engineer5man", "gunner5man", "pilot", "sensors"], activeTab: "pilot", containerName: "shipcombat-helm-ghost", lineName: "shipcombat-helm-line" },
+      { crewSize: 6, renderedTabs: ["captain", "engineer", "gunner", "ordnance", "pilot", "sensors"], activeTab: "pilot", containerName: "shipcombat-helm-ghost", lineName: "shipcombat-helm-line" },
+    ]);
+  });
+
   await phase("commit a Pilot Core action across real Actor and Token documents", async () => {
     const result = await page.evaluate(async ({ actorId, shipTokenId }) => {
       const { ShipCombatState, SystemAdapter } = globalThis.ShipCombat._api;
@@ -1431,21 +1505,35 @@ test("exercises Foundry-only document, application, canvas, combat, and socket b
       const data = SystemAdapter.current.getShipData(actor);
       return {
         currentActorId: game.combats.get(combatId)?.combatant?.actorId,
+        active: data.active,
         hull: data.hull.value,
         fuelBurned: data.resources.pilot.fuelBurned,
         bearing: data.resources.pilot.bearing,
         manpower: data.resources.ordnance.manpower,
         manpowerMax: data.resources.ordnance.manpowerMax,
         holdTheLineActive: data.resources.captain.holdTheLineActive,
+        captainHand: data.resources.captain.hand.length,
+        captainDraw: data.resources.captain.drawPile.length,
+        captainDiscard: data.resources.captain.discardPile.length,
+        captainUnique: new Set([
+          ...data.resources.captain.hand,
+          ...data.resources.captain.drawPile,
+          ...data.resources.captain.discardPile,
+        ].map(card => card.instanceId)).size,
       };
     }, { ...fixture, ...combatFixture })).toEqual({
       currentActorId: fixture.actorId,
+      active: true,
       hull: expectedHull,
       fuelBurned: 0,
       bearing: 0,
       manpower: 12,
       manpowerMax: 12,
       holdTheLineActive: false,
+      captainHand: 3,
+      captainDraw: 20,
+      captainDiscard: 0,
+      captainUnique: 23,
     });
 
     await page.evaluate(combatId => {
@@ -1584,7 +1672,65 @@ test("exercises Foundry-only document, application, canvas, combat, and socket b
     const playerPage = await playerContext.newPage();
     const playerErrors = collectModuleErrors(playerPage);
     await joinWorld(playerPage, playerName, playerPassword);
+    await installAppRootResolver(playerPage);
     return { playerContext, playerPage, playerErrors };
+  });
+
+  await phase("mulligan a real initialized Captain card through the rendered player sheet", async () => {
+    const replacedInstanceId = await playerPage.evaluate(async actorId => {
+      const actor = game.actors.get(actorId);
+      const sheet = actor.sheet;
+      const useV1 = globalThis.ShipCombat._api.SystemAdapter.current.useApplicationV1;
+      await sheet.render(useV1 ? true : { force: true });
+      const deadline = Date.now() + 5_000;
+      let root;
+      while (!(root = globalThis.__shipCombatAppRoot(sheet))?.isConnected && Date.now() < deadline) {
+        await new Promise(resolve => setTimeout(resolve, 25));
+      }
+      root?.querySelector('[data-action="tab"][data-tab="captain"], nav [data-tab="captain"], .tabs [data-tab="captain"]')?.click();
+      let button;
+      while (!(button = globalThis.__shipCombatAppRoot(sheet)?.querySelector('[data-action="captainMulligan"]'))
+        && Date.now() < deadline) {
+        await new Promise(resolve => setTimeout(resolve, 25));
+      }
+      if (!button) throw new Error("Initialized Captain hand did not render a Mulligan control");
+      const card = button.closest("[data-card-instance-id]");
+      const instanceId = card?.dataset.cardInstanceId;
+      if (!instanceId) throw new Error("Rendered Mulligan control has no card instance identity");
+      button.click();
+      return instanceId;
+    }, fixture.actorId);
+
+    // A Captain action with unrolled Leadership must cross the real
+    // allocation-warning dialog before its socket request is dispatched.
+    // Clicking the card alone correctly leaves the authoritative hand intact.
+    const warning = playerPage.locator(".shipcombat-allocation-warning");
+    await warning.waitFor({ state: "visible" });
+    await warning.locator('button[data-action="continue"], button[data-button="continue"]').click();
+
+    await expect.poll(() => page.evaluate(({ actorId, replacedInstanceId }) => {
+      const data = globalThis.ShipCombat._api.SystemAdapter.current.getShipData(game.actors.get(actorId));
+      const captain = data.resources.captain;
+      const allCards = [...captain.hand, ...captain.drawPile, ...captain.discardPile];
+      return {
+        hand: captain.hand.length,
+        draw: captain.drawPile.length,
+        discard: captain.discardPile.length,
+        spent: captain.mulligansSpent,
+        oldLeftHand: !captain.hand.some(card => card.instanceId === replacedInstanceId),
+        oldInDiscard: captain.discardPile.some(card => card.instanceId === replacedInstanceId),
+        unique: new Set(allCards.map(card => card.instanceId)).size,
+      };
+    }, { actorId: fixture.actorId, replacedInstanceId })).toEqual({
+      hand: 3,
+      draw: 19,
+      discard: 1,
+      spent: 1,
+      oldLeftHand: true,
+      oldInDiscard: true,
+      unique: 23,
+    });
+    await playerPage.evaluate(actorId => game.actors.get(actorId).sheet.close(), fixture.actorId);
   });
 
   await phase("verify isolated player ownership across ships and all ordnance paths", async () => {

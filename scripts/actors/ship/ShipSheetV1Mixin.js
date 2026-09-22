@@ -21,6 +21,7 @@ import { WeaponArcOverlay } from "../../canvas/WeaponArcOverlay.js";
 import { SystemAdapter } from "../../systems/SystemAdapter.js";
 import { MODULE_ID } from "../../constants.js";
 import { createActionRequester }  from "../../socket.js";
+import { isGunnerTab, isHelmTab } from "./parts.js";
 import { OVERVIEW_ACTIONS } from "../../roles/overview.js";
 import { SHARED_ACTIONS }   from "../../roles/shared.js";
 import { ENGINEER_ACTIONS } from "../../roles/engineer.js";
@@ -274,7 +275,7 @@ export const ShipSheetV1Mixin = (BaseClass) => {
 
     _updateHelmPreview() {
       // V1 tracks active tab via this._tabs[0]?.active (not tabGroups)
-      if (this._tabs?.[0]?.active !== "pilot") { HelmPreview.hide(); return; }
+      if (!isHelmTab(this._tabs?.[0]?.active)) { HelmPreview.hide(); return; }
       if (!game.user.isGM && !userOperatesStation(this.actor, game.user, "pilot")) return;
       helmUpdatePreview(this);
     }
@@ -290,12 +291,10 @@ export const ShipSheetV1Mixin = (BaseClass) => {
         const tabDef = this.controller.buildTabs()[active];
         if (tabDef) panelTitle.textContent = game.i18n.localize(tabDef.label);
       }
-      const isHelmTab = active === "pilot" || active === "engineer3man";
-      if (!isHelmTab) HelmPreview.hide();
+      if (!isHelmTab(active)) HelmPreview.hide();
       else this._updateHelmPreview();
       const arcBroadcast = !!(SystemAdapter.current.getShipData(this.actor).resources?.gunner?.arcOverlayActive);
-      const GUNNER_TABS  = new Set(["gunner", "gunner4man", "gunner5man"]);
-      if (GUNNER_TABS.has(active) || arcBroadcast) WeaponArcOverlay.activate(this.actor);
+      if (isGunnerTab(active) || arcBroadcast) WeaponArcOverlay.activate(this.actor);
       else WeaponArcOverlay.deactivate();
       // The newly-active tab panel is now visible; re-run shrink-to-fit so
       // labels that were in a hidden panel (scrollWidth/clientWidth both 0) get

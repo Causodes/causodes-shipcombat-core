@@ -15,11 +15,12 @@
  *   allocationLocked : boolean – Captain/shared SL allocation is committed
  */
 
-import { MODULE_ID, CAPTAIN_CARDS, CAPTAIN_CORE_ACTIONS, buildCaptainDeck } from "../constants.js";
+import { MODULE_ID, CAPTAIN_CARDS, CAPTAIN_CORE_ACTIONS } from "../constants.js";
 import { SystemAdapter } from "../systems/SystemAdapter.js";
 import { getPowerCoreCount, getPowerCorePoolRole } from "../roles/crew-operators.js";
 import { ensureContactRecord, isTargetableContactToken } from "../targeting/contact-intelligence.js";
 import { normalizeCaptainZone, shuffleCaptainCards } from "../captain/card-instances.js";
+import { buildCaptainDeckForCrew } from "../captain/deck-state.js";
 
 const HAND_CAP   = 3;
 const DRAWS_PER_ROUND = 3;
@@ -234,10 +235,8 @@ export async function drawCards({ count = DRAWS_PER_ROUND } = {}) {
   }
 
   const toDraw = Math.min(count, headroom);
-  const _excl = (sys.crewSize ?? 6) <= 4 ? ["ordnance", "sensors"] : (sys.crewSize ?? 6) <= 5 ? ["ordnance"] : [];
-  const _exclCards = (sys.crewSize ?? 6) <= 3 ? ["pressTheAttack"] : [];
   const { drawn, drawPile, discardPile } = _drawFrom(
-    normalizeCaptainZone(captain.drawPile ?? buildCaptainDeck(_excl, _exclCards), "draw"),
+    normalizeCaptainZone(captain.drawPile ?? buildCaptainDeckForCrew(sys.crewSize), "draw"),
     normalizeCaptainZone(captain.discardPile, "discard"),
     toDraw,
   );
@@ -359,10 +358,8 @@ async function _mulligan({ cardId, cardInstanceId }) {
 
   // Draw before discarding the replaced card so a depleted pile cannot return
   // the exact same physical card as its own replacement.
-  const _excl = (sys.crewSize ?? 6) <= 4 ? ["ordnance", "sensors"] : (sys.crewSize ?? 6) <= 5 ? ["ordnance"] : [];
-  const _exclCards = (sys.crewSize ?? 6) <= 3 ? ["pressTheAttack"] : [];
   const result = _drawFrom(
-    drawPile.length ? drawPile : normalizeCaptainZone(captain.drawPile ?? buildCaptainDeck(_excl, _exclCards), "draw"),
+    drawPile.length ? drawPile : normalizeCaptainZone(captain.drawPile ?? buildCaptainDeckForCrew(sys.crewSize), "draw"),
     discardPile,
     1,
   );
