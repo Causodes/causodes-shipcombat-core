@@ -72,7 +72,8 @@ async function ensureWorldActive(page) {
   log("Checking whether the prepared world is already active");
   await page.goto("/join");
   if (/\/game(?:$|[?#])/.test(page.url())) return waitForGame(page);
-  if (await page.locator("#join-username, #join-game-user, select[name='userid']").isVisible()) {
+  if (await page.locator("#join-username, #join-game-user, select[name='userid']")
+    .waitFor({ state: "visible", timeout: 10_000 }).then(() => true).catch(() => false)) {
     log("Prepared world is already active");
     return;
   }
@@ -1139,6 +1140,8 @@ test("exercises Foundry-only document, application, canvas, combat, and socket b
         && !previousIds.includes(actor.id)
       )).length;
     }, { moduleId: adapterModuleId, previousIds: npcTorpedoActorIdsBefore })).toBe(1);
+    // The document can arrive before the dialog's closing animation finishes.
+    await expect(page.locator('button[data-action="port"]')).toHaveCount(0);
   });
 
   const npcCraftActorIdsBefore = await page.evaluate(moduleId => game.actors
@@ -1445,6 +1448,9 @@ test("exercises Foundry-only document, application, canvas, combat, and socket b
       name: crew.name,
       img: crew.img,
     });
+    if (SystemAdapter.current.getShipData(ship).roles?.[playerId] !== "captain") {
+      throw new Error("Switching from Ordnance to Captain did not preserve the player's station assignment");
+    }
     await npc.update({
       "system.hull.max": 20,
       "system.hull.value": hpRemaining ? 20 : 0,
@@ -1851,4 +1857,33 @@ test("exercises Foundry-only document, application, canvas, combat, and socket b
     if (actorIds.length) await Actor.deleteDocuments(actorIds);
     await game.users.get(playerId)?.delete();
   }, fixture));
+});
+
+test("keeps Captain and Ordnance assigned to separate users in a six-player crew", async ({ page }) => {
+  await ensureWorldActive(page);
+  await joinWorld(page, "Gamemaster");
+  const result = await page.evaluate(async adapterModuleId => {
+    const { ShipCombatState, SystemAdapter } = globalThis.ShipCombat._api;
+    const player = await User.create({ name: "Station Assignment Test Player", role: CONST.USER_ROLES.PLAYER });
+    let ship;
+    try {
+      ship = await Actor.create({
+        name: "Station Assignment Test Ship",
+        type: `${adapterModuleId}.ship`,
+        system: { crewSize: 6 },
+      });
+      const state = ShipCombatState.forShip(ship);
+      await state.assignRole(game.user.id, "captain");
+      await state.assignRole(player.id, "ordnance");
+      const separate = foundry.utils.deepClone(SystemAdapter.current.getShipData(ship).roles);
+      await state.assignRole(player.id, "pilot");
+      const switched = foundry.utils.deepClone(SystemAdapter.current.getShipData(ship).roles);
+      return { gmId: game.user.id, playerId: player.id, separate, switched };
+    } finally {
+      await ship?.delete();
+      await player.delete();
+    }
+  }, adapterModuleId);
+  expect(result.separate).toEqual({ [result.gmId]: "captain", [result.playerId]: "ordnance" });
+  expect(result.switched).toEqual({ [result.gmId]: "captain", [result.playerId]: "pilot" });
 });

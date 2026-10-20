@@ -1,3 +1,7 @@
+## v2.5.4
+### Bug Fixes
+- Preserve a user's new bridge station when switching roles on Foundry v14 by avoiding a simultaneous deletion and replacement of the same role key
+
 ## v2.5.3
 ### Bug Fixes
 - Initialize every participating player ship when combat starts through Foundry's native tracker so Captain hands, draw piles, resources, and action gates cannot remain at empty schema defaults

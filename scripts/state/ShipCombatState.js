@@ -175,7 +175,8 @@ export class ShipCombatState {
     if (userId) {
       const previousForUser = roles[userId];
       if (previousForUser && previousForUser !== roleId) {
-        changes[`roles.-=${userId}`] = null;
+        // The assignment below replaces this value. Deleting the same key in
+        // this update can also delete its replacement on Foundry v14.
         changes[`crewActors.-=${previousForUser}`] = null;
       }
       changes[`roles.${userId}`] = roleId;

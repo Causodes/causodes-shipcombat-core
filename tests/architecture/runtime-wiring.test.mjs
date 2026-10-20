@@ -109,7 +109,7 @@ test("architecture: every component entry point uses the shared behavioral contr
 test("architecture: D&D5e sheets share one upstream warnings-template contract", () => {
   const dndRoot = path.join(modulesRoot, "causodes-shipcombat-dnd5e");
   const compatibility = fs.readFileSync(path.join(dndRoot, "scripts/actors/dnd5e-compat.js"), "utf8");
-  assert.match(compatibility, /warnings:\s*"systems\/dnd5e\/templates\/shared\/sheet-warnings-dialog\.hbs"/);
+  assert.match(compatibility, /NPCActorSheet\.PARTS\.warnings\.template/);
 
   for (const filename of [
     "scripts/actors/starship/PlayerShipSheet.js",
